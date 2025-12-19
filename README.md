@@ -18,6 +18,124 @@ dependencies: [
 ]
 ```
 
+Then import it:
+
+```swift
+import FP
+```
+
+## Result Extensions API
+
+### Map & FlatMap
+```swift
+// Non-throwing
+func mapAsync<T>(_ transform: (Success) async -> T) async -> Result<T, Failure>
+func flatMapAsync<T>(_ transform: (Success) async -> Result<T, Failure>) async -> Result<T, Failure>
+
+// Throwing (requires Failure == Error)
+func mapAsync<T>(_ transform: (Success) async throws -> T) async -> Result<T, Error>
+```
+
+### From Async
+```swift
+// Throwing (requires Failure == Error)
+static func fromAsync(_ operation: () async throws -> Success) async -> Result<Success, Error>
+```
+
+### From Task
+```swift
+// Throwing Task (requires Failure == Error)
+static func fromTask(_ task: Task<Success, Error>) async -> Result<Success, Error>
+static func fromTask(_ task: () -> Task<Success, Error>) async -> Result<Success, Error>
+
+// Non-throwing Task (requires Failure == Never)
+static func fromTask(_ task: Task<Success, Never>) async -> Result<Success, Never>
+static func fromTask(_ task: () -> Task<Success, Never>) async -> Result<Success, Never>
+
+// Task returning Result (requires Failure == Error)
+static func fromTask<S>(_ task: Task<Result<S, Error>, Never>) async -> Result<S, Error>
+static func fromTask<S>(_ task: () -> Task<Result<S, Error>, Never>) async -> Result<S, Error>
+```
+
+### From Optional
+```swift
+static func fromOptional(_ optional: Success?, error: Failure) -> Result<Success, Failure>
+static func fromOptional(_ optional: Success?, onError: () -> Failure) -> Result<Success, Failure>
+static func fromOptional(error: Failure) -> (Success?) -> Result<Success, Failure>
+static func fromOptional(onError: () -> Failure) -> (Success?) -> Result<Success, Failure>
+```
+
+### Tap (Side Effects)
+```swift
+// Non-throwing
+func tap(_ action: (Success) -> Void) -> Result<Success, Failure>
+func tap<T>(_ action: (Success) -> T) -> Result<Success, Failure>
+func tap<E>(_ action: (Success) -> Result<Void, E>) -> Result<Success, E>
+func tap<T, E>(_ action: (Success) -> Result<T, E>) -> Result<Success, E>
+
+// Throwing
+func tap(_ action: (Success) throws -> Void) -> Result<Success, Error>
+func tap<T>(_ action: (Success) throws -> T) -> Result<Success, Error>
+
+// Async non-throwing
+func tapAsync(_ action: (Success) async -> Void) async -> Result<Success, Failure>
+func tapAsync<T>(_ action: (Success) async -> T) async -> Result<Success, Failure>
+func tapAsync<E>(_ action: (Success) async -> Result<Void, E>) async -> Result<Success, E>
+func tapAsync<T, E>(_ action: (Success) async -> Result<T, E>) async -> Result<Success, E>
+
+// Async throwing
+func tapAsync(_ action: (Success) async throws -> Void) async -> Result<Success, Error>
+func tapAsync<T>(_ action: (Success) async throws -> T) async -> Result<Success, Error>
+```
+
+### TapError (Side Effects on Failure)
+```swift
+// Non-throwing
+func tapError(_ action: (Failure) -> Void) -> Result<Success, Failure>
+func tapError<T>(_ action: (Failure) -> T) -> Result<Success, Failure>
+func tapError<T, E>(_ action: (Failure) -> Result<T, E>) -> Result<Success, E>
+
+// Throwing
+func tapError(_ action: (Failure) throws -> Void) -> Result<Success, Error>
+func tapError<T>(_ action: (Failure) throws -> T) -> Result<Success, Error>
+
+// Async non-throwing
+func tapErrorAsync(_ action: (Failure) async -> Void) async -> Result<Success, Failure>
+func tapErrorAsync<T>(_ action: (Failure) async -> T) async -> Result<Success, Failure>
+func tapErrorAsync<T, E>(_ action: (Failure) async -> Result<T, E>) async -> Result<Success, E>
+
+// Async throwing
+func tapErrorAsync(_ action: (Failure) async throws -> Void) async -> Result<Success, Error>
+func tapErrorAsync<T>(_ action: (Failure) async throws -> T) async -> Result<Success, Error>
+```
+
+## Optional Extensions API
+
+```swift
+// Async (supports both throwing and non-throwing)
+func mapAsync<T>(_ transform: (Wrapped) async -> T) async -> T?
+func mapAsync<T>(_ transform: (Wrapped) async throws -> T) async rethrows -> T?
+
+func orElse<T>(_ defaultValue: T) -> T?
+```
+
+## Array Extensions API
+
+### Traverse
+```swift
+func traverse<Success>(_ transform: (Element) -> Success) -> Result<[Success], Never>
+func traverse<Success, Failure>(_ transform: (Element) -> Result<Success, Failure>) -> Result<[Success], Failure>
+func traverseAsync<Success>(_ transform: (Element) async -> Success) async -> Result<[Success], Never>
+func traverseAsync<Success, Failure>(_ transform: (Element) async -> Result<Success, Failure>) async -> Result<[Success], Failure>
+```
+
+### CompactMap Async
+```swift
+// Async (supports both throwing and non-throwing)
+func compactMapAsync<T>(_ transform: (Element) async -> T?) async -> [T]
+func compactMapAsync<T>(_ transform: (Element) async throws -> T?) async rethrows -> [T]
+```
+
 ## Features
 
 ### Pipe Operators
@@ -59,6 +177,19 @@ let chained = await result.flatMapAsync { value in
 let result = await Result.fromAsync {
     try await networkCall()
 }
+
+// Create Result from Task
+let task = Task { try await networkCall() }
+let result = await Result.fromTask(task)
+
+// Or with closure syntax
+let result = await Result.fromTask {
+    Task { try await networkCall() }
+}
+
+// Also works with Tasks returning Results
+let task = Task { await someResultOperation() }
+let result: Result<Value, Error> = await Result.fromTask(task)
 ```
 
 #### Tap for Side Effects
