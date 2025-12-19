@@ -1,6 +1,6 @@
 import Testing
 
-@testable import fp_swift
+@testable import FP
 
 @Suite("Array+Async Tests")
 struct ArrayAsyncTests {

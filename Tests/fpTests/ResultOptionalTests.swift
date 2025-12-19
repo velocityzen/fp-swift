@@ -1,6 +1,6 @@
 import Testing
 
-@testable import fp_swift
+@testable import FP
 
 @Suite("Result+Optional Tests")
 struct ResultOptionalTests {
