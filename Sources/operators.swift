@@ -30,3 +30,10 @@ infix operator |< : PipePrecedence
 public func |< <A, Z>(lhs: A, rhs: (A) -> Z) -> Z {
     return rhs(lhs)
 }
+
+prefix operator |>
+
+/// Flow operator - creates a function from another function
+public prefix func |> <A, Z>(_ rhs: @escaping (A) -> Z) -> (A) -> Z {
+    return { a in rhs(a) }
+}
