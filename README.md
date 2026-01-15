@@ -119,6 +119,20 @@ func mapAsync<T>(_ transform: (Wrapped) async throws -> T) async rethrows -> T?
 func orElse<T>(_ defaultValue: T) -> T?
 ```
 
+## AsyncStream.Continuation Extensions API
+
+Extensions for `AsyncStream.Continuation` when the element type is `Result<Success, Failure>`:
+
+```swift
+// Yield success/failure values
+func success<Success, Failure>(_ value: Success) -> YieldResult
+func failure<Success, Failure>(_ error: Failure) -> YieldResult
+
+// Yield and finish the stream
+func finishWithSuccess<Success, Failure>(_ value: Success)
+func finishWithFailure<Success, Failure>(_ error: Failure)
+```
+
 ## Array Extensions API
 
 ### Traverse
@@ -247,6 +261,30 @@ let result = await optional.mapAsync { value in
 ```swift
 let optional: Int? = nil
 let fallback = optional.orElse(99)  // Returns 99 when nil, nil when has value
+```
+
+### AsyncStream.Continuation Extensions
+
+Convenience methods for yielding `Result` values in async streams:
+
+```swift
+let stream = AsyncStream<Result<Int, MyError>> { continuation in
+    continuation.success(1)
+    continuation.success(2)
+    continuation.failure(.someError)
+    continuation.finish()
+}
+
+// Or finish with a final value
+let stream = AsyncStream<Result<String, MyError>> { continuation in
+    continuation.success("processing...")
+    continuation.finishWithSuccess("done")  // Yields and finishes
+}
+
+// Finish with error
+let stream = AsyncStream<Result<Data, NetworkError>> { continuation in
+    continuation.finishWithFailure(.connectionLost)  // Yields error and finishes
+}
 ```
 
 ### Array Extensions
