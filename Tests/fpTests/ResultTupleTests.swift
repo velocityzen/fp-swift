@@ -325,4 +325,88 @@ struct ResultTupleTests {
             Issue.record("Expected failure")
         }
     }
+
+    // MARK: - Async flattenAsync Tests
+
+    @Test("flattenAsync 2 succeeds with both async results")
+    func flattenAsync2Succeeds() async {
+        let getInt: @Sendable () async -> Result<Int, TestError> = { .success(1) }
+        let getString: @Sendable () async -> Result<String, TestError> = { .success("hello") }
+
+        let result = await flattenAsync(await getInt(), await getString())
+
+        if case .success(let value) = result {
+            #expect(value.0 == 1)
+            #expect(value.1 == "hello")
+        } else {
+            Issue.record("Expected success")
+        }
+    }
+
+    @Test("flattenAsync 2 fails when any async result fails")
+    func flattenAsync2Fails() async {
+        let getInt: @Sendable () async -> Result<Int, TestError> = { .success(1) }
+        let getString: @Sendable () async -> Result<String, TestError> = { .failure(.failed) }
+
+        let result = await flattenAsync(await getInt(), await getString())
+
+        if case .failure(let error) = result {
+            #expect(error == .failed)
+        } else {
+            Issue.record("Expected failure")
+        }
+    }
+
+    @Test("flattenAsync 3 succeeds with all async results")
+    func flattenAsync3Succeeds() async {
+        let getA: @Sendable () async -> Result<Int, TestError> = { .success(1) }
+        let getB: @Sendable () async -> Result<String, TestError> = { .success("a") }
+        let getC: @Sendable () async -> Result<Double, TestError> = { .success(3.14) }
+
+        let result = await flattenAsync(await getA(), await getB(), await getC())
+
+        if case .success(let value) = result {
+            #expect(value.0 == 1)
+            #expect(value.1 == "a")
+            #expect(value.2 == 3.14)
+        } else {
+            Issue.record("Expected success")
+        }
+    }
+
+    @Test("flattenAsync 4 succeeds with all async results")
+    func flattenAsync4Succeeds() async {
+        let getA: @Sendable () async -> Result<Int, TestError> = { .success(1) }
+        let getB: @Sendable () async -> Result<String, TestError> = { .success("a") }
+        let getC: @Sendable () async -> Result<Double, TestError> = { .success(3.14) }
+        let getD: @Sendable () async -> Result<Bool, TestError> = { .success(true) }
+
+        let result = await flattenAsync(await getA(), await getB(), await getC(), await getD())
+
+        if case .success(let value) = result {
+            #expect(value.0 == 1)
+            #expect(value.1 == "a")
+            #expect(value.2 == 3.14)
+            #expect(value.3 == true)
+        } else {
+            Issue.record("Expected success")
+        }
+    }
+
+    @Test("flattenAsync preserves typed error for async operations")
+    func flattenAsyncPreservesError() async {
+        let getInt: @Sendable () async -> Result<Int, TestError> = { .failure(.other) }
+        let getString: @Sendable () async -> Result<String, TestError> = { .success("hello") }
+
+        let result: Result<(Int, String), TestError> = await flattenAsync(
+            await getInt(),
+            await getString()
+        )
+
+        if case .failure(let error) = result {
+            #expect(error == .other)
+        } else {
+            Issue.record("Expected failure")
+        }
+    }
 }

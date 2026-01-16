@@ -109,6 +109,28 @@ func tapErrorAsync(_ action: (Failure) async throws -> Void) async -> Result<Suc
 func tapErrorAsync<T>(_ action: (Failure) async throws -> T) async -> Result<Success, Error>
 ```
 
+## Flatten Functions API
+
+Combine multiple Results into a single Result containing a tuple of all success values. If any Result fails, returns the first failure.
+
+### Sync Flatten
+```swift
+// Supports 2-10 arguments
+func flatten<A, B, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>) -> Result<(A, B), E>
+func flatten<A, B, C, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>, _ c: Result<C, E>) -> Result<(A, B, C), E>
+// ... up to 10 arguments
+```
+
+### Async Flatten (Parallel Execution)
+```swift
+// Supports 2-10 arguments, runs all operations in parallel
+func flattenAsync<A: Sendable, B: Sendable, E: Error>(
+    _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
+    _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>
+) async -> Result<(A, B), E>
+// ... up to 10 arguments
+```
+
 ## Optional Extensions API
 
 ```swift
@@ -284,6 +306,50 @@ let stream = AsyncStream<Result<String, MyError>> { continuation in
 // Finish with error
 let stream = AsyncStream<Result<Data, NetworkError>> { continuation in
     continuation.finishWithFailure(.connectionLost)  // Yields error and finishes
+}
+```
+
+### Flatten Results
+
+Combine multiple Results into a single Result with a tuple of values:
+
+```swift
+let userResult: Result<User, AppError> = fetchUser(id: 1)
+let profileResult: Result<Profile, AppError> = fetchProfile(id: 1)
+let settingsResult: Result<Settings, AppError> = fetchSettings(id: 1)
+
+// Sync flatten - combine already-computed Results
+let combined = flatten(userResult, profileResult, settingsResult)
+// Result<(User, Profile, Settings), AppError>
+
+// Use map to create named tuple for easier access
+let namedResult = flatten(userResult, profileResult)
+    .map { (user: $0, profile: $1) }
+// Result<(user: User, profile: Profile), AppError>
+
+if case .success(let data) = namedResult {
+    print(data.user.name)
+    print(data.profile.bio)
+}
+```
+
+#### Async Flatten with Parallel Execution
+
+Run multiple async operations in parallel and combine their results:
+
+```swift
+func loadDashboard(userId: Int) async -> Result<Dashboard, AppError> {
+    // All three operations run in parallel
+    let result = await flattenAsync(
+        await fetchUser(id: userId),
+        await fetchNotifications(for: userId),
+        await fetchRecommendations(for: userId)
+    )
+    // Result<(User, [Notification], [Recommendation]), AppError>
+    
+    return result.map { user, notifications, recommendations in
+        Dashboard(user: user, notifications: notifications, recommendations: recommendations)
+    }
 }
 ```
 
