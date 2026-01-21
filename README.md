@@ -36,6 +36,13 @@ func flatMapAsync<T>(_ transform: (Success) async -> Result<T, Failure>) async -
 func mapAsync<T>(_ transform: (Success) async throws -> T) async -> Result<T, Error>
 ```
 
+### Match
+```swift
+func match<T>(_ onSuccess: (Success) -> T, _ onFailure: (Failure) -> T) -> T
+func match<T>(_ success: @autoclosure () -> T, _ failure: @autoclosure () -> T) -> T
+func matchAsync<T>(_ onSuccess: (Success) async -> T, _ onFailure: (Failure) async -> T) async -> T
+```
+
 ### From Async
 ```swift
 // Throwing (requires Failure == Error)
@@ -250,6 +257,30 @@ Tap variants:
 - `.tapError()` - Sync side effect on failure
 - `.tapErrorAsync()` - Async side effect on failure
 - Throwing variants convert `Failure` type to `Error`
+
+#### Match
+
+Branch on a Result without switching manually:
+
+```swift
+let message = result.match(
+    { "value: \($0)" },
+    { "error: \($0)" }
+)
+
+let fallback = result.match("ok", "error")
+
+let asyncMessage = await result.matchAsync(
+    { value in
+        await Task.yield()
+        return "value: \(value)"
+    },
+    { error in
+        await Task.yield()
+        return "error: \(error)"
+    }
+)
+```
 
 #### From Optional
 
