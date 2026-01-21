@@ -14,6 +14,30 @@ public extension Result {
     }
 
     func match<T>(
+        _ onSuccess: (Success) -> T,
+        _ failure: @autoclosure () -> T
+    ) -> T {
+        switch self {
+            case .success(let value):
+                return onSuccess(value)
+            case .failure:
+                return failure()
+        }
+    }
+
+    func match<T>(
+        _ success: @autoclosure () -> T,
+        _ onFailure: (Failure) -> T
+    ) -> T {
+        switch self {
+            case .success:
+                return success()
+            case .failure(let error):
+                return onFailure(error)
+        }
+    }
+
+    func match<T>(
         _ success: @autoclosure () -> T,
         _ failure: @autoclosure () -> T
     ) -> T {
@@ -37,4 +61,27 @@ public extension Result {
         }
     }
 
+    func matchAsync<T>(
+        _ onSuccess: (Success) async -> T,
+        _ failure: @autoclosure () -> T
+    ) async -> T {
+        switch self {
+            case .success(let value):
+                return await onSuccess(value)
+            case .failure:
+                return failure()
+        }
+    }
+
+    func matchAsync<T>(
+        _ success: @autoclosure () -> T,
+        _ onFailure: (Failure) async -> T
+    ) async -> T {
+        switch self {
+            case .success:
+                return success()
+            case .failure(let error):
+                return await onFailure(error)
+        }
+    }
 }

@@ -91,6 +91,30 @@ struct ResultMatchTests {
         #expect(count == 1)
     }
 
+    @Test("match supports success closure with failure constant")
+    func matchSuccessClosureFailureConstant() {
+        let result: Result<Int, TestError> = .success(2)
+
+        let value = result.match(
+            { "\($0 * 2)" },
+            "error"
+        )
+
+        #expect(value == "4")
+    }
+
+    @Test("match supports success constant with failure closure")
+    func matchSuccessConstantFailureClosure() {
+        let result: Result<Int, TestError> = .failure(.notFound)
+
+        let value = result.match(
+            "ok",
+            { "error-\($0)" }
+        )
+
+        #expect(value == "error-notFound")
+    }
+
     // MARK: - matchAsync
 
     @Test("matchAsync transforms success value")
@@ -148,5 +172,35 @@ struct ResultMatchTests {
         let count = await counter.count
         #expect(value == "failure")
         #expect(count == 0)
+    }
+
+    @Test("matchAsync supports success closure with failure constant")
+    func matchAsyncSuccessClosureFailureConstant() async {
+        let result: Result<Int, TestError> = .success(3)
+
+        let value = await result.matchAsync(
+            { value in
+                await Task.yield()
+                return "value-\(value)"
+            },
+            "error"
+        )
+
+        #expect(value == "value-3")
+    }
+
+    @Test("matchAsync supports success constant with failure closure")
+    func matchAsyncSuccessConstantFailureClosure() async {
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let value = await result.matchAsync(
+            "ok",
+            { error in
+                await Task.yield()
+                return "error-\(error)"
+            }
+        )
+
+        #expect(value == "error-invalid")
     }
 }

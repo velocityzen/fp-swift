@@ -39,8 +39,12 @@ func mapAsync<T>(_ transform: (Success) async throws -> T) async -> Result<T, Er
 ### Match
 ```swift
 func match<T>(_ onSuccess: (Success) -> T, _ onFailure: (Failure) -> T) -> T
+func match<T>(_ onSuccess: (Success) -> T, _ failure: @autoclosure () -> T) -> T
+func match<T>(_ success: @autoclosure () -> T, _ onFailure: (Failure) -> T) -> T
 func match<T>(_ success: @autoclosure () -> T, _ failure: @autoclosure () -> T) -> T
 func matchAsync<T>(_ onSuccess: (Success) async -> T, _ onFailure: (Failure) async -> T) async -> T
+func matchAsync<T>(_ onSuccess: (Success) async -> T, _ failure: @autoclosure () -> T) async -> T
+func matchAsync<T>(_ success: @autoclosure () -> T, _ onFailure: (Failure) async -> T) async -> T
 ```
 
 ### From Async
@@ -270,11 +274,24 @@ let message = result.match(
 
 let fallback = result.match("ok", "error")
 
+let mixed = result.match(
+    { "value: \($0)" },
+    "error"
+)
+
 let asyncMessage = await result.matchAsync(
     { value in
         await Task.yield()
         return "value: \(value)"
     },
+    { error in
+        await Task.yield()
+        return "error: \(error)"
+    }
+)
+
+let asyncMixed = await result.matchAsync(
+    "ok",
     { error in
         await Task.yield()
         return "error: \(error)"
