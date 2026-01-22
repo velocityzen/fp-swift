@@ -11,6 +11,7 @@ public func flatten<A, B, E: Error>(
     switch (a, b) {
         case (.success(let a), .success(let b)):
             return .success((a, b))
+
         case (.failure(let e), _), (_, .failure(let e)):
             return .failure(e)
     }
@@ -24,6 +25,7 @@ public func flatten<A, B, C, E: Error>(
     switch (a, b, c) {
         case (.success(let a), .success(let b), .success(let c)):
             return .success((a, b, c))
+
         case (.failure(let e), _, _), (_, .failure(let e), _), (_, _, .failure(let e)):
             return .failure(e)
     }
@@ -38,6 +40,7 @@ public func flatten<A, B, C, D, E: Error>(
     switch (a, b, c, d) {
         case (.success(let a), .success(let b), .success(let c), .success(let d)):
             return .success((a, b, c, d))
+
         case (.failure(let e), _, _, _), (_, .failure(let e), _, _),
             (_, _, .failure(let e), _), (_, _, _, .failure(let e)):
             return .failure(e)
@@ -54,6 +57,7 @@ public func flatten<A, B, C, D, F, E: Error>(
     switch (a, b, c, d, f) {
         case (.success(let a), .success(let b), .success(let c), .success(let d), .success(let f)):
             return .success((a, b, c, d, f))
+
         case (.failure(let e), _, _, _, _), (_, .failure(let e), _, _, _),
             (_, _, .failure(let e), _, _), (_, _, _, .failure(let e), _),
             (_, _, _, _, .failure(let e)):
@@ -75,6 +79,7 @@ public func flatten<A, B, C, D, F, G, E: Error>(
             .success(let g)
         ):
             return .success((a, b, c, d, f, g))
+
         case (.failure(let e), _, _, _, _, _), (_, .failure(let e), _, _, _, _),
             (_, _, .failure(let e), _, _, _), (_, _, _, .failure(let e), _, _),
             (_, _, _, _, .failure(let e), _), (_, _, _, _, _, .failure(let e)):
@@ -97,6 +102,7 @@ public func flatten<A, B, C, D, F, G, H, E: Error>(
             .success(let g), .success(let h)
         ):
             return .success((a, b, c, d, f, g, h))
+
         case (.failure(let e), _, _, _, _, _, _), (_, .failure(let e), _, _, _, _, _),
             (_, _, .failure(let e), _, _, _, _), (_, _, _, .failure(let e), _, _, _),
             (_, _, _, _, .failure(let e), _, _), (_, _, _, _, _, .failure(let e), _),
@@ -121,6 +127,7 @@ public func flatten<A, B, C, D, F, G, H, I, E: Error>(
             .success(let g), .success(let h), .success(let i)
         ):
             return .success((a, b, c, d, f, g, h, i))
+
         case (.failure(let e), _, _, _, _, _, _, _), (_, .failure(let e), _, _, _, _, _, _),
             (_, _, .failure(let e), _, _, _, _, _), (_, _, _, .failure(let e), _, _, _, _),
             (_, _, _, _, .failure(let e), _, _, _), (_, _, _, _, _, .failure(let e), _, _),
@@ -146,6 +153,7 @@ public func flatten<A, B, C, D, F, G, H, I, J, E: Error>(
             .success(let g), .success(let h), .success(let i), .success(let j)
         ):
             return .success((a, b, c, d, f, g, h, i, j))
+
         case (.failure(let e), _, _, _, _, _, _, _, _), (_, .failure(let e), _, _, _, _, _, _, _),
             (_, _, .failure(let e), _, _, _, _, _, _), (_, _, _, .failure(let e), _, _, _, _, _),
             (_, _, _, _, .failure(let e), _, _, _, _), (_, _, _, _, _, .failure(let e), _, _, _),
@@ -173,6 +181,7 @@ public func flatten<A, B, C, D, F, G, H, I, J, K, E: Error>(
             .success(let g), .success(let h), .success(let i), .success(let j), .success(let k)
         ):
             return .success((a, b, c, d, f, g, h, i, j, k))
+
         case (.failure(let e), _, _, _, _, _, _, _, _, _),
             (_, .failure(let e), _, _, _, _, _, _, _, _),
             (_, _, .failure(let e), _, _, _, _, _, _, _),
