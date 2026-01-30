@@ -76,6 +76,11 @@ static func fromOptional(error: Failure) -> (Success?) -> Result<Success, Failur
 static func fromOptional(onError: () -> Failure) -> (Success?) -> Result<Success, Failure>
 ```
 
+### To Bool
+```swift
+var toBool: Bool  // true for success, false for failure
+```
+
 ### Tap (Side Effects)
 ```swift
 // Non-throwing
@@ -311,6 +316,21 @@ let result = Result<User, AppError>.fromOptional(user, error: .notFound)
 let result = Result<User, AppError>.fromOptional(user) {
     .notFound(id: userId)
 }
+```
+
+#### To Bool
+
+Convert Result to boolean for simple success/failure checks:
+
+```swift
+let result: Result<User, AppError> = fetchUser(id: 1)
+
+if result.toBool {
+    print("User fetched successfully")
+}
+
+// Or in ternary expressions
+let message = result.toBool ? "ok" : "error"
 ```
 
 ### Optional Extensions
