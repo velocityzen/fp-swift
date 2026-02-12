@@ -73,31 +73,25 @@ public extension Result {
         }
     }
 
-    func tap<E>(
-        _ action: (Success) -> Result<Void, E>
-    ) -> Result<Success, E> {
+    func tap(
+        _ action: (Success) -> Result<Void, Failure>
+    ) -> Result<Success, Failure> {
         switch self {
             case .success(let value):
                 return action(value).map { value }
-            case .failure(let error as E):
-                return .failure(error)
             case .failure(let error):
-                // This handles the case where Failure != E
-                fatalError("Cannot convert \(type(of: error)) to \(E.self)")
+                return .failure(error)
         }
     }
 
-    func tap<T, E>(
-        _ action: (Success) -> Result<T, E>
-    ) -> Result<Success, E> {
+    func tap<T>(
+        _ action: (Success) -> Result<T, Failure>
+    ) -> Result<Success, Failure> {
         switch self {
             case .success(let value):
                 return action(value).map { _ in value }
-            case .failure(let error as E):
-                return .failure(error)
             case .failure(let error):
-                // This handles the case where Failure != E
-                fatalError("Cannot convert \(type(of: error)) to \(E.self)")
+                return .failure(error)
         }
     }
 
@@ -153,29 +147,25 @@ public extension Result {
         }
     }
 
-    func tapAsync<E>(
-        _ action: (Success) async -> Result<Void, E>
-    ) async -> Result<Success, E> {
+    func tapAsync(
+        _ action: (Success) async -> Result<Void, Failure>
+    ) async -> Result<Success, Failure> {
         switch self {
             case .success(let value):
                 return await action(value).map { value }
-            case .failure(let error as E):
-                return .failure(error)
             case .failure(let error):
-                fatalError("Cannot convert \(type(of: error)) to \(E.self)")
+                return .failure(error)
         }
     }
 
-    func tapAsync<T, E>(
-        _ action: (Success) async -> Result<T, E>
-    ) async -> Result<Success, E> {
+    func tapAsync<T>(
+        _ action: (Success) async -> Result<T, Failure>
+    ) async -> Result<Success, Failure> {
         switch self {
             case .success(let value):
                 return await action(value).map { _ in value }
-            case .failure(let error as E):
-                return .failure(error)
             case .failure(let error):
-                fatalError("Cannot convert \(type(of: error)) to \(E.self)")
+                return .failure(error)
         }
     }
 
@@ -231,20 +221,15 @@ public extension Result {
         }
     }
 
-    func tapError<T, E>(
-        _ action: (Failure) -> Result<T, E>
-    ) -> Result<Success, E> {
+    func tapError<T>(
+        _ action: (Failure) -> Result<T, Failure>
+    ) -> Result<Success, Failure> {
         switch self {
             case .success(let value):
-                // Need to handle generic Success that might not match E
                 return .success(value)
             case .failure(let error):
                 return action(error).flatMap { _ in
-                    if let error = error as? E {
-                        return .failure(error)
-                    } else {
-                        fatalError("Cannot convert \(type(of: error)) to \(E.self)")
-                    }
+                    .failure(error)
                 }
         }
     }
@@ -301,19 +286,15 @@ public extension Result {
         }
     }
 
-    func tapErrorAsync<T, E>(
-        _ action: (Failure) async -> Result<T, E>
-    ) async -> Result<Success, E> {
+    func tapErrorAsync<T>(
+        _ action: (Failure) async -> Result<T, Failure>
+    ) async -> Result<Success, Failure> {
         switch self {
             case .success(let value):
                 return .success(value)
             case .failure(let error):
                 return await action(error).flatMap { _ in
-                    if let error = error as? E {
-                        return .failure(error)
-                    } else {
-                        fatalError("Cannot convert \(type(of: error)) to \(E.self)")
-                    }
+                    .failure(error)
                 }
         }
     }
