@@ -22,13 +22,7 @@ public func flatten<A, B, C, E: Error>(
     _ b: Result<B, E>,
     _ c: Result<C, E>
 ) -> Result<(A, B, C), E> {
-    switch (a, b, c) {
-        case (.success(let a), .success(let b), .success(let c)):
-            return .success((a, b, c))
-
-        case (.failure(let e), _, _), (_, .failure(let e), _), (_, _, .failure(let e)):
-            return .failure(e)
-    }
+    flatten(a, b).flatMap { (a, b) in c.map { c in (a, b, c) } }
 }
 
 public func flatten<A, B, C, D, E: Error>(
@@ -37,14 +31,7 @@ public func flatten<A, B, C, D, E: Error>(
     _ c: Result<C, E>,
     _ d: Result<D, E>
 ) -> Result<(A, B, C, D), E> {
-    switch (a, b, c, d) {
-        case (.success(let a), .success(let b), .success(let c), .success(let d)):
-            return .success((a, b, c, d))
-
-        case (.failure(let e), _, _, _), (_, .failure(let e), _, _),
-            (_, _, .failure(let e), _), (_, _, _, .failure(let e)):
-            return .failure(e)
-    }
+    flatten(a, b, c).flatMap { (a, b, c) in d.map { d in (a, b, c, d) } }
 }
 
 public func flatten<A, B, C, D, F, E: Error>(
@@ -54,15 +41,7 @@ public func flatten<A, B, C, D, F, E: Error>(
     _ d: Result<D, E>,
     _ f: Result<F, E>
 ) -> Result<(A, B, C, D, F), E> {
-    switch (a, b, c, d, f) {
-        case (.success(let a), .success(let b), .success(let c), .success(let d), .success(let f)):
-            return .success((a, b, c, d, f))
-
-        case (.failure(let e), _, _, _, _), (_, .failure(let e), _, _, _),
-            (_, _, .failure(let e), _, _), (_, _, _, .failure(let e), _),
-            (_, _, _, _, .failure(let e)):
-            return .failure(e)
-    }
+    flatten(a, b, c, d).flatMap { (a, b, c, d) in f.map { f in (a, b, c, d, f) } }
 }
 
 public func flatten<A, B, C, D, F, G, E: Error>(
@@ -73,18 +52,7 @@ public func flatten<A, B, C, D, F, G, E: Error>(
     _ f: Result<F, E>,
     _ g: Result<G, E>
 ) -> Result<(A, B, C, D, F, G), E> {
-    switch (a, b, c, d, f, g) {
-        case (
-            .success(let a), .success(let b), .success(let c), .success(let d), .success(let f),
-            .success(let g)
-        ):
-            return .success((a, b, c, d, f, g))
-
-        case (.failure(let e), _, _, _, _, _), (_, .failure(let e), _, _, _, _),
-            (_, _, .failure(let e), _, _, _), (_, _, _, .failure(let e), _, _),
-            (_, _, _, _, .failure(let e), _), (_, _, _, _, _, .failure(let e)):
-            return .failure(e)
-    }
+    flatten(a, b, c, d, f).flatMap { (a, b, c, d, f) in g.map { g in (a, b, c, d, f, g) } }
 }
 
 public func flatten<A, B, C, D, F, G, H, E: Error>(
@@ -96,19 +64,7 @@ public func flatten<A, B, C, D, F, G, H, E: Error>(
     _ g: Result<G, E>,
     _ h: Result<H, E>
 ) -> Result<(A, B, C, D, F, G, H), E> {
-    switch (a, b, c, d, f, g, h) {
-        case (
-            .success(let a), .success(let b), .success(let c), .success(let d), .success(let f),
-            .success(let g), .success(let h)
-        ):
-            return .success((a, b, c, d, f, g, h))
-
-        case (.failure(let e), _, _, _, _, _, _), (_, .failure(let e), _, _, _, _, _),
-            (_, _, .failure(let e), _, _, _, _), (_, _, _, .failure(let e), _, _, _),
-            (_, _, _, _, .failure(let e), _, _), (_, _, _, _, _, .failure(let e), _),
-            (_, _, _, _, _, _, .failure(let e)):
-            return .failure(e)
-    }
+    flatten(a, b, c, d, f, g).flatMap { (a, b, c, d, f, g) in h.map { h in (a, b, c, d, f, g, h) } }
 }
 
 public func flatten<A, B, C, D, F, G, H, I, E: Error>(
@@ -121,18 +77,8 @@ public func flatten<A, B, C, D, F, G, H, I, E: Error>(
     _ h: Result<H, E>,
     _ i: Result<I, E>
 ) -> Result<(A, B, C, D, F, G, H, I), E> {
-    switch (a, b, c, d, f, g, h, i) {
-        case (
-            .success(let a), .success(let b), .success(let c), .success(let d), .success(let f),
-            .success(let g), .success(let h), .success(let i)
-        ):
-            return .success((a, b, c, d, f, g, h, i))
-
-        case (.failure(let e), _, _, _, _, _, _, _), (_, .failure(let e), _, _, _, _, _, _),
-            (_, _, .failure(let e), _, _, _, _, _), (_, _, _, .failure(let e), _, _, _, _),
-            (_, _, _, _, .failure(let e), _, _, _), (_, _, _, _, _, .failure(let e), _, _),
-            (_, _, _, _, _, _, .failure(let e), _), (_, _, _, _, _, _, _, .failure(let e)):
-            return .failure(e)
+    flatten(a, b, c, d, f, g, h).flatMap { (a, b, c, d, f, g, h) in
+        i.map { i in (a, b, c, d, f, g, h, i) }
     }
 }
 
@@ -147,19 +93,8 @@ public func flatten<A, B, C, D, F, G, H, I, J, E: Error>(
     _ i: Result<I, E>,
     _ j: Result<J, E>
 ) -> Result<(A, B, C, D, F, G, H, I, J), E> {
-    switch (a, b, c, d, f, g, h, i, j) {
-        case (
-            .success(let a), .success(let b), .success(let c), .success(let d), .success(let f),
-            .success(let g), .success(let h), .success(let i), .success(let j)
-        ):
-            return .success((a, b, c, d, f, g, h, i, j))
-
-        case (.failure(let e), _, _, _, _, _, _, _, _), (_, .failure(let e), _, _, _, _, _, _, _),
-            (_, _, .failure(let e), _, _, _, _, _, _), (_, _, _, .failure(let e), _, _, _, _, _),
-            (_, _, _, _, .failure(let e), _, _, _, _), (_, _, _, _, _, .failure(let e), _, _, _),
-            (_, _, _, _, _, _, .failure(let e), _, _), (_, _, _, _, _, _, _, .failure(let e), _),
-            (_, _, _, _, _, _, _, _, .failure(let e)):
-            return .failure(e)
+    flatten(a, b, c, d, f, g, h, i).flatMap { (a, b, c, d, f, g, h, i) in
+        j.map { j in (a, b, c, d, f, g, h, i, j) }
     }
 }
 
@@ -175,24 +110,8 @@ public func flatten<A, B, C, D, F, G, H, I, J, K, E: Error>(
     _ j: Result<J, E>,
     _ k: Result<K, E>
 ) -> Result<(A, B, C, D, F, G, H, I, J, K), E> {
-    switch (a, b, c, d, f, g, h, i, j, k) {
-        case (
-            .success(let a), .success(let b), .success(let c), .success(let d), .success(let f),
-            .success(let g), .success(let h), .success(let i), .success(let j), .success(let k)
-        ):
-            return .success((a, b, c, d, f, g, h, i, j, k))
-
-        case (.failure(let e), _, _, _, _, _, _, _, _, _),
-            (_, .failure(let e), _, _, _, _, _, _, _, _),
-            (_, _, .failure(let e), _, _, _, _, _, _, _),
-            (_, _, _, .failure(let e), _, _, _, _, _, _),
-            (_, _, _, _, .failure(let e), _, _, _, _, _),
-            (_, _, _, _, _, .failure(let e), _, _, _, _),
-            (_, _, _, _, _, _, .failure(let e), _, _, _),
-            (_, _, _, _, _, _, _, .failure(let e), _, _),
-            (_, _, _, _, _, _, _, _, .failure(let e), _),
-            (_, _, _, _, _, _, _, _, _, .failure(let e)):
-            return .failure(e)
+    flatten(a, b, c, d, f, g, h, i, j).flatMap { (a, b, c, d, f, g, h, i, j) in
+        k.map { k in (a, b, c, d, f, g, h, i, j, k) }
     }
 }
 
