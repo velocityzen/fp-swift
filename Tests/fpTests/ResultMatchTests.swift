@@ -115,6 +115,43 @@ struct ResultMatchTests {
         #expect(value == "error-notFound")
     }
 
+    // MARK: - match (discardable result)
+
+    @Test("match result can be discarded with closures")
+    func matchDiscardableClosures() {
+        var sideEffect = ""
+        let result: Result<Int, TestError> = .success(42)
+
+        result.match(
+            { sideEffect = "success-\($0)" },
+            { sideEffect = "failure-\($0)" }
+        )
+
+        #expect(sideEffect == "success-42")
+    }
+
+    @Test("match result can be discarded with autoclosures")
+    func matchDiscardableAutoclosures() {
+        let result: Result<Int, TestError> = .success(42)
+        result.match("ok", "fail")
+    }
+
+    @Test("match result can be discarded with mixed closure and constant")
+    func matchDiscardableMixed() {
+        var sideEffect = ""
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        result.match(
+            { value in
+                sideEffect = "success-\(value)"
+                return "ok"
+            },
+            "fail"
+        )
+
+        #expect(sideEffect == "")
+    }
+
     // MARK: - matchAsync
 
     @Test("matchAsync transforms success value")
@@ -202,5 +239,43 @@ struct ResultMatchTests {
         )
 
         #expect(value == "error-invalid")
+    }
+
+    // MARK: - matchAsync (discardable result)
+
+    @Test("matchAsync result can be discarded with closures")
+    func matchAsyncDiscardableClosures() async {
+        var sideEffect = ""
+        let result: Result<Int, TestError> = .success(42)
+
+        await result.matchAsync(
+            { value in
+                await Task.yield()
+                sideEffect = "success-\(value)"
+            },
+            { error in
+                await Task.yield()
+                sideEffect = "failure-\(error)"
+            }
+        )
+
+        #expect(sideEffect == "success-42")
+    }
+
+    @Test("matchAsync result can be discarded with mixed closure and constant")
+    func matchAsyncDiscardableMixed() async {
+        var sideEffect = ""
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        await result.matchAsync(
+            "ok",
+            { error in
+                await Task.yield()
+                sideEffect = "failure-\(error)"
+                return "fail"
+            }
+        )
+
+        #expect(sideEffect == "failure-invalid")
     }
 }

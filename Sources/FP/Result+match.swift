@@ -1,6 +1,7 @@
 import Foundation
 
 public extension Result {
+    @discardableResult
     func match<T>(
         _ onSuccess: (Success) -> T,
         _ onFailure: (Failure) -> T
@@ -13,6 +14,7 @@ public extension Result {
         }
     }
 
+    @discardableResult
     func match<T>(
         _ onSuccess: (Success) -> T,
         _ failure: @autoclosure () -> T
@@ -25,6 +27,7 @@ public extension Result {
         }
     }
 
+    @discardableResult
     func match<T>(
         _ success: @autoclosure () -> T,
         _ onFailure: (Failure) -> T
@@ -37,6 +40,7 @@ public extension Result {
         }
     }
 
+    @discardableResult
     func match<T>(
         _ success: @autoclosure () -> T,
         _ failure: @autoclosure () -> T
@@ -49,6 +53,7 @@ public extension Result {
         }
     }
 
+    @discardableResult
     func matchAsync<T>(
         _ onSuccess: (Success) async -> T,
         _ onFailure: (Failure) async -> T
@@ -61,6 +66,7 @@ public extension Result {
         }
     }
 
+    @discardableResult
     func matchAsync<T>(
         _ onSuccess: (Success) async -> T,
         _ failure: @autoclosure () -> T
@@ -73,6 +79,7 @@ public extension Result {
         }
     }
 
+    @discardableResult
     func matchAsync<T>(
         _ success: @autoclosure () -> T,
         _ onFailure: (Failure) async -> T

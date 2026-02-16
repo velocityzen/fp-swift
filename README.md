@@ -37,14 +37,17 @@ func mapAsync<T>(_ transform: (Success) async throws -> T) async -> Result<T, Er
 ```
 
 ### Match
+
+All match variants are marked `@discardableResult`, so you can use them both for transforming values and for side effects without assigning the result.
+
 ```swift
-func match<T>(_ onSuccess: (Success) -> T, _ onFailure: (Failure) -> T) -> T
-func match<T>(_ onSuccess: (Success) -> T, _ failure: @autoclosure () -> T) -> T
-func match<T>(_ success: @autoclosure () -> T, _ onFailure: (Failure) -> T) -> T
-func match<T>(_ success: @autoclosure () -> T, _ failure: @autoclosure () -> T) -> T
-func matchAsync<T>(_ onSuccess: (Success) async -> T, _ onFailure: (Failure) async -> T) async -> T
-func matchAsync<T>(_ onSuccess: (Success) async -> T, _ failure: @autoclosure () -> T) async -> T
-func matchAsync<T>(_ success: @autoclosure () -> T, _ onFailure: (Failure) async -> T) async -> T
+@discardableResult func match<T>(_ onSuccess: (Success) -> T, _ onFailure: (Failure) -> T) -> T
+@discardableResult func match<T>(_ onSuccess: (Success) -> T, _ failure: @autoclosure () -> T) -> T
+@discardableResult func match<T>(_ success: @autoclosure () -> T, _ onFailure: (Failure) -> T) -> T
+@discardableResult func match<T>(_ success: @autoclosure () -> T, _ failure: @autoclosure () -> T) -> T
+@discardableResult func matchAsync<T>(_ onSuccess: (Success) async -> T, _ onFailure: (Failure) async -> T) async -> T
+@discardableResult func matchAsync<T>(_ onSuccess: (Success) async -> T, _ failure: @autoclosure () -> T) async -> T
+@discardableResult func matchAsync<T>(_ success: @autoclosure () -> T, _ onFailure: (Failure) async -> T) async -> T
 ```
 
 ### From Async
@@ -301,6 +304,12 @@ let asyncMixed = await result.matchAsync(
         await Task.yield()
         return "error: \(error)"
     }
+)
+
+// Use match for side effects without capturing the result
+result.match(
+    { value in print("Success: \(value)") },
+    { error in print("Error: \(error)") }
 )
 ```
 
