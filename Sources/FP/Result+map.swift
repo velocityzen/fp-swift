@@ -1,6 +1,7 @@
 import Foundation
 
 public extension Result {
+    /// Asynchronously transforms the success value.
     func mapAsync<T>(
         _ transform: (Success) async -> T
     ) async -> Result<T, Failure> {
@@ -13,6 +14,7 @@ public extension Result {
         }
     }
 
+    /// Asynchronously transforms the success value, catching thrown errors as failures.
     func mapAsync<T>(
         _ transform: (Success) async throws -> T
     ) async -> Result<T, Error> where Failure == Error {
@@ -29,6 +31,7 @@ public extension Result {
         }
     }
 
+    /// Asynchronously transforms the success value into a new Result.
     func flatMapAsync<T>(
         _ transform: (Success) async -> Result<T, Failure>
     ) async -> Result<T, Failure> {
@@ -43,6 +46,7 @@ public extension Result {
 
 // MARK: - Additional Convenience Methods
 public extension Result where Failure == Error {
+    /// Creates a Result from an async throwing operation.
     static func fromAsync(
         _ operation: () async throws -> Success
     ) async -> Result<Success, Error> {

@@ -23,6 +23,8 @@ import Foundation
 public extension Result {
 
     // MARK: Sync taps
+
+    /// Performs a side effect with the success value, returning the original Result unchanged.
     func tap(
         _ action: (Success) -> Void
     ) -> Result<Success, Failure> {
@@ -32,6 +34,7 @@ public extension Result {
         return self
     }
 
+    /// Performs a side effect with the success value, discarding the action's return value.
     func tap<T>(
         _ action: (Success) -> T
     ) -> Result<Success, Failure> {
@@ -41,6 +44,7 @@ public extension Result {
         return self
     }
 
+    /// Performs a throwing side effect, converting thrown errors to failure.
     func tap(
         _ action: (Success) throws -> Void
     ) -> Result<Success, Error> {
@@ -57,6 +61,7 @@ public extension Result {
         }
     }
 
+    /// Performs a throwing side effect, discarding the return value and converting thrown errors to failure.
     func tap<T>(
         _ action: (Success) throws -> T
     ) -> Result<Success, Error> {
@@ -73,6 +78,7 @@ public extension Result {
         }
     }
 
+    /// Performs a Result-returning side effect, propagating its failure if it fails.
     func tap(
         _ action: (Success) -> Result<Void, Failure>
     ) -> Result<Success, Failure> {
@@ -84,6 +90,7 @@ public extension Result {
         }
     }
 
+    /// Performs a Result-returning side effect, discarding its success value and propagating failure.
     func tap<T>(
         _ action: (Success) -> Result<T, Failure>
     ) -> Result<Success, Failure> {
@@ -97,6 +104,7 @@ public extension Result {
 
     // MARK: Async taps
 
+    /// Asynchronously performs a side effect with the success value.
     func tapAsync(
         _ action: (Success) async -> Void
     ) async -> Result<Success, Failure> {
@@ -106,6 +114,7 @@ public extension Result {
         return self
     }
 
+    /// Asynchronously performs a side effect, discarding the action's return value.
     func tapAsync<T>(
         _ action: (Success) async -> T
     ) async -> Result<Success, Failure> {
@@ -115,6 +124,7 @@ public extension Result {
         return self
     }
 
+    /// Asynchronously performs a throwing side effect, converting thrown errors to failure.
     func tapAsync(
         _ action: (Success) async throws -> Void
     ) async -> Result<Success, Error> {
@@ -131,6 +141,7 @@ public extension Result {
         }
     }
 
+    /// Asynchronously performs a throwing side effect, discarding the return value.
     func tapAsync<T>(
         _ action: (Success) async throws -> T
     ) async -> Result<Success, Error> {
@@ -147,6 +158,7 @@ public extension Result {
         }
     }
 
+    /// Asynchronously performs a Result-returning side effect, propagating its failure.
     func tapAsync(
         _ action: (Success) async -> Result<Void, Failure>
     ) async -> Result<Success, Failure> {
@@ -158,6 +170,7 @@ public extension Result {
         }
     }
 
+    /// Asynchronously performs a Result-returning side effect, discarding its success value.
     func tapAsync<T>(
         _ action: (Success) async -> Result<T, Failure>
     ) async -> Result<Success, Failure> {
@@ -171,6 +184,7 @@ public extension Result {
 
     // MARK: Sync tapError
 
+    /// Performs a side effect with the failure value, returning the original Result unchanged.
     func tapError(
         _ action: (Failure) -> Void
     ) -> Result<Success, Failure> {
@@ -180,6 +194,7 @@ public extension Result {
         return self
     }
 
+    /// Performs a side effect with the failure value, discarding the action's return value.
     func tapError<T>(
         _ action: (Failure) -> T
     ) -> Result<Success, Failure> {
@@ -189,6 +204,7 @@ public extension Result {
         return self
     }
 
+    /// Performs a throwing side effect on failure, converting thrown errors to failure.
     func tapError(
         _ action: (Failure) throws -> Void
     ) -> Result<Success, Error> {
@@ -205,6 +221,7 @@ public extension Result {
         }
     }
 
+    /// Performs a throwing side effect on failure, discarding the return value.
     func tapError<T>(
         _ action: (Failure) throws -> T
     ) -> Result<Success, Error> {
@@ -221,6 +238,7 @@ public extension Result {
         }
     }
 
+    /// Performs a Result-returning side effect on failure, propagating the original error.
     func tapError<T>(
         _ action: (Failure) -> Result<T, Failure>
     ) -> Result<Success, Failure> {
@@ -236,6 +254,7 @@ public extension Result {
 
     // MARK: Async tapError
 
+    /// Asynchronously performs a side effect with the failure value.
     func tapErrorAsync(
         _ action: (Failure) async -> Void
     ) async -> Result<Success, Failure> {
@@ -245,6 +264,7 @@ public extension Result {
         return self
     }
 
+    /// Asynchronously performs a side effect on failure, discarding the action's return value.
     func tapErrorAsync<T>(
         _ action: (Failure) async -> T
     ) async -> Result<Success, Failure> {
@@ -254,6 +274,7 @@ public extension Result {
         return self
     }
 
+    /// Asynchronously performs a throwing side effect on failure.
     func tapErrorAsync(
         _ action: (Failure) async throws -> Void
     ) async -> Result<Success, Error> {
@@ -270,6 +291,7 @@ public extension Result {
         }
     }
 
+    /// Asynchronously performs a throwing side effect on failure, discarding the return value.
     func tapErrorAsync<T>(
         _ action: (Failure) async throws -> T
     ) async -> Result<Success, Error> {
@@ -286,6 +308,7 @@ public extension Result {
         }
     }
 
+    /// Asynchronously performs a Result-returning side effect on failure.
     func tapErrorAsync<T>(
         _ action: (Failure) async -> Result<T, Failure>
     ) async -> Result<Success, Failure> {

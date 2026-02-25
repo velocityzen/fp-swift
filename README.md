@@ -152,11 +152,20 @@ func flattenAsync<A: Sendable, B: Sendable, E: Error>(
 
 ## Optional Extensions API
 
+### Match
 ```swift
-// Async (supports both throwing and non-throwing)
+@discardableResult func match<T>(_ onSome: (Wrapped) -> T, _ onNone: @autoclosure () -> T) -> T
+@discardableResult func matchAsync<T>(_ onSome: (Wrapped) async -> T, _ onNone: @autoclosure () -> T) async -> T
+```
+
+### Map Async
+```swift
 func mapAsync<T>(_ transform: (Wrapped) async -> T) async -> T?
 func mapAsync<T>(_ transform: (Wrapped) async throws -> T) async rethrows -> T?
+```
 
+### OrElse
+```swift
 func orElse<T>(_ defaultValue: T) -> T?
 ```
 
@@ -343,6 +352,25 @@ let message = result.toBool ? "ok" : "error"
 ```
 
 ### Optional Extensions
+
+#### Match
+
+```swift
+let optional: String? = "hello"
+
+let message = optional.match(
+    { "got: \($0)" },
+    "nothing"
+)
+// "got: hello"
+
+let missing: String? = nil
+missing.match(
+    { value in print(value) },
+    ()
+)
+// Does nothing
+```
 
 #### Async Map
 

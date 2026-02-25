@@ -1,5 +1,6 @@
 // MARK: - Optional Async Extensions
 public extension Optional {
+    /// Asynchronously transforms the wrapped value, returning nil if the optional is empty.
     func mapAsync<T>(
         _ transform: (Wrapped) async -> T
     ) async -> T? {
@@ -11,6 +12,7 @@ public extension Optional {
         }
     }
 
+    /// Asynchronously transforms the wrapped value with a throwing closure.
     func mapAsync<T>(
         _ transform: (Wrapped) async throws -> T
     ) async rethrows -> T? {
@@ -22,6 +24,7 @@ public extension Optional {
         }
     }
 
+    /// Returns the default value when nil, or nil when the optional has a value.
     func orElse<T>(_ defaultValue: T) -> T? {
         switch self {
             case .some:

@@ -4,6 +4,9 @@ import Foundation
 
 // MARK: Arity 2
 
+/// Combines multiple Results into a single Result containing a tuple of all success values.
+///
+/// Returns the first failure if any Result fails. Supports 2 to 10 arguments.
 public func flatten<A, B, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>
@@ -119,6 +122,9 @@ public func flatten<A, B, C, D, F, G, H, I, J, K, E: Error>(
 
 // MARK: Arity 2
 
+/// Runs multiple async Result-producing operations in parallel and combines their success values into a tuple.
+///
+/// Returns the first failure if any operation fails. Supports 2 to 10 arguments.
 public func flattenAsync<A: Sendable, B: Sendable, E: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>
