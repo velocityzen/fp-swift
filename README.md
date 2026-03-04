@@ -158,10 +158,10 @@ func flattenAsync<A: Sendable, B: Sendable, E: Error>(
 @discardableResult func matchAsync<T>(_ onSome: (Wrapped) async -> T, _ onNone: @autoclosure () -> T) async -> T
 ```
 
-### Map Async
+### Async Mapping
 ```swift
 func mapAsync<T>(_ transform: (Wrapped) async -> T) async -> T?
-func mapAsync<T>(_ transform: (Wrapped) async throws -> T) async rethrows -> T?
+func flatMapAsync<T>(_ transform: (Wrapped) async -> T?) async -> T?
 ```
 
 ### OrElse
@@ -193,11 +193,27 @@ func traverseAsync<Success>(_ transform: (Element) async -> Success) async -> Re
 func traverseAsync<Success, Failure>(_ transform: (Element) async -> Result<Success, Failure>) async -> Result<[Success], Failure>
 ```
 
-### CompactMap Async
+### Async Mapping
 ```swift
-// Async (supports both throwing and non-throwing)
+// mapAsync
+func mapAsync<T>(_ transform: (Element) async -> T) async -> [T]
+func mapAsync<T, Failure: Error>(
+    _ transform: (Element) async -> Result<T, Failure>
+) async -> Result<[T], Failure>
+
+// flatMapAsync
+func flatMapAsync<S: Sequence>(
+    _ transform: (Element) async -> S
+) async -> [S.Element]
+func flatMapAsync<S: Sequence, Failure: Error>(
+    _ transform: (Element) async -> Result<S, Failure>
+) async -> Result<[S.Element], Failure>
+
+// compactMapAsync
 func compactMapAsync<T>(_ transform: (Element) async -> T?) async -> [T]
-func compactMapAsync<T>(_ transform: (Element) async throws -> T?) async rethrows -> [T]
+func compactMapAsync<T, Failure: Error>(
+    _ transform: (Element) async -> Result<T?, Failure>
+) async -> Result<[T], Failure>
 ```
 
 ## Features
@@ -372,15 +388,19 @@ missing.match(
 // Does nothing
 ```
 
-#### Async Map
+#### Async Mapping
 
 ```swift
 let optional: Int? = 42
 
-let result = await optional.mapAsync { value in
+let mapped = await optional.mapAsync { value in
     await fetchDetails(for: value)
 }
 // Returns nil if optional was nil, otherwise the transformed value
+
+let flatMapped = await optional.flatMapAsync { value -> String? in
+    value > 0 ? "id-\(value)" : nil
+}
 ```
 
 #### OrElse
@@ -479,20 +499,39 @@ let result = await userIds.traverseAsync { id in
 }
 ```
 
-#### CompactMap Async
+#### Async Mapping
 
-Asynchronous version of `compactMap`:
+Asynchronous versions of `map`, `flatMap`, and `compactMap`:
 
 ```swift
 let items = [1, 2, 3, 4, 5]
 
-let result = await items.compactMapAsync { item -> String? in
+let mapped = await items.mapAsync { item in
+    "v\(item)"
+}
+
+let flattened = await items.flatMapAsync { item in
+    [item, item * 10]
+}
+
+let compacted = await items.compactMapAsync { item -> String? in
     await processItem(item)  // Returns nil for items to filter out
 }
 
-// Throwing variant
-let result = try await items.compactMapAsync { item throws -> String? in
-    try await validateAndProcess(item)
+enum ParseError: Error {
+    case invalid
+}
+
+let resultMapped = await items.mapAsync { item -> Result<String, ParseError> in
+    .success("item-\(item)")
+}
+
+let resultFlattened = await items.flatMapAsync { item -> Result<[Int], ParseError> in
+    .success([item, item + 100])
+}
+
+let resultCompacted = await items.compactMapAsync { item -> Result<String?, ParseError> in
+    .success(item.isMultiple(of: 2) ? "even-\(item)" : nil)
 }
 ```
 

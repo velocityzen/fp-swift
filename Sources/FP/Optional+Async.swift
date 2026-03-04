@@ -12,13 +12,13 @@ public extension Optional {
         }
     }
 
-    /// Asynchronously transforms the wrapped value with a throwing closure.
-    func mapAsync<T>(
-        _ transform: (Wrapped) async throws -> T
-    ) async rethrows -> T? {
+    /// Asynchronously transforms the wrapped value to another optional value and flattens the result.
+    func flatMapAsync<T>(
+        _ transform: (Wrapped) async -> T?
+    ) async -> T? {
         switch self {
             case .some(let value):
-                return try await transform(value)
+                return await transform(value)
             case .none:
                 return nil
         }

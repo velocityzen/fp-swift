@@ -101,3 +101,35 @@ let message = optional.match(
 )
 // "got: hello"
 ```
+
+### Optional Async Mapping
+
+```swift
+let optional: Int? = 42
+
+let mapped = await optional.mapAsync { value in
+    await fetchDetails(for: value)
+}
+
+let flatMapped = await optional.flatMapAsync { value -> String? in
+    value > 0 ? "id-\(value)" : nil
+}
+```
+
+### Array Async Mapping
+
+```swift
+let items = [1, 2, 3, 4, 5]
+
+let mapped = await items.mapAsync { item in
+    "v\(item)"
+}
+
+let flatMapped = await items.flatMapAsync { item in
+    [item, item * 10]
+}
+
+let compacted = await items.compactMapAsync { item -> String? in
+    await processItem(item)
+}
+```

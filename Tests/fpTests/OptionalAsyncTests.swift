@@ -4,10 +4,6 @@ import Testing
 
 @Suite("Optional+Async Tests")
 struct OptionalAsyncTests {
-    enum TestError: Error, Equatable {
-        case invalid
-    }
-
     // MARK: - mapAsync (non-throwing)
 
     @Test("mapAsync transforms some value with async operation")
@@ -73,25 +69,25 @@ struct OptionalAsyncTests {
         #expect(result == 123)
     }
 
-    // MARK: - mapAsync (throwing)
+    // MARK: - flatMapAsync (non-throwing)
 
-    @Test("mapAsync throwing transforms some value")
-    func mapAsyncThrowingTransformsSome() async throws {
-        let optional: Int? = 42
+    @Test("flatMapAsync transforms some value with async optional operation")
+    func flatMapAsyncTransformsSome() async {
+        let optional: String? = "123"
 
-        let result = try await optional.mapAsync { value async throws -> String in
+        let result = await optional.flatMapAsync { value -> Int? in
             await Task.yield()
-            return "value-\(value)"
+            return Int(value)
         }
 
-        #expect(result == "value-42")
+        #expect(result == 123)
     }
 
-    @Test("mapAsync throwing returns nil for none")
-    func mapAsyncThrowingReturnsNilForNone() async throws {
+    @Test("flatMapAsync returns nil for none")
+    func flatMapAsyncReturnsNilForNone() async {
         let optional: Int? = nil
 
-        let result = try await optional.mapAsync { value async throws -> String in
+        let result = await optional.flatMapAsync { value -> String? in
             await Task.yield()
             return "value-\(value)"
         }
@@ -99,36 +95,26 @@ struct OptionalAsyncTests {
         #expect(result == nil)
     }
 
-    @Test("mapAsync throwing propagates error")
-    func mapAsyncThrowingPropagatesError() async {
-        let optional: Int? = 42
-
-        await #expect(throws: TestError.self) {
-            _ = try await optional.mapAsync { _ async throws -> String in
-                await Task.yield()
-                throw TestError.invalid
-            }
-        }
-    }
-
-    @Test("mapAsync throwing does not throw for nil")
-    func mapAsyncThrowingDoesNotThrowForNil() async throws {
+    @Test("flatMapAsync does not call transform for nil")
+    func flatMapAsyncDoesNotCallTransformForNil() async {
+        let counter = AsyncCounter()
         let optional: Int? = nil
 
-        let result = try await optional.mapAsync { _ async throws -> String in
-            await Task.yield()
-            throw TestError.invalid
+        _ = await optional.flatMapAsync { value -> Int? in
+            await counter.increment()
+            return value
         }
 
-        #expect(result == nil)
+        let count = await counter.count
+        #expect(count == 0)
     }
 
-    @Test("mapAsync throwing works with actor")
-    func mapAsyncThrowingWithActor() async throws {
+    @Test("flatMapAsync works with actor-isolated operations")
+    func flatMapAsyncWithActor() async {
         let counter = AsyncCounter()
         let optional: String? = "test"
 
-        let result = try await optional.mapAsync { value async throws -> String in
+        let result = await optional.flatMapAsync { value -> String? in
             let count = await counter.increment()
             return "\(value)-\(count)"
         }
