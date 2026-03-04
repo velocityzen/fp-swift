@@ -12,6 +12,61 @@ struct ArrayResultTests {
 
     // MARK: - traverse (synchronous)
 
+    // MARK: - separate
+
+    @Test("separate splits mixed results into successes and failures")
+    func separateMixedResults() {
+        let results: [Result<Int, TestError>] = [
+            .success(1),
+            .failure(.invalid),
+            .success(2),
+            .failure(.notFound),
+            .success(3),
+        ]
+
+        let separated = results.separate()
+
+        #expect(separated.successes == [1, 2, 3])
+        #expect(separated.failures == [.invalid, .notFound])
+    }
+
+    @Test("separate returns only successes when no failures exist")
+    func separateAllSuccesses() {
+        let results: [Result<String, TestError>] = [
+            .success("a"),
+            .success("b"),
+            .success("c"),
+        ]
+
+        let separated = results.separate()
+
+        #expect(separated.successes == ["a", "b", "c"])
+        #expect(separated.failures.isEmpty)
+    }
+
+    @Test("separate returns only failures when no successes exist")
+    func separateAllFailures() {
+        let results: [Result<Int, TestError>] = [
+            .failure(.invalid),
+            .failure(.notFound),
+        ]
+
+        let separated = results.separate()
+
+        #expect(separated.successes.isEmpty)
+        #expect(separated.failures == [.invalid, .notFound])
+    }
+
+    @Test("separate handles empty arrays")
+    func separateEmptyArray() {
+        let results: [Result<Int, TestError>] = []
+
+        let separated = results.separate()
+
+        #expect(separated.successes.isEmpty)
+        #expect(separated.failures.isEmpty)
+    }
+
     @Test("traverse succeeds when all transformations succeed")
     func traverseAllSuccess() {
         let numbers = [1, 2, 3, 4, 5]

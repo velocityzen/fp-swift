@@ -193,6 +193,12 @@ func traverseAsync<Success>(_ transform: (Element) async -> Success) async -> Re
 func traverseAsync<Success, Failure>(_ transform: (Element) async -> Result<Success, Failure>) async -> Result<[Success], Failure>
 ```
 
+### Separate
+```swift
+func separate<Success, Failure>() -> (successes: [Success], failures: [Failure])
+    where Element == Result<Success, Failure>
+```
+
 ### Async Mapping
 ```swift
 // mapAsync

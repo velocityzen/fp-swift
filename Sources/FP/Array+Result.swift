@@ -84,4 +84,26 @@ public extension Array {
 
         return .success(results)
     }
+
+    /// Separates an array of Results into success and failure arrays.
+    ///
+    /// - Returns: A tuple containing all success values and all failure values
+    func separate<Success, Failure>() -> (successes: [Success], failures: [Failure])
+    where Element == Result<Success, Failure> {
+        var successes: [Success] = []
+        var failures: [Failure] = []
+        successes.reserveCapacity(count)
+        failures.reserveCapacity(count)
+
+        for result in self {
+            switch result {
+                case .success(let value):
+                    successes.append(value)
+                case .failure(let error):
+                    failures.append(error)
+            }
+        }
+
+        return (successes: successes, failures: failures)
+    }
 }

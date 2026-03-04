@@ -56,6 +56,20 @@ func processOrders(_ orderIds: [Int]) async -> Result<[Order], OrderError> {
 // Fails fast on first error, returns all orders on success
 ```
 
+### Separating Result Arrays
+
+```swift
+let results: [Result<Int, ValidationError>] = [
+    .success(1),
+    .failure(.invalid),
+    .success(2),
+]
+
+let separated = results.separate()
+// separated.successes == [1, 2]
+// separated.failures == [.invalid]
+```
+
 ### Pipeline with Operators
 
 ```swift
