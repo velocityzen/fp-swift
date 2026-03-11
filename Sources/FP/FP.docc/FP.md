@@ -6,6 +6,25 @@ A lightweight functional programming toolkit for Swift, providing composable uti
 
 FP extends Swift's built-in types with functional programming patterns for both synchronous and asynchronous contexts. Chain operations on `Result`, traverse arrays with error handling, compose functions with pipe operators, and more.
 
+### Do Notation
+
+Compose multiple Result operations with an accumulating context, short-circuiting on the first failure:
+
+```swift
+func createOrder(userId: Int, itemId: Int) -> Result<Order, AppError> {
+    ResultDo<AppError>()
+        .bind { fetchUser(id: userId) }
+        .bind { user in fetchItem(id: itemId) }
+        .let { user, item in item.price * user.discountRate }
+        .bind { user, item, price in
+            validateOrder(user: user, item: item, price: price)
+        }
+        .map { user, item, price, validation in
+            Order(user: user, item: item, price: price)
+        }
+}
+```
+
 ### Chaining Async Operations
 
 ```swift

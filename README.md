@@ -26,6 +26,44 @@ import FP
 
 ## Result Extensions API
 
+### Do Notation
+
+Monadic do-notation for composing multiple Result operations with an accumulating context (like fp-ts `Do` / `bind` / `let`):
+
+```swift
+// ResultDo starts the chain, bind adds Result values, let adds pure values
+let result = ResultDo<MyError>()
+    .bind { getUser() }                              // Result<User, MyError>
+    .bind { user in getProfile(user) }               // Result<(User, Profile), MyError>
+    .let { _, profile in profile.name }              // Result<(User, Profile, String), MyError>
+    .map { user, _, name in "\(user.id): \(name)" }  // Result<String, MyError>
+
+// Short-circuits on the first failure
+let result = ResultDo<MyError>()
+    .bind { getUser() }                // .failure(.notFound) → stops here
+    .bind { user in getProfile(user) } // never called
+    .map { user, profile in profile }  // never called
+// result == .failure(.notFound)
+```
+
+**API:**
+```swift
+// Start the chain
+ResultDo<Failure>()
+
+// Bind: add a Result value, accumulates into a growing tuple
+func bind<A>(_ f: () -> Result<A, Failure>) -> Result<A, Failure>
+func bind<B>(_ f: (A) -> Result<B, Failure>) -> Result<(A, B), Failure>
+func bind<C>(_ f: (A, B) -> Result<C, Failure>) -> Result<(A, B, C), Failure>
+// ... up to 5 accumulated values
+
+// Let: add a pure (non-Result) value
+func `let`<A>(_ f: () -> A) -> Result<A, Failure>
+func `let`<B>(_ f: (A) -> B) -> Result<(A, B), Failure>
+func `let`<C>(_ f: (A, B) -> C) -> Result<(A, B, C), Failure>
+// ... up to 5 accumulated values
+```
+
 ### Map & FlatMap
 ```swift
 // Non-throwing
@@ -542,6 +580,23 @@ let resultCompacted = await items.compactMapAsync { item -> Result<String?, Pars
 ```
 
 ## Usage Examples
+
+### Do Notation for Composing Results
+
+```swift
+func createOrder(userId: Int, itemId: Int) -> Result<Order, AppError> {
+    ResultDo<AppError>()
+        .bind { fetchUser(id: userId) }
+        .bind { user in fetchItem(id: itemId) }
+        .let { user, item in item.price * user.discountRate }
+        .bind { user, item, price in
+            validateOrder(user: user, item: item, price: price)
+        }
+        .map { user, item, price, validation in
+            Order(user: user, item: item, price: price)
+        }
+}
+```
 
 ### Chaining Async Operations
 
