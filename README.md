@@ -55,13 +55,13 @@ ResultDo<Failure>()
 func bind<A>(_ f: () -> Result<A, Failure>) -> Result<A, Failure>
 func bind<B>(_ f: (A) -> Result<B, Failure>) -> Result<(A, B), Failure>
 func bind<C>(_ f: (A, B) -> Result<C, Failure>) -> Result<(A, B, C), Failure>
-// ... up to 5 accumulated values
+// ... up to 10 accumulated values
 
 // Let: add a pure (non-Result) value
 func `let`<A>(_ f: () -> A) -> Result<A, Failure>
 func `let`<B>(_ f: (A) -> B) -> Result<(A, B), Failure>
 func `let`<C>(_ f: (A, B) -> C) -> Result<(A, B, C), Failure>
-// ... up to 5 accumulated values
+// ... up to 10 accumulated values
 ```
 
 ### Map & FlatMap
