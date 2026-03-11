@@ -23,6 +23,20 @@ func createOrder(userId: Int, itemId: Int) -> Result<Order, AppError> {
             Order(user: user, item: item, price: price)
         }
 }
+
+// Async variant — sync and async steps can be freely mixed
+func createOrderAsync(userId: Int, itemId: Int) async -> Result<Order, AppError> {
+    await ResultDo<AppError>()
+        .bindAsync { await fetchUser(id: userId) }
+        .bindAsync { user in await fetchItem(id: itemId) }
+        .let { user, item in item.price * user.discountRate }
+        .bindAsync { user, item, price in
+            await validateOrder(user: user, item: item, price: price)
+        }
+        .map { user, item, price, validation in
+            Order(user: user, item: item, price: price)
+        }
+}
 ```
 
 ### Chaining Async Operations

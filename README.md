@@ -62,6 +62,27 @@ func `let`<A>(_ f: () -> A) -> Result<A, Failure>
 func `let`<B>(_ f: (A) -> B) -> Result<(A, B), Failure>
 func `let`<C>(_ f: (A, B) -> C) -> Result<(A, B, C), Failure>
 // ... up to 10 accumulated values
+
+// Async variants: bindAsync / letAsync
+func bindAsync<A>(_ f: () async -> Result<A, Failure>) async -> Result<A, Failure>
+func bindAsync<B>(_ f: (A) async -> Result<B, Failure>) async -> Result<(A, B), Failure>
+// ... up to 10 accumulated values
+
+func letAsync<A>(_ f: () async -> A) async -> Result<A, Failure>
+func letAsync<B>(_ f: (A) async -> B) async -> Result<(A, B), Failure>
+// ... up to 10 accumulated values
+```
+
+Sync and async can be freely mixed in the same chain:
+
+```swift
+let result = await ResultDo<MyError>()
+    .bind { getCachedUser() }                          // sync
+    .bindAsync { user in await fetchProfile(user) }    // async
+    .let { user, profile in profile.name }             // sync
+    .mapAsync { user, profile, name in                 // async
+        await formatDisplay(user, name)
+    }
 ```
 
 ### Map & FlatMap
@@ -591,6 +612,20 @@ func createOrder(userId: Int, itemId: Int) -> Result<Order, AppError> {
         .let { user, item in item.price * user.discountRate }
         .bind { user, item, price in
             validateOrder(user: user, item: item, price: price)
+        }
+        .map { user, item, price, validation in
+            Order(user: user, item: item, price: price)
+        }
+}
+
+// Async variant with mixed sync/async steps
+func createOrderAsync(userId: Int, itemId: Int) async -> Result<Order, AppError> {
+    await ResultDo<AppError>()
+        .bindAsync { await fetchUser(id: userId) }
+        .bindAsync { user in await fetchItem(id: itemId) }
+        .let { user, item in item.price * user.discountRate }
+        .bindAsync { user, item, price in
+            await validateOrder(user: user, item: item, price: price)
         }
         .map { user, item, price, validation in
             Order(user: user, item: item, price: price)
