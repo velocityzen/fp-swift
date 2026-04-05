@@ -123,6 +123,18 @@ let result = Result<User, AppError>.fromOptional(user) {
 }
 ```
 
+### Mapping to Constant Values
+
+```swift
+let result: Result<Int, AppError> = .success(42)
+
+// Map to a specific constant
+let mapped = result.as("done")  // .success("done")
+
+// Map to Void (discard the success value)
+let unit = result.asUnit()  // .success(())
+```
+
 ### Side Effects with Tap
 
 ```swift

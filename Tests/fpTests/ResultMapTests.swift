@@ -141,6 +141,56 @@ struct ResultMapTests {
         #expect(count == 0)
     }
 
+    // MARK: - as
+
+    @Test("as maps success value to constant")
+    func asMapsSuccessToConstant() {
+        let result: Result<Int, TestError> = .success(42)
+
+        let mapped = result.as("constant")
+
+        #expect(mapped == .success("constant"))
+    }
+
+    @Test("as preserves failure")
+    func asPreservesFailure() {
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let mapped = result.as("constant")
+
+        #expect(mapped == .failure(.invalid))
+    }
+
+    // MARK: - asUnit
+
+    @Test("asUnit maps success value to Void")
+    func asUnitMapsSuccessToVoid() {
+        let result: Result<Int, TestError> = .success(42)
+
+        let mapped = result.asUnit()
+
+        switch mapped {
+            case .success:
+                break  // expected
+            case .failure:
+                Issue.record("Expected success")
+        }
+    }
+
+    @Test("asUnit preserves failure")
+    func asUnitPreservesFailure() {
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let mapped = result.asUnit()
+
+        switch mapped {
+            case .success:
+                Issue.record("Expected failure")
+            case .failure(let error):
+                #expect(error == .invalid)
+        }
+    }
+
     // MARK: - flatMapAsync
 
     @Test("flatMapAsync transforms success to new success")

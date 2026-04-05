@@ -42,6 +42,16 @@ public extension Result {
                 return .failure(error)
         }
     }
+
+    /// Maps the success value to the specified constant value.
+    func `as`<T>(_ value: T) -> Result<T, Failure> {
+        map { _ in value }
+    }
+
+    /// Maps the success value to Void.
+    func asUnit() -> Result<Void, Failure> {
+        map { _ in () }
+    }
 }
 
 // MARK: - Additional Convenience Methods

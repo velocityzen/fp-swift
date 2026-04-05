@@ -93,6 +93,10 @@ func flatMapAsync<T>(_ transform: (Success) async -> Result<T, Failure>) async -
 
 // Throwing (requires Failure == Error)
 func mapAsync<T>(_ transform: (Success) async throws -> T) async -> Result<T, Error>
+
+// Map to constant value
+func `as`<T>(_ value: T) -> Result<T, Failure>
+func asUnit() -> Result<Void, Failure>
 ```
 
 ### Match
@@ -335,6 +339,25 @@ let result = await Result.fromTask {
 // Also works with Tasks returning Results
 let task = Task { await someResultOperation() }
 let result: Result<Value, Error> = await Result.fromTask(task)
+```
+
+#### Map to Constant Value
+
+Replace the success value with a constant or discard it entirely:
+
+```swift
+let result: Result<Int, AppError> = .success(42)
+
+// Map to a specific constant
+let mapped = result.as("done")  // .success("done")
+
+// Map to Void (discard the success value)
+let unit = result.asUnit()  // .success(())
+
+// Useful in chains where you only care about success/failure
+fetchUser(id: 1)
+    .tap { user in saveToCache(user) }
+    .asUnit()  // Result<Void, AppError>
 ```
 
 #### Tap for Side Effects
