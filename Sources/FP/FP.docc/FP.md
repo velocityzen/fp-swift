@@ -175,6 +175,47 @@ let flatMapped = await optional.flatMapAsync { value -> String? in
 }
 ```
 
+### AsyncSequence Result Processing
+
+```swift
+let stream = AsyncStream<Result<Int, AppError>> { continuation in
+    continuation.success(1)
+    continuation.failure(.invalid)
+    continuation.success(2)
+    continuation.finish()
+}
+
+// Filter to just success values
+for await value in stream.successes() {
+    print(value)  // 1, 2
+}
+
+// Transform, tap, and chain
+for await result in stream
+    .tap { value in logger.info("got \(value)") }
+    .tapError { error in logger.error("\(error)") }
+    .mapAsync { value in await enrich(value) }
+    .flatMap { value in validate(value) }
+{
+    // ...
+}
+```
+
+### AsyncStream Result Factories
+
+```swift
+// Create single-element Result streams
+let success: AsyncStream<Result<Int, MyError>> = .success(42)
+let failure: AsyncStream<Result<Int, MyError>> = .failure(.someError)
+
+// Continuation helpers
+let stream = AsyncStream<Result<Int, MyError>> { continuation in
+    continuation.success(1)
+    continuation.failure(.someError)
+    continuation.finishWithSuccess(2)
+}
+```
+
 ### Array Async Mapping
 
 ```swift

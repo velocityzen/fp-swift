@@ -89,6 +89,7 @@ let result = await ResultDo<MyError>()
 ```swift
 // Non-throwing
 func mapAsync<T>(_ transform: (Success) async -> T) async -> Result<T, Failure>
+func mapFailureAsync<E: Error>(_ transform: (Failure) async -> E) async -> Result<Success, E>
 func flatMapAsync<T>(_ transform: (Success) async -> Result<T, Failure>) async -> Result<T, Failure>
 
 // Throwing (requires Failure == Error)
@@ -232,7 +233,51 @@ func flatMapAsync<T>(_ transform: (Wrapped) async -> T?) async -> T?
 func orElse<T>(_ defaultValue: T) -> T?
 ```
 
-## AsyncStream.Continuation Extensions API
+## AsyncSequence Extensions API
+
+Extensions for any `AsyncSequence` where `Element == Result<Success, Failure>`:
+
+### Filter
+```swift
+func successes() -> AsyncCompactMapSequence  // unwraps success values
+func failures() -> AsyncCompactMapSequence   // unwraps failure errors
+```
+
+### Map & FlatMap
+```swift
+// Sync
+func map<T>(_ transform: (Success) -> T) -> AsyncMapSequence<Self, Result<T, Failure>>
+func mapFailure<E>(_ transform: (Failure) -> E) -> AsyncMapSequence<Self, Result<Success, E>>
+func flatMap<T>(_ transform: (Success) -> Result<T, Failure>) -> AsyncMapSequence<Self, Result<T, Failure>>
+
+// Async
+func mapAsync<T>(_ transform: (Success) async -> T) -> AsyncMapSequence<Self, Result<T, Failure>>
+func mapFailureAsync<E>(_ transform: (Failure) async -> E) -> AsyncMapSequence<Self, Result<Success, E>>
+func flatMapAsync<T>(_ transform: (Success) async -> Result<T, Failure>) -> AsyncMapSequence<Self, Result<T, Failure>>
+```
+
+### Tap
+```swift
+// Sync
+func tap(_ action: (Success) -> Void) -> AsyncMapSequence<Self, Result<Success, Failure>>
+func tapError(_ action: (Failure) -> Void) -> AsyncMapSequence<Self, Result<Success, Failure>>
+
+// Async
+func tapAsync(_ action: (Success) async -> Void) -> AsyncMapSequence<Self, Result<Success, Failure>>
+func tapErrorAsync(_ action: (Failure) async -> Void) -> AsyncMapSequence<Self, Result<Success, Failure>>
+```
+
+## AsyncStream Extensions API
+
+### Static Factories
+Create single-element Result streams:
+
+```swift
+static func success<Success, Failure>(_ value: Success) -> AsyncStream<Result<Success, Failure>>
+static func failure<Success, Failure>(_ error: Failure) -> AsyncStream<Result<Success, Failure>>
+```
+
+### Continuation Extensions
 
 Extensions for `AsyncStream.Continuation` when the element type is `Result<Success, Failure>`:
 
@@ -498,11 +543,45 @@ let optional: Int? = nil
 let fallback = optional.orElse(99)  // Returns 99 when nil, nil when has value
 ```
 
-### AsyncStream.Continuation Extensions
+### AsyncSequence Result Processing
 
-Convenience methods for yielding `Result` values in async streams:
+Process streams of Results with familiar functional operations:
 
 ```swift
+let stream = AsyncStream<Result<Int, AppError>> { continuation in
+    continuation.success(1)
+    continuation.success(2)
+    continuation.failure(.invalid)
+    continuation.success(3)
+    continuation.finish()
+}
+
+// Filter to just success values
+for await value in stream.successes() {
+    print(value)  // 1, 2, 3
+}
+
+// Transform, tap, and chain
+for await result in stream
+    .tap { value in logger.info("got \(value)") }
+    .tapError { error in logger.error("\(error)") }
+    .mapAsync { value in await enrich(value) }
+    .flatMap { value in validate(value) }
+{
+    // ...
+}
+```
+
+### AsyncStream Extensions
+
+Create single-element Result streams or use convenience methods on continuations:
+
+```swift
+// Static factories — single-element streams
+let success: AsyncStream<Result<Int, MyError>> = .success(42)
+let failure: AsyncStream<Result<Int, MyError>> = .failure(.someError)
+
+// Continuation helpers
 let stream = AsyncStream<Result<Int, MyError>> { continuation in
     continuation.success(1)
     continuation.success(2)

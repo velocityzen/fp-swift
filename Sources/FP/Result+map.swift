@@ -31,6 +31,19 @@ public extension Result {
         }
     }
 
+    /// Asynchronously transforms the failure error.
+    func mapFailureAsync<E: Error>(
+        _ transform: (Failure) async -> E
+    ) async -> Result<Success, E> {
+        switch self {
+            case .success(let value):
+                return .success(value)
+            case .failure(let error):
+                let newError = await transform(error)
+                return .failure(newError)
+        }
+    }
+
     /// Asynchronously transforms the success value into a new Result.
     func flatMapAsync<T>(
         _ transform: (Success) async -> Result<T, Failure>

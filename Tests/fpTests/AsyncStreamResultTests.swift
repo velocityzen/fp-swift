@@ -9,7 +9,37 @@ struct AsyncStreamResultTests {
         case other
     }
 
-    // MARK: - success(_:)
+    // MARK: - AsyncStream.success(_:)
+
+    @Test("AsyncStream.success creates a single-element success stream")
+    func staticSuccessCreatesStream() async {
+        let stream: AsyncStream<Result<Int, TestError>> = .success(42)
+
+        var results: [Result<Int, TestError>] = []
+        for await result in stream {
+            results.append(result)
+        }
+
+        #expect(results.count == 1)
+        #expect(results[0] == .success(42))
+    }
+
+    // MARK: - AsyncStream.failure(_:)
+
+    @Test("AsyncStream.failure creates a single-element failure stream")
+    func staticFailureCreatesStream() async {
+        let stream: AsyncStream<Result<Int, TestError>> = .failure(.failed)
+
+        var results: [Result<Int, TestError>] = []
+        for await result in stream {
+            results.append(result)
+        }
+
+        #expect(results.count == 1)
+        #expect(results[0] == .failure(.failed))
+    }
+
+    // MARK: - Continuation.success(_:)
 
     @Test("success yields a success result")
     func successYieldsResult() async {
