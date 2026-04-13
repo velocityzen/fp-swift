@@ -4,6 +4,26 @@ _This is not a full fledged package for functional programming in Swift. This wi
 
 A lightweight functional programming toolkit for Swift, providing composable utilities for working with `Result`, `Optional`, and `Array` types in both synchronous and asynchronous contexts. 
 
+## Contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Features](#features)
+  - [Pipe Operators](#pipe-operators)
+  - [Result Extensions](#result-extensions)
+  - [Flatten Results](#flatten-results)
+  - [Array Extensions](#array-extensions)
+  - [AsyncSequence Result Processing](#asyncsequence-result-processing)
+  - [AsyncStream Extensions](#asyncstream-extensions)
+  - [Optional Extensions](#optional-extensions)
+- [API Reference](#result-extensions-api)
+  - [Result Extensions API](#result-extensions-api)
+  - [Flatten Functions API](#flatten-functions-api)
+  - [Array Extensions API](#array-extensions-api)
+  - [AsyncSequence Extensions API](#asyncsequence-extensions-api)
+  - [AsyncStream Extensions API](#asyncstream-extensions-api)
+  - [Optional Extensions API](#optional-extensions-api)
+
 ## Requirements
 
 - Swift 6.2+
@@ -14,7 +34,7 @@ Add the package to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/velocityzen/fp-swift.git", from: "0.2.0")
+    .package(url: "https://github.com/velocityzen/fp-swift.git", from: "1.7.0")
 ]
 ```
 
@@ -22,6 +42,421 @@ Then import it:
 
 ```swift
 import FP
+```
+
+## Features
+
+### Pipe Operators
+
+Forward pipe operators for function composition:
+
+```swift
+// Basic pipe: pass value to function
+let result = 5 |> double |> toString  // "10"
+
+// Pipe into second argument
+let result = value |>> (function, firstArg)
+
+// Pipe into third argument  
+let result = value |>>> (function, firstArg, secondArg)
+
+// Flow operator: create function from another function
+let transform = |> double  // (Int) -> Int
+```
+
+### Result Extensions
+
+#### Do Notation for Composing Results
+
+```swift
+func createOrder(userId: Int, itemId: Int) -> Result<Order, AppError> {
+    ResultDo<AppError>()
+        .bind { fetchUser(id: userId) }
+        .bind { user in fetchItem(id: itemId) }
+        .let { user, item in item.price * user.discountRate }
+        .bind { user, item, price in
+            validateOrder(user: user, item: item, price: price)
+        }
+        .map { user, item, price, validation in
+            Order(user: user, item: item, price: price)
+        }
+}
+
+// Async variant with mixed sync/async steps
+func createOrderAsync(userId: Int, itemId: Int) async -> Result<Order, AppError> {
+    await ResultDo<AppError>()
+        .bindAsync { await fetchUser(id: userId) }
+        .bindAsync { user in await fetchItem(id: itemId) }
+        .let { user, item in item.price * user.discountRate }
+        .bindAsync { user, item, price in
+            await validateOrder(user: user, item: item, price: price)
+        }
+        .map { user, item, price, validation in
+            Order(user: user, item: item, price: price)
+        }
+}
+```
+
+#### Chaining Async Operations
+
+```swift
+func processUser(id: Int) async -> Result<ProcessedUser, Error> {
+    await Result.fromAsync { try await api.fetchUser(id: id) }
+        .tapAsync { user in await analytics.track(.userFetched(user)) }
+        .mapAsync { user in await enrichUserData(user) }
+        .flatMapAsync { user in await validateUser(user) }
+        .tapError { error in logger.error("Failed: \(error)") }
+}
+```
+
+#### Async Map Operations
+
+```swift
+let result: Result<Int, Error> = .success(42)
+
+// Transform success value asynchronously
+let mapped = await result.mapAsync { value in
+    await fetchData(for: value)
+}
+
+// FlatMap for chaining Result-returning async operations
+let chained = await result.flatMapAsync { value in
+    await validateAndTransform(value)  // Returns Result<T, Error>
+}
+
+// Create Result from async throwing operation
+let result = await Result.fromAsync {
+    try await networkCall()
+}
+
+// Create Result from Task
+let task = Task { try await networkCall() }
+let result = await Result.fromTask(task)
+
+// Or with closure syntax
+let result = await Result.fromTask {
+    Task { try await networkCall() }
+}
+
+// Also works with Tasks returning Results
+let task = Task { await someResultOperation() }
+let result: Result<Value, Error> = await Result.fromTask(task)
+```
+
+#### Map to Constant Value
+
+Replace the success value with a constant or discard it entirely:
+
+```swift
+let result: Result<Int, AppError> = .success(42)
+
+// Map to a specific constant
+let mapped = result.as("done")  // .success("done")
+
+// Map to Void (discard the success value)
+let unit = result.asUnit()  // .success(())
+
+// Useful in chains where you only care about success/failure
+fetchUser(id: 1)
+    .tap { user in saveToCache(user) }
+    .asUnit()  // Result<Void, AppError>
+```
+
+#### Tap for Side Effects
+
+Perform side effects while keeping the Result chain flowing:
+
+```swift
+someOperation()
+    .tap { value in saveToCache(value) }
+    .tapError { error in logError(error) }
+    .map { value in transform(value) }
+
+// Async variants
+await result
+    .tapAsync { value in await sendAnalytics(value) }
+    .tapErrorAsync { error in await reportError(error) }
+```
+
+Tap variants:
+- `.tap()` - Sync side effect on success
+- `.tapAsync()` - Async side effect on success
+- `.tapError()` - Sync side effect on failure
+- `.tapErrorAsync()` - Async side effect on failure
+- Throwing variants convert `Failure` type to `Error`
+
+#### Match
+
+Branch on a Result without switching manually:
+
+```swift
+let message = result.match(
+    { "value: \($0)" },
+    { "error: \($0)" }
+)
+
+let fallback = result.match("ok", "error")
+
+let mixed = result.match(
+    { "value: \($0)" },
+    "error"
+)
+
+let asyncMessage = await result.matchAsync(
+    { value in
+        await Task.yield()
+        return "value: \(value)"
+    },
+    { error in
+        await Task.yield()
+        return "error: \(error)"
+    }
+)
+
+let asyncMixed = await result.matchAsync(
+    "ok",
+    { error in
+        await Task.yield()
+        return "error: \(error)"
+    }
+)
+
+// Use match for side effects without capturing the result
+result.match(
+    { value in print("Success: \(value)") },
+    { error in print("Error: \(error)") }
+)
+```
+
+#### From Optional
+
+Convert optionals to Results:
+
+```swift
+// With static error
+let result = Result<User, AppError>.fromOptional(user, error: .notFound)
+
+// With lazy error (only evaluated if nil)
+let result = Result<User, AppError>.fromOptional(user) {
+    .notFound(id: userId)
+}
+```
+
+#### To Bool
+
+Convert Result to boolean for simple success/failure checks:
+
+```swift
+let result: Result<User, AppError> = fetchUser(id: 1)
+
+if result.toBool {
+    print("User fetched successfully")
+}
+
+// Or in ternary expressions
+let message = result.toBool ? "ok" : "error"
+```
+
+### Flatten Results
+
+Combine multiple Results into a single Result with a tuple of values:
+
+```swift
+let userResult: Result<User, AppError> = fetchUser(id: 1)
+let profileResult: Result<Profile, AppError> = fetchProfile(id: 1)
+let settingsResult: Result<Settings, AppError> = fetchSettings(id: 1)
+
+// Sync flatten - combine already-computed Results
+let combined = flatten(userResult, profileResult, settingsResult)
+// Result<(User, Profile, Settings), AppError>
+
+// Use map to create named tuple for easier access
+let namedResult = flatten(userResult, profileResult)
+    .map { (user: $0, profile: $1) }
+// Result<(user: User, profile: Profile), AppError>
+
+if case .success(let data) = namedResult {
+    print(data.user.name)
+    print(data.profile.bio)
+}
+```
+
+#### Async Flatten with Parallel Execution
+
+Run multiple async operations in parallel and combine their results:
+
+```swift
+func loadDashboard(userId: Int) async -> Result<Dashboard, AppError> {
+    // All three operations run in parallel
+    let result = await flattenAsync(
+        await fetchUser(id: userId),
+        await fetchNotifications(for: userId),
+        await fetchRecommendations(for: userId)
+    )
+    // Result<(User, [Notification], [Recommendation]), AppError>
+    
+    return result.map { user, notifications, recommendations in
+        Dashboard(user: user, notifications: notifications, recommendations: recommendations)
+    }
+}
+```
+
+### Array Extensions
+
+#### Traverse
+
+Apply a Result-returning transform to each element, short-circuiting on first failure:
+
+```swift
+let userIds = [1, 2, 3]
+
+// Sync traverse
+let result = userIds.traverse { id -> Result<User, AppError> in
+    fetchUser(id: id)
+}
+// Returns .success([User]) or .failure on first error
+
+// Async traverse
+let result = await userIds.traverseAsync { id in
+    await fetchUserAsync(id: id)
+}
+```
+
+#### Async Mapping
+
+Asynchronous versions of `map`, `flatMap`, and `compactMap`:
+
+```swift
+let items = [1, 2, 3, 4, 5]
+
+let mapped = await items.mapAsync { item in
+    "v\(item)"
+}
+
+let flattened = await items.flatMapAsync { item in
+    [item, item * 10]
+}
+
+let compacted = await items.compactMapAsync { item -> String? in
+    await processItem(item)  // Returns nil for items to filter out
+}
+
+enum ParseError: Error {
+    case invalid
+}
+
+let resultMapped = await items.mapAsync { item -> Result<String, ParseError> in
+    .success("item-\(item)")
+}
+
+let resultFlattened = await items.flatMapAsync { item -> Result<[Int], ParseError> in
+    .success([item, item + 100])
+}
+
+let resultCompacted = await items.compactMapAsync { item -> Result<String?, ParseError> in
+    .success(item.isMultiple(of: 2) ? "even-\(item)" : nil)
+}
+```
+
+### AsyncSequence Result Processing
+
+Process streams of Results with familiar functional operations:
+
+```swift
+let stream = AsyncStream<Result<Int, AppError>> { continuation in
+    continuation.success(1)
+    continuation.success(2)
+    continuation.failure(.invalid)
+    continuation.success(3)
+    continuation.finish()
+}
+
+// Filter to just success values
+for await value in stream.successes() {
+    print(value)  // 1, 2, 3
+}
+
+// Transform, tap, and chain
+for await result in stream
+    .tap { value in logger.info("got \(value)") }
+    .tapError { error in logger.error("\(error)") }
+    .mapAsync { value in await enrich(value) }
+    .flatMap { value in validate(value) }
+{
+    // ...
+}
+```
+
+### AsyncStream Extensions
+
+Create single-element Result streams or use convenience methods on continuations:
+
+```swift
+// Static factories — single-element streams
+let success: AsyncStream<Result<Int, MyError>> = .success(42)
+let failure: AsyncStream<Result<Int, MyError>> = .failure(.someError)
+
+// Continuation helpers
+let stream = AsyncStream<Result<Int, MyError>> { continuation in
+    continuation.success(1)
+    continuation.success(2)
+    continuation.failure(.someError)
+    continuation.finish()
+}
+
+// Or finish with a final value
+let stream = AsyncStream<Result<String, MyError>> { continuation in
+    continuation.success("processing...")
+    continuation.finishWithSuccess("done")  // Yields and finishes
+}
+
+// Finish with error
+let stream = AsyncStream<Result<Data, NetworkError>> { continuation in
+    continuation.finishWithFailure(.connectionLost)  // Yields error and finishes
+}
+```
+
+### Optional Extensions
+
+#### Match
+
+```swift
+let optional: String? = "hello"
+
+let message = optional.match(
+    { "got: \($0)" },
+    "nothing"
+)
+// "got: hello"
+
+let missing: String? = nil
+missing.match(
+    { value in print(value) },
+    ()
+)
+// Does nothing
+```
+
+#### Async Mapping
+
+```swift
+let optional: Int? = 42
+
+let mapped = await optional.mapAsync { value in
+    await fetchDetails(for: value)
+}
+// Returns nil if optional was nil, otherwise the transformed value
+
+let flatMapped = await optional.flatMapAsync { value -> String? in
+    value > 0 ? "id-\(value)" : nil
+}
+```
+
+#### OrElse
+
+```swift
+let optional: Int? = nil
+let fallback = optional.orElse(99)  // Returns 99 when nil, nil when has value
 ```
 
 ## Result Extensions API
@@ -214,23 +649,43 @@ func flattenAsync<A: Sendable, B: Sendable, E: Error>(
 // ... up to 10 arguments
 ```
 
-## Optional Extensions API
+## Array Extensions API
 
-### Match
+### Traverse
 ```swift
-@discardableResult func match<T>(_ onSome: (Wrapped) -> T, _ onNone: @autoclosure () -> T) -> T
-@discardableResult func matchAsync<T>(_ onSome: (Wrapped) async -> T, _ onNone: @autoclosure () -> T) async -> T
+func traverse<Success>(_ transform: (Element) -> Success) -> Result<[Success], Never>
+func traverse<Success, Failure>(_ transform: (Element) -> Result<Success, Failure>) -> Result<[Success], Failure>
+func traverseAsync<Success>(_ transform: (Element) async -> Success) async -> Result<[Success], Never>
+func traverseAsync<Success, Failure>(_ transform: (Element) async -> Result<Success, Failure>) async -> Result<[Success], Failure>
+```
+
+### Separate
+```swift
+func separate<Success, Failure>() -> (successes: [Success], failures: [Failure])
+    where Element == Result<Success, Failure>
 ```
 
 ### Async Mapping
 ```swift
-func mapAsync<T>(_ transform: (Wrapped) async -> T) async -> T?
-func flatMapAsync<T>(_ transform: (Wrapped) async -> T?) async -> T?
-```
+// mapAsync
+func mapAsync<T>(_ transform: (Element) async -> T) async -> [T]
+func mapAsync<T, Failure: Error>(
+    _ transform: (Element) async -> Result<T, Failure>
+) async -> Result<[T], Failure>
 
-### OrElse
-```swift
-func orElse<T>(_ defaultValue: T) -> T?
+// flatMapAsync
+func flatMapAsync<S: Sequence>(
+    _ transform: (Element) async -> S
+) async -> [S.Element]
+func flatMapAsync<S: Sequence, Failure: Error>(
+    _ transform: (Element) async -> Result<S, Failure>
+) async -> Result<[S.Element], Failure>
+
+// compactMapAsync
+func compactMapAsync<T>(_ transform: (Element) async -> T?) async -> [T]
+func compactMapAsync<T, Failure: Error>(
+    _ transform: (Element) async -> Result<T?, Failure>
+) async -> Result<[T], Failure>
 ```
 
 ## AsyncSequence Extensions API
@@ -291,480 +746,23 @@ func finishWithSuccess<Success, Failure>(_ value: Success)
 func finishWithFailure<Success, Failure>(_ error: Failure)
 ```
 
-## Array Extensions API
+## Optional Extensions API
 
-### Traverse
+### Match
 ```swift
-func traverse<Success>(_ transform: (Element) -> Success) -> Result<[Success], Never>
-func traverse<Success, Failure>(_ transform: (Element) -> Result<Success, Failure>) -> Result<[Success], Failure>
-func traverseAsync<Success>(_ transform: (Element) async -> Success) async -> Result<[Success], Never>
-func traverseAsync<Success, Failure>(_ transform: (Element) async -> Result<Success, Failure>) async -> Result<[Success], Failure>
-```
-
-### Separate
-```swift
-func separate<Success, Failure>() -> (successes: [Success], failures: [Failure])
-    where Element == Result<Success, Failure>
+@discardableResult func match<T>(_ onSome: (Wrapped) -> T, _ onNone: @autoclosure () -> T) -> T
+@discardableResult func matchAsync<T>(_ onSome: (Wrapped) async -> T, _ onNone: @autoclosure () -> T) async -> T
 ```
 
 ### Async Mapping
 ```swift
-// mapAsync
-func mapAsync<T>(_ transform: (Element) async -> T) async -> [T]
-func mapAsync<T, Failure: Error>(
-    _ transform: (Element) async -> Result<T, Failure>
-) async -> Result<[T], Failure>
-
-// flatMapAsync
-func flatMapAsync<S: Sequence>(
-    _ transform: (Element) async -> S
-) async -> [S.Element]
-func flatMapAsync<S: Sequence, Failure: Error>(
-    _ transform: (Element) async -> Result<S, Failure>
-) async -> Result<[S.Element], Failure>
-
-// compactMapAsync
-func compactMapAsync<T>(_ transform: (Element) async -> T?) async -> [T]
-func compactMapAsync<T, Failure: Error>(
-    _ transform: (Element) async -> Result<T?, Failure>
-) async -> Result<[T], Failure>
+func mapAsync<T>(_ transform: (Wrapped) async -> T) async -> T?
+func flatMapAsync<T>(_ transform: (Wrapped) async -> T?) async -> T?
 ```
 
-## Features
-
-### Pipe Operators
-
-Forward pipe operators for function composition:
-
+### OrElse
 ```swift
-// Basic pipe: pass value to function
-let result = 5 |> double |> toString  // "10"
-
-// Pipe into second argument
-let result = value |>> (function, firstArg)
-
-// Pipe into third argument  
-let result = value |>>> (function, firstArg, secondArg)
-
-// Flow operator: create function from another function
-let transform = |> double  // (Int) -> Int
-```
-
-### Result Extensions
-
-#### Async Map Operations
-
-```swift
-let result: Result<Int, Error> = .success(42)
-
-// Transform success value asynchronously
-let mapped = await result.mapAsync { value in
-    await fetchData(for: value)
-}
-
-// FlatMap for chaining Result-returning async operations
-let chained = await result.flatMapAsync { value in
-    await validateAndTransform(value)  // Returns Result<T, Error>
-}
-
-// Create Result from async throwing operation
-let result = await Result.fromAsync {
-    try await networkCall()
-}
-
-// Create Result from Task
-let task = Task { try await networkCall() }
-let result = await Result.fromTask(task)
-
-// Or with closure syntax
-let result = await Result.fromTask {
-    Task { try await networkCall() }
-}
-
-// Also works with Tasks returning Results
-let task = Task { await someResultOperation() }
-let result: Result<Value, Error> = await Result.fromTask(task)
-```
-
-#### Map to Constant Value
-
-Replace the success value with a constant or discard it entirely:
-
-```swift
-let result: Result<Int, AppError> = .success(42)
-
-// Map to a specific constant
-let mapped = result.as("done")  // .success("done")
-
-// Map to Void (discard the success value)
-let unit = result.asUnit()  // .success(())
-
-// Useful in chains where you only care about success/failure
-fetchUser(id: 1)
-    .tap { user in saveToCache(user) }
-    .asUnit()  // Result<Void, AppError>
-```
-
-#### Tap for Side Effects
-
-Perform side effects while keeping the Result chain flowing:
-
-```swift
-someOperation()
-    .tap { value in saveToCache(value) }
-    .tapError { error in logError(error) }
-    .map { value in transform(value) }
-
-// Async variants
-await result
-    .tapAsync { value in await sendAnalytics(value) }
-    .tapErrorAsync { error in await reportError(error) }
-```
-
-Tap variants:
-- `.tap()` - Sync side effect on success
-- `.tapAsync()` - Async side effect on success
-- `.tapError()` - Sync side effect on failure
-- `.tapErrorAsync()` - Async side effect on failure
-- Throwing variants convert `Failure` type to `Error`
-
-#### Match
-
-Branch on a Result without switching manually:
-
-```swift
-let message = result.match(
-    { "value: \($0)" },
-    { "error: \($0)" }
-)
-
-let fallback = result.match("ok", "error")
-
-let mixed = result.match(
-    { "value: \($0)" },
-    "error"
-)
-
-let asyncMessage = await result.matchAsync(
-    { value in
-        await Task.yield()
-        return "value: \(value)"
-    },
-    { error in
-        await Task.yield()
-        return "error: \(error)"
-    }
-)
-
-let asyncMixed = await result.matchAsync(
-    "ok",
-    { error in
-        await Task.yield()
-        return "error: \(error)"
-    }
-)
-
-// Use match for side effects without capturing the result
-result.match(
-    { value in print("Success: \(value)") },
-    { error in print("Error: \(error)") }
-)
-```
-
-#### From Optional
-
-Convert optionals to Results:
-
-```swift
-// With static error
-let result = Result<User, AppError>.fromOptional(user, error: .notFound)
-
-// With lazy error (only evaluated if nil)
-let result = Result<User, AppError>.fromOptional(user) {
-    .notFound(id: userId)
-}
-```
-
-#### To Bool
-
-Convert Result to boolean for simple success/failure checks:
-
-```swift
-let result: Result<User, AppError> = fetchUser(id: 1)
-
-if result.toBool {
-    print("User fetched successfully")
-}
-
-// Or in ternary expressions
-let message = result.toBool ? "ok" : "error"
-```
-
-### Optional Extensions
-
-#### Match
-
-```swift
-let optional: String? = "hello"
-
-let message = optional.match(
-    { "got: \($0)" },
-    "nothing"
-)
-// "got: hello"
-
-let missing: String? = nil
-missing.match(
-    { value in print(value) },
-    ()
-)
-// Does nothing
-```
-
-#### Async Mapping
-
-```swift
-let optional: Int? = 42
-
-let mapped = await optional.mapAsync { value in
-    await fetchDetails(for: value)
-}
-// Returns nil if optional was nil, otherwise the transformed value
-
-let flatMapped = await optional.flatMapAsync { value -> String? in
-    value > 0 ? "id-\(value)" : nil
-}
-```
-
-#### OrElse
-
-```swift
-let optional: Int? = nil
-let fallback = optional.orElse(99)  // Returns 99 when nil, nil when has value
-```
-
-### AsyncSequence Result Processing
-
-Process streams of Results with familiar functional operations:
-
-```swift
-let stream = AsyncStream<Result<Int, AppError>> { continuation in
-    continuation.success(1)
-    continuation.success(2)
-    continuation.failure(.invalid)
-    continuation.success(3)
-    continuation.finish()
-}
-
-// Filter to just success values
-for await value in stream.successes() {
-    print(value)  // 1, 2, 3
-}
-
-// Transform, tap, and chain
-for await result in stream
-    .tap { value in logger.info("got \(value)") }
-    .tapError { error in logger.error("\(error)") }
-    .mapAsync { value in await enrich(value) }
-    .flatMap { value in validate(value) }
-{
-    // ...
-}
-```
-
-### AsyncStream Extensions
-
-Create single-element Result streams or use convenience methods on continuations:
-
-```swift
-// Static factories — single-element streams
-let success: AsyncStream<Result<Int, MyError>> = .success(42)
-let failure: AsyncStream<Result<Int, MyError>> = .failure(.someError)
-
-// Continuation helpers
-let stream = AsyncStream<Result<Int, MyError>> { continuation in
-    continuation.success(1)
-    continuation.success(2)
-    continuation.failure(.someError)
-    continuation.finish()
-}
-
-// Or finish with a final value
-let stream = AsyncStream<Result<String, MyError>> { continuation in
-    continuation.success("processing...")
-    continuation.finishWithSuccess("done")  // Yields and finishes
-}
-
-// Finish with error
-let stream = AsyncStream<Result<Data, NetworkError>> { continuation in
-    continuation.finishWithFailure(.connectionLost)  // Yields error and finishes
-}
-```
-
-### Flatten Results
-
-Combine multiple Results into a single Result with a tuple of values:
-
-```swift
-let userResult: Result<User, AppError> = fetchUser(id: 1)
-let profileResult: Result<Profile, AppError> = fetchProfile(id: 1)
-let settingsResult: Result<Settings, AppError> = fetchSettings(id: 1)
-
-// Sync flatten - combine already-computed Results
-let combined = flatten(userResult, profileResult, settingsResult)
-// Result<(User, Profile, Settings), AppError>
-
-// Use map to create named tuple for easier access
-let namedResult = flatten(userResult, profileResult)
-    .map { (user: $0, profile: $1) }
-// Result<(user: User, profile: Profile), AppError>
-
-if case .success(let data) = namedResult {
-    print(data.user.name)
-    print(data.profile.bio)
-}
-```
-
-#### Async Flatten with Parallel Execution
-
-Run multiple async operations in parallel and combine their results:
-
-```swift
-func loadDashboard(userId: Int) async -> Result<Dashboard, AppError> {
-    // All three operations run in parallel
-    let result = await flattenAsync(
-        await fetchUser(id: userId),
-        await fetchNotifications(for: userId),
-        await fetchRecommendations(for: userId)
-    )
-    // Result<(User, [Notification], [Recommendation]), AppError>
-    
-    return result.map { user, notifications, recommendations in
-        Dashboard(user: user, notifications: notifications, recommendations: recommendations)
-    }
-}
-```
-
-### Array Extensions
-
-#### Traverse
-
-Apply a Result-returning transform to each element, short-circuiting on first failure:
-
-```swift
-let userIds = [1, 2, 3]
-
-// Sync traverse
-let result = userIds.traverse { id -> Result<User, AppError> in
-    fetchUser(id: id)
-}
-// Returns .success([User]) or .failure on first error
-
-// Async traverse
-let result = await userIds.traverseAsync { id in
-    await fetchUserAsync(id: id)
-}
-```
-
-#### Async Mapping
-
-Asynchronous versions of `map`, `flatMap`, and `compactMap`:
-
-```swift
-let items = [1, 2, 3, 4, 5]
-
-let mapped = await items.mapAsync { item in
-    "v\(item)"
-}
-
-let flattened = await items.flatMapAsync { item in
-    [item, item * 10]
-}
-
-let compacted = await items.compactMapAsync { item -> String? in
-    await processItem(item)  // Returns nil for items to filter out
-}
-
-enum ParseError: Error {
-    case invalid
-}
-
-let resultMapped = await items.mapAsync { item -> Result<String, ParseError> in
-    .success("item-\(item)")
-}
-
-let resultFlattened = await items.flatMapAsync { item -> Result<[Int], ParseError> in
-    .success([item, item + 100])
-}
-
-let resultCompacted = await items.compactMapAsync { item -> Result<String?, ParseError> in
-    .success(item.isMultiple(of: 2) ? "even-\(item)" : nil)
-}
-```
-
-## Usage Examples
-
-### Do Notation for Composing Results
-
-```swift
-func createOrder(userId: Int, itemId: Int) -> Result<Order, AppError> {
-    ResultDo<AppError>()
-        .bind { fetchUser(id: userId) }
-        .bind { user in fetchItem(id: itemId) }
-        .let { user, item in item.price * user.discountRate }
-        .bind { user, item, price in
-            validateOrder(user: user, item: item, price: price)
-        }
-        .map { user, item, price, validation in
-            Order(user: user, item: item, price: price)
-        }
-}
-
-// Async variant with mixed sync/async steps
-func createOrderAsync(userId: Int, itemId: Int) async -> Result<Order, AppError> {
-    await ResultDo<AppError>()
-        .bindAsync { await fetchUser(id: userId) }
-        .bindAsync { user in await fetchItem(id: itemId) }
-        .let { user, item in item.price * user.discountRate }
-        .bindAsync { user, item, price in
-            await validateOrder(user: user, item: item, price: price)
-        }
-        .map { user, item, price, validation in
-            Order(user: user, item: item, price: price)
-        }
-}
-```
-
-### Chaining Async Operations
-
-```swift
-func processUser(id: Int) async -> Result<ProcessedUser, Error> {
-    await Result.fromAsync { try await api.fetchUser(id: id) }
-        .tapAsync { user in await analytics.track(.userFetched(user)) }
-        .mapAsync { user in await enrichUserData(user) }
-        .flatMapAsync { user in await validateUser(user) }
-        .tapError { error in logger.error("Failed: \(error)") }
-}
-```
-
-### Batch Processing with Traverse
-
-```swift
-func processOrders(_ orderIds: [Int]) async -> Result<[Order], OrderError> {
-    await orderIds.traverseAsync { id in
-        await fetchAndValidateOrder(id: id)
-    }
-}
-// Fails fast on first error, returns all orders on success
-```
-
-### Pipeline with Operators
-
-```swift
-let result = input
-    |> validate
-    |> transform
-    |> format
+func orElse<T>(_ defaultValue: T) -> T?
 ```
 
 ## License

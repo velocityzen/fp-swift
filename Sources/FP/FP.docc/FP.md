@@ -6,6 +6,15 @@ A lightweight functional programming toolkit for Swift, providing composable uti
 
 FP extends Swift's built-in types with functional programming patterns for both synchronous and asynchronous contexts. Chain operations on `Result`, traverse arrays with error handling, compose functions with pipe operators, and more.
 
+### Pipeline with Operators
+
+```swift
+let result = input
+    |> validate
+    |> transform
+    |> format
+```
+
 ### Do Notation
 
 Compose multiple Result operations with an accumulating context, short-circuiting on the first failure:
@@ -66,52 +75,6 @@ result.match(
 )
 ```
 
-### Parallel Execution with Flatten
-
-```swift
-// All three operations run in parallel
-let result = await flattenAsync(
-    await fetchUser(id: userId),
-    await fetchNotifications(for: userId),
-    await fetchRecommendations(for: userId)
-)
-// Result<(User, [Notification], [Recommendation]), AppError>
-```
-
-### Batch Processing with Traverse
-
-```swift
-func processOrders(_ orderIds: [Int]) async -> Result<[Order], OrderError> {
-    await orderIds.traverseAsync { id in
-        await fetchAndValidateOrder(id: id)
-    }
-}
-// Fails fast on first error, returns all orders on success
-```
-
-### Separating Result Arrays
-
-```swift
-let results: [Result<Int, ValidationError>] = [
-    .success(1),
-    .failure(.invalid),
-    .success(2),
-]
-
-let separated = results.separate()
-// separated.successes == [1, 2]
-// separated.failures == [.invalid]
-```
-
-### Pipeline with Operators
-
-```swift
-let result = input
-    |> validate
-    |> transform
-    |> format
-```
-
 ### Converting Optionals to Results
 
 ```swift
@@ -149,29 +112,58 @@ await result
     .tapErrorAsync { error in await reportError(error) }
 ```
 
-### Optional Match
+### Parallel Execution with Flatten
 
 ```swift
-let optional: String? = "hello"
-
-let message = optional.match(
-    { "got: \($0)" },
-    "nothing"
+// All three operations run in parallel
+let result = await flattenAsync(
+    await fetchUser(id: userId),
+    await fetchNotifications(for: userId),
+    await fetchRecommendations(for: userId)
 )
-// "got: hello"
+// Result<(User, [Notification], [Recommendation]), AppError>
 ```
 
-### Optional Async Mapping
+### Batch Processing with Traverse
 
 ```swift
-let optional: Int? = 42
+func processOrders(_ orderIds: [Int]) async -> Result<[Order], OrderError> {
+    await orderIds.traverseAsync { id in
+        await fetchAndValidateOrder(id: id)
+    }
+}
+// Fails fast on first error, returns all orders on success
+```
 
-let mapped = await optional.mapAsync { value in
-    await fetchDetails(for: value)
+### Separating Result Arrays
+
+```swift
+let results: [Result<Int, ValidationError>] = [
+    .success(1),
+    .failure(.invalid),
+    .success(2),
+]
+
+let separated = results.separate()
+// separated.successes == [1, 2]
+// separated.failures == [.invalid]
+```
+
+### Array Async Mapping
+
+```swift
+let items = [1, 2, 3, 4, 5]
+
+let mapped = await items.mapAsync { item in
+    "v\(item)"
 }
 
-let flatMapped = await optional.flatMapAsync { value -> String? in
-    value > 0 ? "id-\(value)" : nil
+let flatMapped = await items.flatMapAsync { item in
+    [item, item * 10]
+}
+
+let compacted = await items.compactMapAsync { item -> String? in
+    await processItem(item)
 }
 ```
 
@@ -216,20 +208,28 @@ let stream = AsyncStream<Result<Int, MyError>> { continuation in
 }
 ```
 
-### Array Async Mapping
+### Optional Match
 
 ```swift
-let items = [1, 2, 3, 4, 5]
+let optional: String? = "hello"
 
-let mapped = await items.mapAsync { item in
-    "v\(item)"
+let message = optional.match(
+    { "got: \($0)" },
+    "nothing"
+)
+// "got: hello"
+```
+
+### Optional Async Mapping
+
+```swift
+let optional: Int? = 42
+
+let mapped = await optional.mapAsync { value in
+    await fetchDetails(for: value)
 }
 
-let flatMapped = await items.flatMapAsync { item in
-    [item, item * 10]
-}
-
-let compacted = await items.compactMapAsync { item -> String? in
-    await processItem(item)
+let flatMapped = await optional.flatMapAsync { value -> String? in
+    value > 0 ? "id-\(value)" : nil
 }
 ```
