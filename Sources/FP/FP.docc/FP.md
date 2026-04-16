@@ -193,6 +193,28 @@ for await result in stream
 }
 ```
 
+### Ordered Concurrent Mapping
+
+Map an `AsyncSequence` through an async transform in parallel while preserving source order — wall-clock time is bounded by the slowest element rather than the sum of all transforms, but emission still follows source arrival order:
+
+```swift
+for await image in references.mapAsyncKeepOrder({ ref in
+    await downloader.fetch(ref)
+}) {
+    render(image)
+}
+```
+
+A `Result`-aware overload transforms only the success side and passes failures through unchanged:
+
+```swift
+for await result in events.mapAsyncKeepOrder({ event in
+    await enrich(event)
+}) {
+    handle(result)  // Result<EnrichedEvent, MyError>
+}
+```
+
 ### AsyncStream Result Factories
 
 ```swift

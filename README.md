@@ -14,6 +14,7 @@ A lightweight functional programming toolkit for Swift, providing composable uti
   - [Flatten Results](#flatten-results)
   - [Array Extensions](#array-extensions)
   - [AsyncSequence Result Processing](#asyncsequence-result-processing)
+  - [Ordered Concurrent Mapping](#ordered-concurrent-mapping)
   - [AsyncStream Extensions](#asyncstream-extensions)
   - [Optional Extensions](#optional-extensions)
 - [API Reference](#result-extensions-api)
@@ -27,6 +28,7 @@ A lightweight functional programming toolkit for Swift, providing composable uti
 ## Requirements
 
 - Swift 6.2+
+- macOS 15+ / iOS 18+
 
 ## Installation
 
@@ -387,6 +389,28 @@ for await result in stream
 }
 ```
 
+### Ordered Concurrent Mapping
+
+Map elements through an async transform in parallel while preserving source order. Each transform runs in its own `Task`, so wall-clock time is bounded by the slowest element rather than the sum of all transforms — but emission still follows source arrival order. Useful when an upstream provider streams items that should be processed concurrently but consumed in order (e.g. SSE image references that need to be fetched in parallel and rendered in order):
+
+```swift
+for await image in references.mapAsyncKeepOrder({ ref in
+    await downloader.fetch(ref)
+}) {
+    render(image)
+}
+```
+
+When the source is a stream of `Result`, an overload transforms only the success values and passes failures through unchanged — preserving order across both:
+
+```swift
+for await result in events.mapAsyncKeepOrder({ event in
+    await enrich(event)
+}) {
+    handle(result)  // Result<EnrichedEvent, MyError>
+}
+```
+
 ### AsyncStream Extensions
 
 Create single-element Result streams or use convenience methods on continuations:
@@ -720,6 +744,24 @@ func tapError(_ action: (Failure) -> Void) -> AsyncMapSequence<Self, Result<Succ
 // Async
 func tapAsync(_ action: (Success) async -> Void) -> AsyncMapSequence<Self, Result<Success, Failure>>
 func tapErrorAsync(_ action: (Failure) async -> Void) -> AsyncMapSequence<Self, Result<Success, Failure>>
+```
+
+### Ordered Concurrent Mapping
+
+Element transforms run in parallel; output preserves source arrival order.
+
+```swift
+// General form
+func mapAsyncKeepOrder<T: Sendable>(
+    _ transform: @Sendable @escaping (Element) async -> T
+) -> AsyncStream<T>
+where Self: Sendable, Failure == Never, Element: Sendable
+
+// Result overload — transforms successes, passes failures through
+func mapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
+    _ transform: @Sendable @escaping (Success) async -> T
+) -> AsyncStream<Result<T, E>>
+where Self: Sendable, Failure == Never, Element == Result<Success, E>
 ```
 
 ## AsyncStream Extensions API
