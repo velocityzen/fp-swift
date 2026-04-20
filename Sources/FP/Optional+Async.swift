@@ -24,13 +24,62 @@ public extension Optional {
         }
     }
 
-    /// Returns the default value when nil, or nil when the optional has a value.
-    func orElse<T>(_ defaultValue: T) -> T? {
+    /// Returns `self` if it's `.some`; otherwise returns the alternative.
+    /// The alternative is only evaluated when `self` is nil.
+    ///
+    /// Mirrors fp-ts `Option.orElse`: the left-most `.some` wins, and the
+    /// alternative is chained only when `self` is `.none`.
+    ///
+    /// ```swift
+    /// let name = cachedName.orElse(fetchName())
+    /// ```
+    func orElse(_ alternative: @autoclosure () -> Wrapped?) -> Wrapped? {
         switch self {
             case .some:
-                return nil
+                return self
             case .none:
-                return defaultValue
+                return alternative()
+        }
+    }
+
+    /// Asynchronous variant of ``orElse(_:)``.
+    func orElseAsync(
+        _ alternative: @autoclosure @escaping () async -> Wrapped?
+    ) async -> Wrapped? {
+        switch self {
+            case .some:
+                return self
+            case .none:
+                return await alternative()
+        }
+    }
+
+    /// Returns the wrapped value, or a default if `self` is nil.
+    /// The default is only evaluated when `self` is nil.
+    ///
+    /// Mirrors fp-ts `Option.getOrElse`. Equivalent to Swift's `??` operator.
+    ///
+    /// ```swift
+    /// let count = parsed.getOrElse(0)
+    /// ```
+    func getOrElse(_ defaultValue: @autoclosure () -> Wrapped) -> Wrapped {
+        switch self {
+            case .some(let value):
+                return value
+            case .none:
+                return defaultValue()
+        }
+    }
+
+    /// Asynchronous variant of ``getOrElse(_:)``.
+    func getOrElseAsync(
+        _ defaultValue: @autoclosure @escaping () async -> Wrapped
+    ) async -> Wrapped {
+        switch self {
+            case .some(let value):
+                return value
+            case .none:
+                return await defaultValue()
         }
     }
 }

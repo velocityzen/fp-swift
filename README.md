@@ -185,6 +185,40 @@ Tap variants:
 - `.tapAsync()` - Async side effect on success
 - `.tapError()` - Sync side effect on failure
 - `.tapErrorAsync()` - Async side effect on failure
+
+#### Alt — Recover with an Alternative
+
+Mirrors fp-ts `Either.alt`. If `self` is a success, keep it; otherwise return the lazily-evaluated alternative. The alternative may itself succeed (recovery) or fail (in which case its failure replaces the original):
+
+```swift
+fetchUser(id: 1)
+    .alt { fetchUserFromCache(id: 1) }
+    .alt { .success(.guest) }
+
+// Async variant
+await fetchUser(id: 1)
+    .altAsync { await fetchUserFromCache(id: 1) }
+```
+
+#### GetOrElse — Unwrap with a Fallback
+
+Mirrors fp-ts `Either.getOrElse`. Returns the success value, or computes/returns a fallback when the result is a failure. Unlike `alt`, this returns the unwrapped `Success` rather than another `Result`:
+
+```swift
+// Closure-based — receives the error
+let count = parse(input).getOrElse { _ in 0 }
+
+// Constant default (lazily evaluated)
+let count = parse(input).getOrElse(0)
+
+// Async variant — closure receives the error
+let user = await fetchUser(id: 1).getOrElseAsync { _ in
+    await loadGuestUser()
+}
+
+// Async variant — lazily-evaluated async default
+let user = await fetchUser(id: 1).getOrElseAsync(await loadGuestUser())
+```
 - Throwing variants convert `Failure` type to `Error`
 
 #### Match
@@ -557,6 +591,22 @@ func mapAsync<T>(_ transform: (Success) async throws -> T) async -> Result<T, Er
 // Map to constant value
 func `as`<T>(_ value: T) -> Result<T, Failure>
 func asUnit() -> Result<Void, Failure>
+```
+
+### Alt
+```swift
+// Lazily provides an alternative on failure (analogue of fp-ts Either.alt)
+func alt(_ alternative: () -> Result<Success, Failure>) -> Result<Success, Failure>
+func altAsync(_ alternative: () async -> Result<Success, Failure>) async -> Result<Success, Failure>
+```
+
+### GetOrElse
+```swift
+// Unwrap or fall back (analogue of fp-ts Either.getOrElse)
+func getOrElse(_ onFailure: (Failure) -> Success) -> Success
+func getOrElse(_ defaultValue: @autoclosure () -> Success) -> Success
+func getOrElseAsync(_ onFailure: (Failure) async -> Success) async -> Success
+func getOrElseAsync(_ defaultValue: @autoclosure @escaping () async -> Success) async -> Success
 ```
 
 ### Match

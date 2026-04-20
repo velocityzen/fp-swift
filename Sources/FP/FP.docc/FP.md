@@ -98,6 +98,43 @@ let mapped = result.as("done")  // .success("done")
 let unit = result.asUnit()  // .success(())
 ```
 
+### Recovery: alt, orElse, getOrElse
+
+Three ways to handle failure, each with a different trade-off:
+
+| Method       | Receives error? | Can change `Failure` type? | Returns                    |
+| ------------ | --------------- | -------------------------- | -------------------------- |
+| `alt`        | no              | no                         | `Result<Success, Failure>` |
+| `orElse`     | yes             | yes                        | `Result<Success, NewFailure>` |
+| `getOrElse`  | yes (closure)   | n/a (unwraps)              | `Success`                  |
+
+- Use `alt` for a blind fallback chain (cache, default branch) — mirrors fp-ts `Either.alt`.
+- Use `orElse` when recovery depends on the error, or when you want to normalize/wrap the failure type — mirrors fp-ts `Either.orElse`.
+- Use `getOrElse` when you just need the plain value and can compute one from the error — mirrors fp-ts `Either.getOrElse`.
+
+```swift
+// alt — blind chain; type stays Result<User, AppError>
+fetchUser(id: 1)
+    .alt { fetchUserFromCache(id: 1) }
+    .alt { .success(.guest) }
+
+// orElse — branch on the error, optionally change Failure type
+fetchUser(id: 1).orElse { error in
+    error is Timeout
+        ? fetchUser(id: 1)                    // retry, keeps Failure = AppError
+        : .failure(AppError.wrap(error))      // normalize to a different Failure type
+}
+
+// getOrElse — unwrap to Success
+let count = parse(input).getOrElse { _ in 0 }
+let count = parse(input).getOrElse(0)  // autoclosure — lazy constant
+
+// Async variants exist for all three
+await fetchUser(id: 1).altAsync { await fetchUserFromCache(id: 1) }
+await fetchUser(id: 1).orElseAsync { error in await recover(from: error) }
+await fetchUser(id: 1).getOrElseAsync(await loadGuestUser())
+```
+
 ### Side Effects with Tap
 
 ```swift
@@ -254,4 +291,27 @@ let mapped = await optional.mapAsync { value in
 let flatMapped = await optional.flatMapAsync { value -> String? in
     value > 0 ? "id-\(value)" : nil
 }
+```
+
+### Optional Recovery: orElse, getOrElse
+
+Same distinction as the `Result` variants, minus the error value (`Optional` has none):
+
+| Method       | Returns       | Fallback accepts |
+| ------------ | ------------- | ---------------- |
+| `orElse`     | `Wrapped?`    | `Wrapped?` — chains through nils |
+| `getOrElse`  | `Wrapped`     | `Wrapped` — unwraps with a default |
+
+```swift
+// orElse — first .some wins; chain through multiple sources
+let name = cachedName
+    .orElse(storedName)
+    .orElse(fetchName())
+
+// getOrElse — unwrap with a default (equivalent to ??)
+let count = parsed.getOrElse(0)
+
+// Async variants
+let name = await cachedName.orElseAsync(await fetchName())
+let user = await cachedUser.getOrElseAsync(await loadGuestUser())
 ```

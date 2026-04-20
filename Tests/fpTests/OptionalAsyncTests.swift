@@ -124,39 +124,172 @@ struct OptionalAsyncTests {
 
     // MARK: - orElse
 
-    @Test("orElse returns default value for nil")
-    func orElseReturnsDefaultForNil() {
-        let optional: Int? = nil
+    @Test("orElse returns self when self is some, regardless of alternative")
+    func orElseSomeKeepsSelf() {
+        let some: Int? = 1
 
-        let result = optional.orElse(99)
+        let altSome = some.orElse(2)
+        let altNil = some.orElse(nil)
+
+        #expect(altSome == 1)
+        #expect(altNil == 1)
+    }
+
+    @Test("orElse returns alternative when self is nil")
+    func orElseNilReturnsAlternative() {
+        let none: Int? = nil
+
+        let result = none.orElse(99)
 
         #expect(result == 99)
     }
 
-    @Test("orElse returns nil for some value")
-    func orElseReturnsNilForSome() {
-        let optional: Int? = 42
+    @Test("orElse chains through multiple nils")
+    func orElseChainsThroughNils() {
+        let first: String? = nil
+        let second: String? = nil
+        let third: String? = "found"
 
-        let result = optional.orElse(99)
+        let result = first.orElse(second).orElse(third)
 
-        #expect(result == nil)
+        #expect(result == "found")
     }
 
-    @Test("orElse with string type")
-    func orElseWithString() {
-        let optional: String? = nil
+    @Test("orElse does not evaluate alternative when self is some")
+    func orElseDoesNotEvaluateOnSome() {
+        let some: Int? = 1
+        nonisolated(unsafe) var evaluated = false
 
-        let result = optional.orElse("default")
+        _ = some.orElse({
+            evaluated = true
+            return 2
+        }())
 
-        #expect(result == "default")
+        #expect(evaluated == false)
     }
 
-    @Test("orElse returns nil when value exists")
-    func orElseNilWhenValueExists() {
-        let optional: String? = "exists"
+    // MARK: - orElseAsync
 
-        let result = optional.orElse("default")
+    @Test("orElseAsync returns self when self is some")
+    func orElseAsyncSomeKeepsSelf() async {
+        let some: Int? = 1
 
-        #expect(result == nil)
+        @Sendable func alt() async -> Int? {
+            await Task.yield()
+            return 2
+        }
+
+        let result = await some.orElseAsync(await alt())
+
+        #expect(result == 1)
+    }
+
+    @Test("orElseAsync returns alternative when self is nil")
+    func orElseAsyncNilReturnsAlternative() async {
+        let none: Int? = nil
+
+        @Sendable func alt() async -> Int? {
+            await Task.yield()
+            return 99
+        }
+
+        let result = await none.orElseAsync(await alt())
+
+        #expect(result == 99)
+    }
+
+    @Test("orElseAsync does not evaluate alternative when self is some")
+    func orElseAsyncDoesNotEvaluateOnSome() async {
+        let some: Int? = 1
+        let counter = AsyncCounter()
+
+        @Sendable func alt(_ counter: AsyncCounter) async -> Int? {
+            await counter.increment()
+            return 2
+        }
+
+        _ = await some.orElseAsync(await alt(counter))
+
+        let count = await counter.count
+        #expect(count == 0)
+    }
+
+    // MARK: - getOrElse
+
+    @Test("getOrElse returns wrapped value when self is some")
+    func getOrElseSomeReturnsValue() {
+        let some: Int? = 42
+
+        let result = some.getOrElse(0)
+
+        #expect(result == 42)
+    }
+
+    @Test("getOrElse returns default when self is nil")
+    func getOrElseNilReturnsDefault() {
+        let none: Int? = nil
+
+        let result = none.getOrElse(99)
+
+        #expect(result == 99)
+    }
+
+    @Test("getOrElse does not evaluate default when self is some")
+    func getOrElseDoesNotEvaluateOnSome() {
+        let some: Int? = 42
+        nonisolated(unsafe) var evaluated = false
+
+        _ = some.getOrElse({
+            evaluated = true
+            return 0
+        }())
+
+        #expect(evaluated == false)
+    }
+
+    // MARK: - getOrElseAsync
+
+    @Test("getOrElseAsync returns wrapped value when self is some")
+    func getOrElseAsyncSomeReturnsValue() async {
+        let some: Int? = 42
+
+        @Sendable func fallback() async -> Int {
+            await Task.yield()
+            return 0
+        }
+
+        let result = await some.getOrElseAsync(await fallback())
+
+        #expect(result == 42)
+    }
+
+    @Test("getOrElseAsync awaits default when self is nil")
+    func getOrElseAsyncNilAwaitsDefault() async {
+        let none: Int? = nil
+
+        @Sendable func fallback() async -> Int {
+            await Task.yield()
+            return 99
+        }
+
+        let result = await none.getOrElseAsync(await fallback())
+
+        #expect(result == 99)
+    }
+
+    @Test("getOrElseAsync does not evaluate default when self is some")
+    func getOrElseAsyncDoesNotEvaluateOnSome() async {
+        let some: Int? = 42
+        let counter = AsyncCounter()
+
+        @Sendable func fallback(_ counter: AsyncCounter) async -> Int {
+            await counter.increment()
+            return 0
+        }
+
+        _ = await some.getOrElseAsync(await fallback(counter))
+
+        let count = await counter.count
+        #expect(count == 0)
     }
 }
