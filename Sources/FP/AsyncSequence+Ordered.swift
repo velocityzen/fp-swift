@@ -68,4 +68,29 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
             await element.mapAsync(transform)
         }
     }
+
+    /// Maps each `Result` element's success value through a fallible async
+    /// transform, preserving failures and source arrival order. Same
+    /// concurrency model as ``mapAsyncKeepOrder(_:)`` — every success is
+    /// transformed in its own `Task`, so wall-clock time is bounded by the
+    /// slowest transform.
+    ///
+    /// Use this when each transform may fail. Source failures pass through
+    /// unchanged; transform failures replace the success they originated from.
+    ///
+    /// ```swift
+    /// for await result in events.flatMapAsyncKeepOrder({ event in
+    ///     await validateAndEnrich(event)  // returns Result<Enriched, MyError>
+    /// }) {
+    ///     handle(result)
+    /// }
+    /// ```
+    public func flatMapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
+        _ transform: @Sendable @escaping (Success) async -> Result<T, E>
+    ) -> AsyncStream<Result<T, E>>
+    where Element == Result<Success, E> {
+        mapAsyncKeepOrder { element in
+            await element.flatMapAsync(transform)
+        }
+    }
 }

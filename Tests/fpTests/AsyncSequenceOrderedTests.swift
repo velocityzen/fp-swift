@@ -256,4 +256,141 @@ struct AsyncSequenceOrderedTests {
 
         #expect(results == [.failure(.failed), .failure(.other)])
     }
+
+    // MARK: - flatMapAsyncKeepOrder (Result)
+
+    @Test("flatMapAsyncKeepOrder transforms successes, preserves source failures")
+    func flatMapTransformsAndPreserves() async {
+        let stream = AsyncStream<Result<Int, TestError>> { continuation in
+            continuation.yield(.success(1))
+            continuation.yield(.failure(.failed))
+            continuation.yield(.success(2))
+            continuation.finish()
+        }
+
+        var results: [Result<String, TestError>] = []
+        for await result in stream.flatMapAsyncKeepOrder({ value -> Result<String, TestError> in
+            .success("v\(value)")
+        }) {
+            results.append(result)
+        }
+
+        #expect(results.count == 3)
+        #expect(results[0] == .success("v1"))
+        #expect(results[1] == .failure(.failed))
+        #expect(results[2] == .success("v2"))
+    }
+
+    @Test("flatMapAsyncKeepOrder transform failure replaces success it came from")
+    func flatMapTransformFailureReplacesSuccess() async {
+        let stream = AsyncStream<Result<Int, TestError>> { continuation in
+            continuation.yield(.success(1))
+            continuation.yield(.success(2))
+            continuation.yield(.success(3))
+            continuation.finish()
+        }
+
+        var results: [Result<Int, TestError>] = []
+        for await result in stream.flatMapAsyncKeepOrder({ value -> Result<Int, TestError> in
+            value == 2 ? .failure(.failed) : .success(value * 10)
+        }) {
+            results.append(result)
+        }
+
+        #expect(results == [.success(10), .failure(.failed), .success(30)])
+    }
+
+    @Test("flatMapAsyncKeepOrder distinguishes source vs transform failures by error")
+    func flatMapDistinguishesFailureSources() async {
+        let stream = AsyncStream<Result<Int, TestError>> { continuation in
+            continuation.yield(.failure(.failed))   // source failure
+            continuation.yield(.success(1))         // transform will fail with .other
+            continuation.yield(.success(2))         // transform succeeds
+            continuation.finish()
+        }
+
+        var results: [Result<Int, TestError>] = []
+        for await result in stream.flatMapAsyncKeepOrder({ value -> Result<Int, TestError> in
+            value == 1 ? .failure(.other) : .success(value * 10)
+        }) {
+            results.append(result)
+        }
+
+        #expect(results == [.failure(.failed), .failure(.other), .success(20)])
+    }
+
+    @Test("flatMapAsyncKeepOrder preserves order when later transforms finish first")
+    func flatMapPreservesOrderWithVariableLatency() async {
+        let stream = AsyncStream<Result<Int, TestError>> { continuation in
+            continuation.yield(.success(1))
+            continuation.yield(.success(2))
+            continuation.yield(.failure(.failed))
+            continuation.yield(.success(3))
+            continuation.finish()
+        }
+
+        var results: [Result<Int, TestError>] = []
+        for await result in stream.flatMapAsyncKeepOrder({ (value: Int) -> Result<Int, TestError> in
+            // Earlier successes sleep longer.
+            let nanos = UInt64((4 - value) * 20_000_000)
+            try? await Task.sleep(nanoseconds: nanos)
+            return .success(value)
+        }) {
+            results.append(result)
+        }
+
+        #expect(results == [.success(1), .success(2), .failure(.failed), .success(3)])
+    }
+
+    @Test("flatMapAsyncKeepOrder runs successful transforms concurrently")
+    func flatMapRunsTransformsConcurrently() async {
+        let stream = AsyncStream<Result<Int, TestError>> { continuation in
+            continuation.yield(.success(1))
+            continuation.yield(.success(2))
+            continuation.yield(.failure(.failed))
+            continuation.yield(.success(3))
+            continuation.yield(.success(4))
+            continuation.finish()
+        }
+
+        let perElementSleep: UInt64 = 100_000_000  // 100ms
+
+        let start = ContinuousClock.now
+        var results: [Result<Int, TestError>] = []
+        for await result in stream.flatMapAsyncKeepOrder({ (value: Int) -> Result<Int, TestError> in
+            try? await Task.sleep(nanoseconds: perElementSleep)
+            return .success(value)
+        }) {
+            results.append(result)
+        }
+        let elapsed = ContinuousClock.now - start
+
+        #expect(results.count == 5)
+        // 4 successes sequential would be ~400ms.
+        #expect(elapsed < .milliseconds(300))
+    }
+
+    @Test("flatMapAsyncKeepOrder skips transform for source failures")
+    func flatMapSkipsTransformForSourceFailures() async {
+        let stream = AsyncStream<Result<Int, TestError>> { continuation in
+            continuation.yield(.failure(.failed))
+            continuation.yield(.success(1))
+            continuation.yield(.failure(.other))
+            continuation.yield(.success(2))
+            continuation.finish()
+        }
+
+        let counter = AsyncCounter()
+        var results: [Result<Int, TestError>] = []
+        for await result in stream.flatMapAsyncKeepOrder({ (value: Int) -> Result<Int, TestError> in
+            await counter.increment()
+            return .success(value * 10)
+        }) {
+            results.append(result)
+        }
+
+        let count = await counter.count
+        #expect(count == 2)
+        #expect(results == [.failure(.failed), .success(10), .failure(.other), .success(20)])
+    }
 }

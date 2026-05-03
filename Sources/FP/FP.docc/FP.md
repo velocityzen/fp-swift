@@ -252,6 +252,16 @@ for await result in events.mapAsyncKeepOrder({ event in
 }
 ```
 
+When the transform itself can fail, use `flatMapAsyncKeepOrder` — the transform returns a `Result`, source failures pass through, and transform failures replace the success they came from:
+
+```swift
+for await result in events.flatMapAsyncKeepOrder({ event in
+    await validateAndEnrich(event)  // Result<EnrichedEvent, MyError>
+}) {
+    handle(result)
+}
+```
+
 ### AsyncStream Result Factories
 
 ```swift
