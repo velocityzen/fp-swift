@@ -106,4 +106,39 @@ public extension Array {
 
         return (successes: successes, failures: failures)
     }
+
+    /// Returns just the success values from an array of `Result`.
+    ///
+    /// ```swift
+    /// let results: [Result<Int, MyError>] = [.success(1), .failure(.bad), .success(2)]
+    /// results.successes()  // [1, 2]
+    /// ```
+    func successes<Success, Failure>() -> [Success]
+    where Element == Result<Success, Failure> {
+        var values: [Success] = []
+        values.reserveCapacity(count)
+        for result in self {
+            if case .success(let value) = result {
+                values.append(value)
+            }
+        }
+        return values
+    }
+
+    /// Returns just the failure errors from an array of `Result`.
+    ///
+    /// ```swift
+    /// let results: [Result<Int, MyError>] = [.success(1), .failure(.bad), .success(2)]
+    /// results.failures()  // [.bad]
+    /// ```
+    func failures<Success, Failure>() -> [Failure]
+    where Element == Result<Success, Failure> {
+        var errors: [Failure] = []
+        for result in self {
+            if case .failure(let error) = result {
+                errors.append(error)
+            }
+        }
+        return errors
+    }
 }

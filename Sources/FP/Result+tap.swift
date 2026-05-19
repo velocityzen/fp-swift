@@ -321,4 +321,27 @@ public extension Result {
                 }
         }
     }
+
+    // MARK: Finally
+
+    /// Performs a side effect regardless of success or failure, returning self
+    /// unchanged. Useful for cleanup, logging, or metrics that should run no
+    /// matter the outcome.
+    ///
+    /// ```swift
+    /// fetchUser(id: 1)
+    ///     .tap { user in cache.store(user) }
+    ///     .tapError { error in logger.error("\(error)") }
+    ///     .finally { metrics.record(.requestComplete) }
+    /// ```
+    func finally(_ action: () -> Void) -> Result<Success, Failure> {
+        action()
+        return self
+    }
+
+    /// Asynchronous variant of ``finally(_:)``.
+    func finallyAsync(_ action: () async -> Void) async -> Result<Success, Failure> {
+        await action()
+        return self
+    }
 }

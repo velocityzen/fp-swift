@@ -27,8 +27,8 @@ public extension Optional {
     /// Returns `self` if it's `.some`; otherwise returns the alternative.
     /// The alternative is only evaluated when `self` is nil.
     ///
-    /// Mirrors fp-ts `Option.orElse`: the left-most `.some` wins, and the
-    /// alternative is chained only when `self` is `.none`.
+    /// The left-most `.some` wins; the alternative is chained only when `self`
+    /// is `.none`.
     ///
     /// ```swift
     /// let name = cachedName.orElse(fetchName())
@@ -55,9 +55,8 @@ public extension Optional {
     }
 
     /// Returns the wrapped value, or a default if `self` is nil.
-    /// The default is only evaluated when `self` is nil.
-    ///
-    /// Mirrors fp-ts `Option.getOrElse`. Equivalent to Swift's `??` operator.
+    /// The default is only evaluated when `self` is nil. Equivalent to Swift's
+    /// `??` operator, in method-chain form.
     ///
     /// ```swift
     /// let count = parsed.getOrElse(0)
@@ -81,5 +80,23 @@ public extension Optional {
             case .none:
                 return await defaultValue()
         }
+    }
+
+    /// Performs a side effect regardless of `.some` or `.none`, returning self
+    /// unchanged. Useful for cleanup or logging that should run no matter the
+    /// outcome.
+    ///
+    /// ```swift
+    /// loadUser(id: 1).finally { spinner.stop() }
+    /// ```
+    func finally(_ action: () -> Void) -> Wrapped? {
+        action()
+        return self
+    }
+
+    /// Asynchronous variant of ``finally(_:)``.
+    func finallyAsync(_ action: () async -> Void) async -> Wrapped? {
+        await action()
+        return self
     }
 }

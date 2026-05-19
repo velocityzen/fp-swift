@@ -108,9 +108,9 @@ Three ways to handle failure, each with a different trade-off:
 | `orElse`     | yes             | yes                        | `Result<Success, NewFailure>` |
 | `getOrElse`  | yes (closure)   | n/a (unwraps)              | `Success`                  |
 
-- Use `alt` for a blind fallback chain (cache, default branch) — mirrors fp-ts `Either.alt`.
-- Use `orElse` when recovery depends on the error, or when you want to normalize/wrap the failure type — mirrors fp-ts `Either.orElse`.
-- Use `getOrElse` when you just need the plain value and can compute one from the error — mirrors fp-ts `Either.getOrElse`.
+- Use `alt` for a blind fallback chain (cache, default branch).
+- Use `orElse` when recovery depends on the error, or when you want to normalize/wrap the failure type.
+- Use `getOrElse` when you just need the plain value and can compute one from the error.
 
 ```swift
 // alt — blind chain; type stays Result<User, AppError>
@@ -149,6 +149,23 @@ await result
     .tapErrorAsync { error in await reportError(error) }
 ```
 
+### Cleanup with Finally
+
+Run a side effect regardless of success/failure (or `.some`/`.none` for `Optional`) — useful for cleanup, logging, or metrics. Available on both `Result` and `Optional`:
+
+```swift
+fetchUser(id: 1)
+    .tap { user in cache.store(user) }
+    .tapError { error in logger.error("\(error)") }
+    .finally { metrics.record(.requestComplete) }
+
+// Async variant
+await fetchUser(id: 1).finallyAsync { await spinner.stop() }
+
+// Same on Optional
+loadCached(id: 1).finally { spinner.stop() }
+```
+
 ### Parallel Execution with Flatten
 
 ```swift
@@ -184,6 +201,23 @@ let results: [Result<Int, ValidationError>] = [
 let separated = results.separate()
 // separated.successes == [1, 2]
 // separated.failures == [.invalid]
+
+// When you only need one side
+results.successes()  // [1, 2]
+results.failures()   // [.invalid]
+```
+
+### Compacting and Sequencing Optional Arrays
+
+```swift
+let xs: [Int?] = [1, nil, 2, nil, 3]
+
+// compact — drop the nils
+xs.compact()   // [1, 2, 3]
+
+// sequence — all-or-nothing flip to [Int]?
+xs.sequence()  // nil (because one element is nil)
+[1, 2, 3].map(Optional.some).sequence()  // [1, 2, 3]
 ```
 
 ### Array Async Mapping

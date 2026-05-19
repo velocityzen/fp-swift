@@ -556,4 +556,82 @@ struct ResultTapTests {
         #expect(tapped2 == .success(42))
         #expect(count == 2)
     }
+
+    // MARK: - finally
+
+    @Test("finally runs action on success and returns self")
+    func finallyRunsOnSuccess() {
+        var ran = false
+        let result: Result<Int, TestError> = .success(42)
+
+        let returned = result.finally { ran = true }
+
+        #expect(ran)
+        #expect(returned == .success(42))
+    }
+
+    @Test("finally runs action on failure and returns self")
+    func finallyRunsOnFailure() {
+        var ran = false
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let returned = result.finally { ran = true }
+
+        #expect(ran)
+        #expect(returned == .failure(.invalid))
+    }
+
+    @Test("finally composes with tap and tapError")
+    func finallyComposesWithTaps() {
+        var events: [String] = []
+        let result: Result<Int, TestError> = .success(42)
+
+        let _ =
+            result
+            .tap { _ in events.append("tap") }
+            .tapError { _ in events.append("tapError") }
+            .finally { events.append("finally") }
+
+        #expect(events == ["tap", "finally"])
+    }
+
+    @Test("finally still runs on failure when tap is skipped")
+    func finallyRunsAfterSkippedTap() {
+        var events: [String] = []
+        let result: Result<Int, TestError> = .failure(.failed)
+
+        let _ =
+            result
+            .tap { _ in events.append("tap") }
+            .tapError { _ in events.append("tapError") }
+            .finally { events.append("finally") }
+
+        #expect(events == ["tapError", "finally"])
+    }
+
+    // MARK: - finallyAsync
+
+    @Test("finallyAsync runs action on success and returns self")
+    func finallyAsyncRunsOnSuccess() async {
+        let counter = AsyncCounter()
+        let result: Result<Int, TestError> = .success(42)
+
+        let returned = await result.finallyAsync { await counter.increment() }
+
+        let count = await counter.count
+        #expect(count == 1)
+        #expect(returned == .success(42))
+    }
+
+    @Test("finallyAsync runs action on failure and returns self")
+    func finallyAsyncRunsOnFailure() async {
+        let counter = AsyncCounter()
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let returned = await result.finallyAsync { await counter.increment() }
+
+        let count = await counter.count
+        #expect(count == 1)
+        #expect(returned == .failure(.invalid))
+    }
 }

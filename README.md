@@ -188,7 +188,7 @@ Tap variants:
 
 #### Alt — Recover with an Alternative
 
-Mirrors fp-ts `Either.alt`. If `self` is a success, keep it; otherwise return the lazily-evaluated alternative. The alternative may itself succeed (recovery) or fail (in which case its failure replaces the original):
+If `self` is a success, keep it; otherwise return the lazily-evaluated alternative. The alternative may itself succeed (recovery) or fail (in which case its failure replaces the original):
 
 ```swift
 fetchUser(id: 1)
@@ -202,7 +202,7 @@ await fetchUser(id: 1)
 
 #### GetOrElse — Unwrap with a Fallback
 
-Mirrors fp-ts `Either.getOrElse`. Returns the success value, or computes/returns a fallback when the result is a failure. Unlike `alt`, this returns the unwrapped `Success` rather than another `Result`:
+Returns the success value, or computes/returns a fallback when the result is a failure. Unlike `alt`, this returns the unwrapped `Success` rather than another `Result`:
 
 ```swift
 // Closure-based — receives the error
@@ -521,7 +521,7 @@ let fallback = optional.orElse(99)  // Returns 99 when nil, nil when has value
 
 ### Do Notation
 
-Monadic do-notation for composing multiple Result operations with an accumulating context (like fp-ts `Do` / `bind` / `let`):
+Monadic do-notation for composing multiple Result operations with an accumulating context:
 
 ```swift
 // ResultDo starts the chain, bind adds Result values, let adds pure values
@@ -595,14 +595,14 @@ func asUnit() -> Result<Void, Failure>
 
 ### Alt
 ```swift
-// Lazily provides an alternative on failure (analogue of fp-ts Either.alt)
+// Lazily provides an alternative on failure
 func alt(_ alternative: () -> Result<Success, Failure>) -> Result<Success, Failure>
 func altAsync(_ alternative: () async -> Result<Success, Failure>) async -> Result<Success, Failure>
 ```
 
 ### GetOrElse
 ```swift
-// Unwrap or fall back (analogue of fp-ts Either.getOrElse)
+// Unwrap or fall back
 func getOrElse(_ onFailure: (Failure) -> Success) -> Success
 func getOrElse(_ defaultValue: @autoclosure () -> Success) -> Success
 func getOrElseAsync(_ onFailure: (Failure) async -> Success) async -> Success

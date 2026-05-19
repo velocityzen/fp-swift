@@ -67,6 +67,67 @@ struct ArrayResultTests {
         #expect(separated.failures.isEmpty)
     }
 
+    // MARK: - successes / failures
+
+    @Test("successes returns only the success values, preserving order")
+    func successesReturnsValues() {
+        let results: [Result<Int, TestError>] = [
+            .success(1),
+            .failure(.invalid),
+            .success(2),
+            .failure(.notFound),
+            .success(3),
+        ]
+
+        #expect(results.successes() == [1, 2, 3])
+    }
+
+    @Test("successes returns empty array when all failures")
+    func successesAllFailures() {
+        let results: [Result<Int, TestError>] = [
+            .failure(.invalid),
+            .failure(.notFound),
+        ]
+
+        #expect(results.successes().isEmpty)
+    }
+
+    @Test("successes returns empty array for empty input")
+    func successesEmpty() {
+        let results: [Result<Int, TestError>] = []
+
+        #expect(results.successes().isEmpty)
+    }
+
+    @Test("failures returns only the failure errors, preserving order")
+    func failuresReturnsErrors() {
+        let results: [Result<Int, TestError>] = [
+            .success(1),
+            .failure(.invalid),
+            .success(2),
+            .failure(.notFound),
+        ]
+
+        #expect(results.failures() == [.invalid, .notFound])
+    }
+
+    @Test("failures returns empty array when all successes")
+    func failuresAllSuccesses() {
+        let results: [Result<Int, TestError>] = [
+            .success(1),
+            .success(2),
+        ]
+
+        #expect(results.failures().isEmpty)
+    }
+
+    @Test("failures returns empty array for empty input")
+    func failuresEmpty() {
+        let results: [Result<Int, TestError>] = []
+
+        #expect(results.failures().isEmpty)
+    }
+
     @Test("traverse succeeds when all transformations succeed")
     func traverseAllSuccess() {
         let numbers = [1, 2, 3, 4, 5]

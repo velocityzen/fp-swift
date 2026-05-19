@@ -292,4 +292,54 @@ struct OptionalAsyncTests {
         let count = await counter.count
         #expect(count == 0)
     }
+
+    // MARK: - finally
+
+    @Test("finally runs action when self is some and returns self")
+    func finallyRunsOnSome() {
+        var ran = false
+        let some: Int? = 42
+
+        let returned = some.finally { ran = true }
+
+        #expect(ran)
+        #expect(returned == 42)
+    }
+
+    @Test("finally runs action when self is nil and returns self")
+    func finallyRunsOnNil() {
+        var ran = false
+        let none: Int? = nil
+
+        let returned = none.finally { ran = true }
+
+        #expect(ran)
+        #expect(returned == nil)
+    }
+
+    // MARK: - finallyAsync
+
+    @Test("finallyAsync runs action when self is some and returns self")
+    func finallyAsyncRunsOnSome() async {
+        let counter = AsyncCounter()
+        let some: Int? = 42
+
+        let returned = await some.finallyAsync { await counter.increment() }
+
+        let count = await counter.count
+        #expect(count == 1)
+        #expect(returned == 42)
+    }
+
+    @Test("finallyAsync runs action when self is nil and returns self")
+    func finallyAsyncRunsOnNil() async {
+        let counter = AsyncCounter()
+        let none: Int? = nil
+
+        let returned = await none.finallyAsync { await counter.increment() }
+
+        let count = await counter.count
+        #expect(count == 1)
+        #expect(returned == nil)
+    }
 }

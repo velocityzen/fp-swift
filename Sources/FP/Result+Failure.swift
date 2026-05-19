@@ -4,8 +4,8 @@ public extension Result {
     /// Returns `self` if it's a success; otherwise returns the alternative.
     /// The alternative is only evaluated on failure.
     ///
-    /// Mirrors fp-ts `Either.alt`: the left-most success wins, but if both
-    /// sides are failures the alternative's failure is returned.
+    /// The left-most success wins, but if both sides are failures the
+    /// alternative's failure is returned.
     ///
     /// ```swift
     /// fetchUser(id: 1).alt { fetchUserFromCache(id: 1) }
@@ -34,8 +34,8 @@ public extension Result {
     /// Returns `self` if it's a success; otherwise computes a recovery `Result`
     /// from the failure. The recovery may change the `Failure` type.
     ///
-    /// Mirrors fp-ts `Either.orElse`. Unlike ``alt(_:)``, the recovery receives
-    /// the failure value and can transform the error type.
+    /// Unlike ``alt(_:)``, the recovery receives the failure value and can
+    /// transform the error type.
     ///
     /// ```swift
     /// fetchUser(id: 1).orElse { error in
@@ -67,8 +67,8 @@ public extension Result {
 
     /// Returns the success value, or computes a fallback from the failure.
     ///
-    /// Mirrors fp-ts `Either.getOrElse`. Unlike ``alt(_:)``, the fallback
-    /// returns an unwrapped `Success` rather than another `Result`.
+    /// Unlike ``alt(_:)``, the fallback returns an unwrapped `Success` rather
+    /// than another `Result`.
     ///
     /// ```swift
     /// let count = parse(input).getOrElse { _ in 0 }
