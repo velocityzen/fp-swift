@@ -145,7 +145,7 @@ public extension Result {
             case .success(let value):
                 return value
             case .failure(let error):
-                fputs("\(prefix)\(error)\n", stderr)
+                writeToStderr("\(prefix)\(error)\n")
                 Foundation.exit(exitCode)
         }
     }
@@ -167,7 +167,7 @@ public extension Result {
             case .success(let value):
                 return value
             case .failure(let error):
-                fputs(message(error), stderr)
+                writeToStderr(message(error))
                 Foundation.exit(exitCode)
         }
     }
@@ -190,7 +190,7 @@ public extension Result {
         exitCode: Int32 = 1
     ) {
         if case .failure(let error) = self {
-            fputs("\(prefix)\(error)\n", stderr)
+            writeToStderr("\(prefix)\(error)\n")
             Foundation.exit(exitCode)
         }
     }
@@ -209,8 +209,12 @@ public extension Result {
         message: (Failure) -> String
     ) {
         if case .failure(let error) = self {
-            fputs(message(error), stderr)
+            writeToStderr(message(error))
             Foundation.exit(exitCode)
         }
     }
+}
+
+private func writeToStderr(_ message: String) {
+    FileHandle.standardError.write(Data(message.utf8))
 }
