@@ -125,4 +125,92 @@ public extension Result {
                 return await defaultValue()
         }
     }
+
+    /// Returns the success value, or prints the failure to stderr and exits
+    /// the process. Designed for CLI entry points where any failure should
+    /// terminate the program with a diagnostic line.
+    ///
+    /// On failure, writes `"<prefix><error>\n"` to stderr and calls
+    /// `Foundation.exit(exitCode)`.
+    ///
+    /// ```swift
+    /// let config = loadConfig().getOrExit()
+    /// // failure prints: "Error: <error>\n" and exits with status 1
+    /// ```
+    func getOrExit(
+        prefix: String = "Error: ",
+        exitCode: Int32 = 1
+    ) -> Success {
+        switch self {
+            case .success(let value):
+                return value
+            case .failure(let error):
+                fputs("\(prefix)\(error)\n", stderr)
+                Foundation.exit(exitCode)
+        }
+    }
+
+    /// Returns the success value, or prints a custom message to stderr and
+    /// exits the process. The closure receives the failure and returns the
+    /// full message — include any trailing newline yourself.
+    ///
+    /// ```swift
+    /// let user = fetchUser(id: 1).getOrExit { error in
+    ///     "could not load user: \(error)\n"
+    /// }
+    /// ```
+    func getOrExit(
+        exitCode: Int32 = 1,
+        message: (Failure) -> String
+    ) -> Success {
+        switch self {
+            case .success(let value):
+                return value
+            case .failure(let error):
+                fputs(message(error), stderr)
+                Foundation.exit(exitCode)
+        }
+    }
+
+    /// Exits the process on failure, ignoring the success value. Useful at
+    /// the end of a pipeline that has already consumed the success (via
+    /// ``tap(_:)-((Success)->Void)`` or similar) and just needs to terminate
+    /// on error.
+    ///
+    /// On failure, writes `"<prefix><error>\n"` to stderr and calls
+    /// `Foundation.exit(exitCode)`. On success, does nothing.
+    ///
+    /// ```swift
+    /// runCommand(args)
+    ///     .tap { output in print(output) }
+    ///     .orExit()
+    /// ```
+    func orExit(
+        prefix: String = "Error: ",
+        exitCode: Int32 = 1
+    ) {
+        if case .failure(let error) = self {
+            fputs("\(prefix)\(error)\n", stderr)
+            Foundation.exit(exitCode)
+        }
+    }
+
+    /// Exits the process on failure with a custom message, ignoring the
+    /// success value. The closure receives the failure and returns the full
+    /// message — include any trailing newline yourself.
+    ///
+    /// ```swift
+    /// runCommand(args).orExit { error in
+    ///     "command failed: \(error)\n"
+    /// }
+    /// ```
+    func orExit(
+        exitCode: Int32 = 1,
+        message: (Failure) -> String
+    ) {
+        if case .failure(let error) = self {
+            fputs(message(error), stderr)
+            Foundation.exit(exitCode)
+        }
+    }
 }

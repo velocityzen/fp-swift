@@ -365,4 +365,73 @@ struct ResultFailureTests {
         let count = await counter.count
         #expect(count == 0)
     }
+
+    // MARK: - getOrExit
+    //
+    // Only the success path is unit-testable here; the failure path calls
+    // `Foundation.exit` and would terminate the test process.
+
+    @Test("getOrExit returns the success value")
+    func getOrExitReturnsSuccess() {
+        let success: Result<Int, TestError> = .success(42)
+
+        let value = success.getOrExit()
+
+        #expect(value == 42)
+    }
+
+    @Test("getOrExit with custom prefix and exit code returns success unchanged")
+    func getOrExitCustomArgsReturnsSuccess() {
+        let success: Result<String, TestError> = .success("ok")
+
+        let value = success.getOrExit(prefix: "fatal: ", exitCode: 2)
+
+        #expect(value == "ok")
+    }
+
+    @Test("getOrExit message closure is not evaluated on success")
+    func getOrExitMessageClosureNotEvaluatedOnSuccess() {
+        let success: Result<Int, TestError> = .success(7)
+        nonisolated(unsafe) var evaluated = false
+
+        let value = success.getOrExit { error in
+            evaluated = true
+            return "should not run: \(error)\n"
+        }
+
+        #expect(value == 7)
+        #expect(evaluated == false)
+    }
+
+    // MARK: - orExit
+    //
+    // Only the success path is unit-testable; the failure path calls
+    // `Foundation.exit` and would terminate the test process.
+
+    @Test("orExit does nothing on success")
+    func orExitDoesNothingOnSuccess() {
+        let success: Result<Int, TestError> = .success(42)
+
+        success.orExit()
+    }
+
+    @Test("orExit with custom prefix and exit code does nothing on success")
+    func orExitCustomArgsDoesNothingOnSuccess() {
+        let success: Result<String, TestError> = .success("ok")
+
+        success.orExit(prefix: "fatal: ", exitCode: 2)
+    }
+
+    @Test("orExit message closure is not evaluated on success")
+    func orExitMessageClosureNotEvaluatedOnSuccess() {
+        let success: Result<Int, TestError> = .success(7)
+        nonisolated(unsafe) var evaluated = false
+
+        success.orExit { error in
+            evaluated = true
+            return "should not run: \(error)\n"
+        }
+
+        #expect(evaluated == false)
+    }
 }

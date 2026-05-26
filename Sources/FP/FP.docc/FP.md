@@ -135,6 +135,28 @@ await fetchUser(id: 1).orElseAsync { error in await recover(from: error) }
 await fetchUser(id: 1).getOrElseAsync(await loadGuestUser())
 ```
 
+### CLI Entry Points: getOrExit
+
+For command-line tools, `getOrExit` unwraps a success or prints the failure to stderr and calls `Foundation.exit`:
+
+```swift
+// Default — "Error: <error>\n" to stderr, exit status 1
+let config = loadConfig().getOrExit()
+
+// Custom prefix and exit code
+let port = parsePort(args).getOrExit(prefix: "fatal: ", exitCode: 2)
+
+// Fully custom message
+let user = fetchUser(id: 1).getOrExit { error in
+    "could not load user: \(error)\n"
+}
+
+// orExit — discard the success value, exit only on failure
+runCommand(args)
+    .tap { output in print(output) }
+    .orExit()
+```
+
 ### Side Effects with Tap
 
 ```swift

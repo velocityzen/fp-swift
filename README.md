@@ -219,6 +219,38 @@ let user = await fetchUser(id: 1).getOrElseAsync { _ in
 // Async variant — lazily-evaluated async default
 let user = await fetchUser(id: 1).getOrElseAsync(await loadGuestUser())
 ```
+
+#### GetOrExit — Unwrap or Terminate the Process
+
+Designed for CLI entry points. Returns the success value, or prints the failure to stderr and calls `Foundation.exit`:
+
+```swift
+// Default: prints "Error: <error>\n" and exits with status 1
+let config = loadConfig().getOrExit()
+
+// Customize the prefix and exit code
+let port = parsePort(args).getOrExit(prefix: "fatal: ", exitCode: 2)
+
+// Provide a fully custom message — include any trailing newline yourself
+let user = fetchUser(id: 1).getOrExit { error in
+    "could not load user: \(error)\n"
+}
+```
+
+#### OrExit — Terminate on Failure, Discard Success
+
+Same termination behavior as `getOrExit`, but discards the success value. Useful at the end of a pipeline that has already consumed the success:
+
+```swift
+runCommand(args)
+    .tap { output in print(output) }
+    .orExit()
+
+// Custom message
+runCommand(args).orExit { error in
+    "command failed: \(error)\n"
+}
+```
 - Throwing variants convert `Failure` type to `Error`
 
 #### Match
@@ -607,6 +639,17 @@ func getOrElse(_ onFailure: (Failure) -> Success) -> Success
 func getOrElse(_ defaultValue: @autoclosure () -> Success) -> Success
 func getOrElseAsync(_ onFailure: (Failure) async -> Success) async -> Success
 func getOrElseAsync(_ defaultValue: @autoclosure @escaping () async -> Success) async -> Success
+```
+
+### GetOrExit / OrExit
+```swift
+// Unwrap or print to stderr and call Foundation.exit
+func getOrExit(prefix: String = "Error: ", exitCode: Int32 = 1) -> Success
+func getOrExit(exitCode: Int32 = 1, message: (Failure) -> String) -> Success
+
+// Discard success; print to stderr and exit on failure
+func orExit(prefix: String = "Error: ", exitCode: Int32 = 1)
+func orExit(exitCode: Int32 = 1, message: (Failure) -> String)
 ```
 
 ### Match
