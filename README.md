@@ -66,6 +66,25 @@ let result = value |>>> (function, firstArg, secondArg)
 let transform = |> double  // (Int) -> Int
 ```
 
+All four pipe operators (and the prefix flow operator) have async overloads. Sync and async functions can be freely mixed in a chain — the chain becomes `async` as soon as any step is async:
+
+```swift
+// Mixed sync/async chain — only one `await` needed at the front
+let summary = await userId
+    |> normalizeId         // sync (Int) -> Int
+    |> fetchUser           // async (Int) async -> User
+    |> renderSummary       // sync (User) -> String
+
+// Two- and three-arg variants
+let profile = await userId |>> (fetchProfile, session)
+let html    = await body  |>>> (renderPage, title, theme)
+
+// Async point-free
+let load: (Int) async -> User = |> fetchUserAsync
+```
+
+Adding the async overloads does not affect existing sync usage: in a sync context (no `await`) only the sync overload can match, and in an async context Swift still prefers the sync overload when the closure is sync.
+
 ### Result Extensions
 
 #### Do Notation for Composing Results

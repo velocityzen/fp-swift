@@ -15,6 +15,17 @@ let result = input
     |> format
 ```
 
+Every pipe operator (`|>`, `|>>`, `|>>>`, `|<`, and prefix `|>`) has an async overload. Sync and async steps mix freely — the chain becomes `async` as soon as one step needs it, and a single `await` covers the whole expression:
+
+```swift
+let summary = await userId
+    |> normalizeId         // sync
+    |> fetchUser           // async
+    |> renderSummary       // sync
+```
+
+Adding the async overloads is purely additive: in a sync context only the sync overload can match, and in an async context Swift still prefers the sync overload when the closure is sync.
+
 ### Do Notation
 
 Compose multiple Result operations with an accumulating context, short-circuiting on the first failure:
