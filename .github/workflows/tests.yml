@@ -48,6 +48,28 @@ jobs:
       - name: Run tests
         run: swift test
 
+  test-simulators:
+    name: Run ${{ matrix.platform }} Simulator Tests
+    runs-on: macos-26
+    strategy:
+      matrix:
+        include:
+          - platform: iOS
+            device-filter: iPhone
+          - platform: tvOS
+            device-filter: Apple TV
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run tests (${{ matrix.platform }} Simulator)
+        run: |
+          set -o pipefail
+          LINE=$(xcrun simctl list devices available | grep -m1 "${{ matrix.device-filter }}")
+          UDID=$(echo "$LINE" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
+          echo "Using simulator: $LINE"
+          xcodebuild test -scheme fp-swift -destination "id=$UDID" | tail -60
+
   test-linux:
     name: Run Linux Tests
     runs-on: ubuntu-latest

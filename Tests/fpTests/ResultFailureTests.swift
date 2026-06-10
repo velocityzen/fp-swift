@@ -404,6 +404,8 @@ struct ResultFailureTests {
         #expect(evaluated == false)
     }
 
+    // Exit tests need process spawning — unavailable on iOS/tvOS.
+    #if os(macOS) || os(Linux)
     @Test("getOrExit on failure writes prefix and error to stderr and exits with the given code")
     func getOrExitExitsOnFailure() async {
         let result = await #expect(
@@ -447,6 +449,7 @@ struct ResultFailureTests {
         let stderr = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
         #expect(stderr.contains("could not load: primary"))
     }
+    #endif
 
     // MARK: - orExit
     //
@@ -480,6 +483,8 @@ struct ResultFailureTests {
         #expect(evaluated == false)
     }
 
+    // Exit tests need process spawning — unavailable on iOS/tvOS.
+    #if os(macOS) || os(Linux)
     @Test("orExit on failure writes prefix and error to stderr and exits with the given code")
     func orExitExitsOnFailure() async {
         let result = await #expect(
@@ -509,4 +514,5 @@ struct ResultFailureTests {
         let stderr = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
         #expect(stderr.contains("command failed: primary"))
     }
+    #endif
 }
