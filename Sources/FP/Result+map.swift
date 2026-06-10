@@ -1,5 +1,3 @@
-import Foundation
-
 public extension Result {
     /// Asynchronously transforms the success value.
     func mapAsync<T>(
@@ -31,8 +29,9 @@ public extension Result {
         }
     }
 
-    /// Asynchronously transforms the failure error.
-    func mapFailureAsync<E: Error>(
+    /// Asynchronously transforms the failure error. Async counterpart of the
+    /// standard library's `mapError`.
+    func mapErrorAsync<E: Error>(
         _ transform: (Failure) async -> E
     ) async -> Result<Success, E> {
         switch self {

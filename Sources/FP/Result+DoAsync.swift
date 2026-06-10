@@ -1,5 +1,3 @@
-import Foundation
-
 // MARK: - Do Notation (Async)
 
 public extension ResultDo {
@@ -203,7 +201,8 @@ public extension Result {
 public extension Result {
     func bindAsync<A, B, C, D, E, F, G, H, I>(
         _ fn: (A, B, C, D, E, F, G, H) async -> Result<I, Failure>
-    ) async -> Result<(A, B, C, D, E, F, G, H, I), Failure> where Success == (A, B, C, D, E, F, G, H) {
+    ) async -> Result<(A, B, C, D, E, F, G, H, I), Failure>
+    where Success == (A, B, C, D, E, F, G, H) {
         switch self {
             case .success(let (a, b, c, d, e, f, g, h)):
                 return await fn(a, b, c, d, e, f, g, h).map { i in (a, b, c, d, e, f, g, h, i) }
@@ -214,7 +213,8 @@ public extension Result {
 
     func letAsync<A, B, C, D, E, F, G, H, I>(
         _ fn: (A, B, C, D, E, F, G, H) async -> I
-    ) async -> Result<(A, B, C, D, E, F, G, H, I), Failure> where Success == (A, B, C, D, E, F, G, H) {
+    ) async -> Result<(A, B, C, D, E, F, G, H, I), Failure>
+    where Success == (A, B, C, D, E, F, G, H) {
         switch self {
             case .success(let (a, b, c, d, e, f, g, h)):
                 return .success((a, b, c, d, e, f, g, h, await fn(a, b, c, d, e, f, g, h)))
@@ -229,10 +229,12 @@ public extension Result {
 public extension Result {
     func bindAsync<A, B, C, D, E, F, G, H, I, J>(
         _ fn: (A, B, C, D, E, F, G, H, I) async -> Result<J, Failure>
-    ) async -> Result<(A, B, C, D, E, F, G, H, I, J), Failure> where Success == (A, B, C, D, E, F, G, H, I) {
+    ) async -> Result<(A, B, C, D, E, F, G, H, I, J), Failure>
+    where Success == (A, B, C, D, E, F, G, H, I) {
         switch self {
             case .success(let (a, b, c, d, e, f, g, h, i)):
-                return await fn(a, b, c, d, e, f, g, h, i).map { j in (a, b, c, d, e, f, g, h, i, j) }
+                return await fn(a, b, c, d, e, f, g, h, i).map { j in (a, b, c, d, e, f, g, h, i, j)
+                }
             case .failure(let error):
                 return .failure(error)
         }
@@ -240,7 +242,8 @@ public extension Result {
 
     func letAsync<A, B, C, D, E, F, G, H, I, J>(
         _ fn: (A, B, C, D, E, F, G, H, I) async -> J
-    ) async -> Result<(A, B, C, D, E, F, G, H, I, J), Failure> where Success == (A, B, C, D, E, F, G, H, I) {
+    ) async -> Result<(A, B, C, D, E, F, G, H, I, J), Failure>
+    where Success == (A, B, C, D, E, F, G, H, I) {
         switch self {
             case .success(let (a, b, c, d, e, f, g, h, i)):
                 return .success((a, b, c, d, e, f, g, h, i, await fn(a, b, c, d, e, f, g, h, i)))

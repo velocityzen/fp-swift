@@ -59,20 +59,6 @@ struct OperatorTests {
         #expect(result == "hello world!")
     }
 
-    // MARK: - |< (pipe into last argument, same as |>)
-
-    @Test("|< pipes value into function")
-    func pipeIntoLast() {
-        let result = 42 |< { $0 * 2 }
-        #expect(result == 84)
-    }
-
-    @Test("|< chains with |>")
-    func pipeIntoLastChaining() {
-        let result = 5 |> { $0 * 2 } |< { $0 + 1 }
-        #expect(result == 11)
-    }
-
     // MARK: - prefix |> (flow operator)
 
     @Test("prefix |> creates a function from another function")
@@ -88,14 +74,49 @@ struct OperatorTests {
         #expect(result == 6)
     }
 
+    // MARK: - Precedence
+
+    @Test("pipe binds looser than arithmetic")
+    func pipePrecedenceArithmetic() {
+        func double(_ x: Int) -> Int { x * 2 }
+        // (1 + 2) |> double, not 1 + (2 |> double)
+        let result = 1 + 2 |> double
+        #expect(result == 6)
+    }
+
+    @Test("pipe binds tighter than comparison")
+    func pipePrecedenceComparison() {
+        func double(_ x: Int) -> Int { x * 2 }
+        // (5 |> double) == 10
+        #expect(5 |> double == 10)
+    }
+
+    @Test("pipe binds looser than nil-coalescing")
+    func pipePrecedenceNilCoalescing() {
+        func double(_ x: Int) -> Int { x * 2 }
+        let missing: Int? = nil
+        // (missing ?? 3) |> double
+        let result = missing ?? 3 |> double
+        #expect(result == 6)
+    }
+
+    @Test("pipe binds tighter than logical operators")
+    func pipePrecedenceLogical() {
+        func isEven(_ x: Int) -> Bool { x.isMultiple(of: 2) }
+        // true && (4 |> isEven)
+        let result = true && 4 |> isEven
+        #expect(result == true)
+    }
+
     // MARK: - async |> (forward pipe)
 
     @Test("|> pipes value into async function")
     func forwardPipeAsync() async {
-        let result = await 5 |> { (x: Int) async -> Int in
-            await Task.yield()
-            return x * 2
-        }
+        let result =
+            await 5 |> { (x: Int) async -> Int in
+                await Task.yield()
+                return x * 2
+            }
         #expect(result == 10)
     }
 
@@ -149,17 +170,6 @@ struct OperatorTests {
 
         let result = await "!" |>>> (combine, "hello", " world")
         #expect(result == "hello world!")
-    }
-
-    // MARK: - async |< (pipe into last argument)
-
-    @Test("|< pipes value into async function")
-    func pipeIntoLastAsync() async {
-        let result = await 42 |< { (x: Int) async -> Int in
-            await Task.yield()
-            return x * 2
-        }
-        #expect(result == 84)
     }
 
     // MARK: - async prefix |> (flow operator)

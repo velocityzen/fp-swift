@@ -1,5 +1,3 @@
-import Foundation
-
 // MARK: - Do Notation
 
 /// Starting point for Result's do-notation chain.
@@ -137,7 +135,9 @@ public extension Result {
     func bind<A, B, C, D, E, F, G, H>(
         _ fn: (A, B, C, D, E, F, G) -> Result<H, Failure>
     ) -> Result<(A, B, C, D, E, F, G, H), Failure> where Success == (A, B, C, D, E, F, G) {
-        flatMap { (a, b, c, d, e, f, g) in fn(a, b, c, d, e, f, g).map { h in (a, b, c, d, e, f, g, h) } }
+        flatMap { (a, b, c, d, e, f, g) in
+            fn(a, b, c, d, e, f, g).map { h in (a, b, c, d, e, f, g, h) }
+        }
     }
 
     func `let`<A, B, C, D, E, F, G, H>(
@@ -153,7 +153,9 @@ public extension Result {
     func bind<A, B, C, D, E, F, G, H, I>(
         _ fn: (A, B, C, D, E, F, G, H) -> Result<I, Failure>
     ) -> Result<(A, B, C, D, E, F, G, H, I), Failure> where Success == (A, B, C, D, E, F, G, H) {
-        flatMap { (a, b, c, d, e, f, g, h) in fn(a, b, c, d, e, f, g, h).map { i in (a, b, c, d, e, f, g, h, i) } }
+        flatMap { (a, b, c, d, e, f, g, h) in
+            fn(a, b, c, d, e, f, g, h).map { i in (a, b, c, d, e, f, g, h, i) }
+        }
     }
 
     func `let`<A, B, C, D, E, F, G, H, I>(
@@ -168,13 +170,19 @@ public extension Result {
 public extension Result {
     func bind<A, B, C, D, E, F, G, H, I, J>(
         _ fn: (A, B, C, D, E, F, G, H, I) -> Result<J, Failure>
-    ) -> Result<(A, B, C, D, E, F, G, H, I, J), Failure> where Success == (A, B, C, D, E, F, G, H, I) {
-        flatMap { (a, b, c, d, e, f, g, h, i) in fn(a, b, c, d, e, f, g, h, i).map { j in (a, b, c, d, e, f, g, h, i, j) } }
+    ) -> Result<(A, B, C, D, E, F, G, H, I, J), Failure>
+    where Success == (A, B, C, D, E, F, G, H, I) {
+        flatMap { (a, b, c, d, e, f, g, h, i) in
+            fn(a, b, c, d, e, f, g, h, i).map { j in (a, b, c, d, e, f, g, h, i, j) }
+        }
     }
 
     func `let`<A, B, C, D, E, F, G, H, I, J>(
         _ fn: (A, B, C, D, E, F, G, H, I) -> J
-    ) -> Result<(A, B, C, D, E, F, G, H, I, J), Failure> where Success == (A, B, C, D, E, F, G, H, I) {
-        map { (a, b, c, d, e, f, g, h, i) in (a, b, c, d, e, f, g, h, i, fn(a, b, c, d, e, f, g, h, i)) }
+    ) -> Result<(A, B, C, D, E, F, G, H, I, J), Failure>
+    where Success == (A, B, C, D, E, F, G, H, I) {
+        map { (a, b, c, d, e, f, g, h, i) in
+            (a, b, c, d, e, f, g, h, i, fn(a, b, c, d, e, f, g, h, i))
+        }
     }
 }

@@ -55,53 +55,6 @@ struct ArrayAsyncTests {
         #expect(result == ["a-1", "b-2", "c-3"])
     }
 
-    // MARK: - mapAsync (Result)
-
-    @Test("mapAsync result variant transforms all elements with async operations")
-    func mapAsyncResultTransformsElements() async {
-        struct ParseError: Error, Equatable {}
-        let strings = ["1", "2", "3"]
-
-        let result = await strings.mapAsync { string -> Result<Int, ParseError> in
-            await Task.yield()
-            guard let value = Int(string) else {
-                return .failure(ParseError())
-            }
-            return .success(value)
-        }
-
-        #expect(result == .success([1, 2, 3]))
-    }
-
-    @Test("mapAsync result variant returns first failure from async operations")
-    func mapAsyncResultPropagatesError() async {
-        struct TestError: Error, Equatable {}
-        let numbers = [1, 2, 3]
-
-        let result = await numbers.mapAsync { number -> Result<Int, TestError> in
-            await Task.yield()
-            if number == 2 {
-                return .failure(TestError())
-            }
-            return .success(number)
-        }
-
-        #expect(result == .failure(TestError()))
-    }
-
-    @Test("mapAsync result variant handles empty array")
-    func mapAsyncResultEmptyArray() async {
-        struct TestError: Error, Equatable {}
-        let empty: [Int] = []
-
-        let result = await empty.mapAsync { number -> Result<String, TestError> in
-            await Task.yield()
-            return .success("\(number)")
-        }
-
-        #expect(result == .success([]))
-    }
-
     // MARK: - flatMapAsync (non-throwing)
 
     @Test("flatMapAsync transforms and flattens async results")

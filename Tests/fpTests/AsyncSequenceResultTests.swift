@@ -104,10 +104,10 @@ struct AsyncSequenceResultTests {
         #expect(results[2] == .success("v2"))
     }
 
-    // MARK: - mapFailure
+    // MARK: - mapError
 
-    @Test("mapFailure transforms failure errors")
-    func mapFailureTransformsErrors() async {
+    @Test("mapError transforms failure errors")
+    func mapErrorTransformsErrors() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.success(1))
             continuation.yield(.failure(.failed))
@@ -116,7 +116,7 @@ struct AsyncSequenceResultTests {
         }
 
         var results: [Result<Int, TestError>] = []
-        for await result in stream.mapFailure({ _ in TestError.other }) {
+        for await result in stream.mapError({ _ in TestError.other }) {
             results.append(result)
         }
 
@@ -175,10 +175,10 @@ struct AsyncSequenceResultTests {
         #expect(results[2] == .success("v2"))
     }
 
-    // MARK: - mapFailureAsync
+    // MARK: - mapErrorAsync
 
-    @Test("mapFailureAsync asynchronously transforms failure errors")
-    func mapFailureAsyncTransformsErrors() async {
+    @Test("mapErrorAsync asynchronously transforms failure errors")
+    func mapErrorAsyncTransformsErrors() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.success(1))
             continuation.yield(.failure(.failed))
@@ -187,7 +187,7 @@ struct AsyncSequenceResultTests {
         }
 
         var results: [Result<Int, TestError>] = []
-        for await result in stream.mapFailureAsync({ _ in
+        for await result in stream.mapErrorAsync({ _ in
             await Task.yield()
             return TestError.other
         }) {

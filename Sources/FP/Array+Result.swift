@@ -1,5 +1,3 @@
-import Foundation
-
 public extension Array {
     /// Traverses the array, applying a transform function to each element.
     /// Returns a Result containing an array of transformed values.

@@ -28,7 +28,7 @@ A lightweight functional programming toolkit for Swift, providing composable uti
 ## Requirements
 
 - Swift 6.2+
-- macOS 15+ / iOS 18+
+- macOS 10.15+ / iOS 13+ (the `mapAsyncKeepOrder` family requires macOS 15+ / iOS 18+)
 
 ## Installation
 
@@ -36,7 +36,7 @@ Add the package to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/velocityzen/fp-swift.git", from: "1.7.0")
+    .package(url: "https://github.com/velocityzen/fp-swift.git", from: "3.0.0")
 ]
 ```
 
@@ -66,7 +66,16 @@ let result = value |>>> (function, firstArg, secondArg)
 let transform = |> double  // (Int) -> Int
 ```
 
-All four pipe operators (and the prefix flow operator) have async overloads. Sync and async functions can be freely mixed in a chain — the chain becomes `async` as soon as any step is async:
+Pipe operators bind looser than arithmetic, ranges, casts, and `??`, but tighter than comparisons, logical operators, and assignment — the same placement as Elixir's `|>` and F#'s pipe family. The full expression on the left flows into the function on the right:
+
+```swift
+1 + 2 |> double          // double(3) = 6 — not 1 + double(2)
+x |> transform == 6      // (x |> transform) == 6
+flag && x |> isValid     // flag && (x |> isValid)
+a ?? b |> process        // (a ?? b) |> process
+```
+
+All pipe operators (including the prefix flow operator) have async overloads. Sync and async functions can be freely mixed in a chain — the chain becomes `async` as soon as any step is async:
 
 ```swift
 // Mixed sync/async chain — only one `await` needed at the front
@@ -205,6 +214,8 @@ Tap variants:
 - `.tapError()` - Sync side effect on failure
 - `.tapErrorAsync()` - Async side effect on failure
 
+Throwing variants convert the `Failure` type to `Error`; if the action throws, the thrown error becomes the failure (in the `tapError` case it replaces the original failure). Result-returning variants propagate the action's failure the same way.
+
 #### Alt — Recover with an Alternative
 
 If `self` is a success, keep it; otherwise return the lazily-evaluated alternative. The alternative may itself succeed (recovery) or fail (in which case its failure replaces the original):
@@ -270,7 +281,6 @@ runCommand(args).orExit { error in
     "command failed: \(error)\n"
 }
 ```
-- Throwing variants convert `Failure` type to `Error`
 
 #### Match
 
@@ -329,19 +339,23 @@ let result = Result<User, AppError>.fromOptional(user) {
 }
 ```
 
-#### To Bool
+#### Is Success / Is Failure
 
-Convert Result to boolean for simple success/failure checks:
+Boolean checks for simple conditionals:
 
 ```swift
 let result: Result<User, AppError> = fetchUser(id: 1)
 
-if result.toBool {
+if result.isSuccess {
     print("User fetched successfully")
 }
 
 // Or in ternary expressions
-let message = result.toBool ? "ok" : "error"
+let message = result.isSuccess ? "ok" : "error"
+
+if result.isFailure {
+    scheduleRetry()
+}
 ```
 
 ### Flatten Results
@@ -432,10 +446,6 @@ enum ParseError: Error {
     case invalid
 }
 
-let resultMapped = await items.mapAsync { item -> Result<String, ParseError> in
-    .success("item-\(item)")
-}
-
 let resultFlattened = await items.flatMapAsync { item -> Result<[Int], ParseError> in
     .success([item, item + 100])
 }
@@ -476,10 +486,10 @@ for await result in stream
 
 ### Ordered Concurrent Mapping
 
-Map elements through an async transform in parallel while preserving source order. Each transform runs in its own `Task`, so wall-clock time is bounded by the slowest element rather than the sum of all transforms — but emission still follows source arrival order. Useful when an upstream provider streams items that should be processed concurrently but consumed in order (e.g. SSE image references that need to be fetched in parallel and rendered in order):
+Map elements through an async transform in parallel while preserving source order. Transforms run concurrently — up to `maxConcurrency` at a time (unlimited by default) — so wall-clock time is bounded by the slowest element rather than the sum of all transforms, but emission still follows source arrival order. If the consumer stops iterating early, no further elements are read from the source and in-flight transforms are cancelled cooperatively. Useful when an upstream provider streams items that should be processed concurrently but consumed in order (e.g. SSE image references that need to be fetched in parallel and rendered in order):
 
 ```swift
-for await image in references.mapAsyncKeepOrder({ ref in
+for await image in references.mapAsyncKeepOrder(maxConcurrency: 8, { ref in
     await downloader.fetch(ref)
 }) {
     render(image)
@@ -561,11 +571,15 @@ let flatMapped = await optional.flatMapAsync { value -> String? in
 }
 ```
 
-#### OrElse
+#### OrElse / GetOrElse
 
 ```swift
 let optional: Int? = nil
-let fallback = optional.orElse(99)  // Returns 99 when nil, nil when has value
+let fallback = optional.orElse(99)  // 99 — first .some wins, so nil falls through
+let kept = Optional(5).orElse(99)   // 5 — keeps the wrapped value
+
+// getOrElse unwraps with a default (equivalent to ??)
+let count = optional.getOrElse(0)   // 0
 ```
 
 ## Result Extensions API
@@ -633,7 +647,7 @@ let result = await ResultDo<MyError>()
 ```swift
 // Non-throwing
 func mapAsync<T>(_ transform: (Success) async -> T) async -> Result<T, Failure>
-func mapFailureAsync<E: Error>(_ transform: (Failure) async -> E) async -> Result<Success, E>
+func mapErrorAsync<E: Error>(_ transform: (Failure) async -> E) async -> Result<Success, E>
 func flatMapAsync<T>(_ transform: (Success) async -> Result<T, Failure>) async -> Result<T, Failure>
 
 // Throwing (requires Failure == Error)
@@ -714,18 +728,24 @@ static func fromOptional(error: Failure) -> (Success?) -> Result<Success, Failur
 static func fromOptional(onError: () -> Failure) -> (Success?) -> Result<Success, Failure>
 ```
 
-### To Bool
+### Is Success / Is Failure
 ```swift
-var toBool: Bool  // true for success, false for failure
+var isSuccess: Bool  // true for success, false for failure
+var isFailure: Bool  // true for failure, false for success
 ```
 
 ### Tap (Side Effects)
+
+Throwing variants convert `Failure` to `Error`; a thrown error becomes the failure. Result-returning variants keep the success value but propagate the action's failure (the action's `Failure` type must match the Result's).
+
 ```swift
 // Non-throwing
 func tap(_ action: (Success) -> Void) -> Result<Success, Failure>
 func tap<T>(_ action: (Success) -> T) -> Result<Success, Failure>
-func tap<E>(_ action: (Success) -> Result<Void, E>) -> Result<Success, E>
-func tap<T, E>(_ action: (Success) -> Result<T, E>) -> Result<Success, E>
+
+// Result-returning
+func tap(_ action: (Success) -> Result<Void, Failure>) -> Result<Success, Failure>
+func tap<T>(_ action: (Success) -> Result<T, Failure>) -> Result<Success, Failure>
 
 // Throwing
 func tap(_ action: (Success) throws -> Void) -> Result<Success, Error>
@@ -734,8 +754,10 @@ func tap<T>(_ action: (Success) throws -> T) -> Result<Success, Error>
 // Async non-throwing
 func tapAsync(_ action: (Success) async -> Void) async -> Result<Success, Failure>
 func tapAsync<T>(_ action: (Success) async -> T) async -> Result<Success, Failure>
-func tapAsync<E>(_ action: (Success) async -> Result<Void, E>) async -> Result<Success, E>
-func tapAsync<T, E>(_ action: (Success) async -> Result<T, E>) async -> Result<Success, E>
+
+// Async Result-returning
+func tapAsync(_ action: (Success) async -> Result<Void, Failure>) async -> Result<Success, Failure>
+func tapAsync<T>(_ action: (Success) async -> Result<T, Failure>) async -> Result<Success, Failure>
 
 // Async throwing
 func tapAsync(_ action: (Success) async throws -> Void) async -> Result<Success, Error>
@@ -743,11 +765,16 @@ func tapAsync<T>(_ action: (Success) async throws -> T) async -> Result<Success,
 ```
 
 ### TapError (Side Effects on Failure)
+
+In the throwing variants, a thrown error replaces the original failure. In the Result-returning variants, the action's failure replaces the original; its success is discarded.
+
 ```swift
 // Non-throwing
 func tapError(_ action: (Failure) -> Void) -> Result<Success, Failure>
 func tapError<T>(_ action: (Failure) -> T) -> Result<Success, Failure>
-func tapError<T, E>(_ action: (Failure) -> Result<T, E>) -> Result<Success, E>
+
+// Result-returning
+func tapError<T>(_ action: (Failure) -> Result<T, Failure>) -> Result<Success, Failure>
 
 // Throwing
 func tapError(_ action: (Failure) throws -> Void) -> Result<Success, Error>
@@ -756,11 +783,20 @@ func tapError<T>(_ action: (Failure) throws -> T) -> Result<Success, Error>
 // Async non-throwing
 func tapErrorAsync(_ action: (Failure) async -> Void) async -> Result<Success, Failure>
 func tapErrorAsync<T>(_ action: (Failure) async -> T) async -> Result<Success, Failure>
-func tapErrorAsync<T, E>(_ action: (Failure) async -> Result<T, E>) async -> Result<Success, E>
+
+// Async Result-returning
+func tapErrorAsync<T>(_ action: (Failure) async -> Result<T, Failure>) async -> Result<Success, Failure>
 
 // Async throwing
 func tapErrorAsync(_ action: (Failure) async throws -> Void) async -> Result<Success, Error>
 func tapErrorAsync<T>(_ action: (Failure) async throws -> T) async -> Result<Success, Error>
+```
+
+### Finally
+```swift
+// Runs regardless of success or failure, returns self unchanged
+func finally(_ action: () -> Void) -> Result<Success, Failure>
+func finallyAsync(_ action: () async -> Void) async -> Result<Success, Failure>
 ```
 
 ## Flatten Functions API
@@ -795,19 +831,30 @@ func traverseAsync<Success>(_ transform: (Element) async -> Success) async -> Re
 func traverseAsync<Success, Failure>(_ transform: (Element) async -> Result<Success, Failure>) async -> Result<[Success], Failure>
 ```
 
-### Separate
+### Separate / Successes / Failures
 ```swift
+// Split an array of Results into both sides
 func separate<Success, Failure>() -> (successes: [Success], failures: [Failure])
     where Element == Result<Success, Failure>
+
+// Just one side
+func successes<Success, Failure>() -> [Success] where Element == Result<Success, Failure>
+func failures<Success, Failure>() -> [Failure] where Element == Result<Success, Failure>
+```
+
+### Compact / Sequence
+```swift
+// Drop nil elements
+func compact<T>() -> [T] where Element == T?
+
+// All-or-nothing: nil if any element is nil
+func sequence<T>() -> [T]? where Element == T?
 ```
 
 ### Async Mapping
 ```swift
-// mapAsync
+// mapAsync — for Result-returning transforms, use traverseAsync
 func mapAsync<T>(_ transform: (Element) async -> T) async -> [T]
-func mapAsync<T, Failure: Error>(
-    _ transform: (Element) async -> Result<T, Failure>
-) async -> Result<[T], Failure>
 
 // flatMapAsync
 func flatMapAsync<S: Sequence>(
@@ -838,12 +885,12 @@ func failures() -> AsyncCompactMapSequence   // unwraps failure errors
 ```swift
 // Sync
 func map<T>(_ transform: (Success) -> T) -> AsyncMapSequence<Self, Result<T, Failure>>
-func mapFailure<E>(_ transform: (Failure) -> E) -> AsyncMapSequence<Self, Result<Success, E>>
+func mapError<E>(_ transform: (Failure) -> E) -> AsyncMapSequence<Self, Result<Success, E>>
 func flatMap<T>(_ transform: (Success) -> Result<T, Failure>) -> AsyncMapSequence<Self, Result<T, Failure>>
 
 // Async
 func mapAsync<T>(_ transform: (Success) async -> T) -> AsyncMapSequence<Self, Result<T, Failure>>
-func mapFailureAsync<E>(_ transform: (Failure) async -> E) -> AsyncMapSequence<Self, Result<Success, E>>
+func mapErrorAsync<E>(_ transform: (Failure) async -> E) -> AsyncMapSequence<Self, Result<Success, E>>
 func flatMapAsync<T>(_ transform: (Success) async -> Result<T, Failure>) -> AsyncMapSequence<Self, Result<T, Failure>>
 ```
 
@@ -860,18 +907,27 @@ func tapErrorAsync(_ action: (Failure) async -> Void) -> AsyncMapSequence<Self, 
 
 ### Ordered Concurrent Mapping
 
-Element transforms run in parallel; output preserves source arrival order.
+Element transforms run in parallel, at most `maxConcurrency` at a time; output preserves source arrival order. Early termination by the consumer cancels in-flight transforms cooperatively.
 
 ```swift
 // General form
 func mapAsyncKeepOrder<T: Sendable>(
+    maxConcurrency: Int = .max,
     _ transform: @Sendable @escaping (Element) async -> T
 ) -> AsyncStream<T>
 where Self: Sendable, Failure == Never, Element: Sendable
 
 // Result overload — transforms successes, passes failures through
 func mapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
+    maxConcurrency: Int = .max,
     _ transform: @Sendable @escaping (Success) async -> T
+) -> AsyncStream<Result<T, E>>
+where Self: Sendable, Failure == Never, Element == Result<Success, E>
+
+// Fallible transform — transform failures replace the success they came from
+func flatMapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
+    maxConcurrency: Int = .max,
+    _ transform: @Sendable @escaping (Success) async -> Result<T, E>
 ) -> AsyncStream<Result<T, E>>
 where Self: Sendable, Failure == Never, Element == Result<Success, E>
 ```
@@ -914,9 +970,22 @@ func mapAsync<T>(_ transform: (Wrapped) async -> T) async -> T?
 func flatMapAsync<T>(_ transform: (Wrapped) async -> T?) async -> T?
 ```
 
-### OrElse
+### OrElse / GetOrElse
 ```swift
-func orElse<T>(_ defaultValue: T) -> T?
+// First .some wins; the alternative is only evaluated when nil
+func orElse(_ alternative: @autoclosure () -> Wrapped?) -> Wrapped?
+func orElseAsync(_ alternative: @autoclosure @escaping () async -> Wrapped?) async -> Wrapped?
+
+// Unwrap with a default (equivalent to ??)
+func getOrElse(_ defaultValue: @autoclosure () -> Wrapped) -> Wrapped
+func getOrElseAsync(_ defaultValue: @autoclosure @escaping () async -> Wrapped) async -> Wrapped
+```
+
+### Finally
+```swift
+// Runs regardless of .some/.none, returns self unchanged
+func finally(_ action: () -> Void) -> Wrapped?
+func finallyAsync(_ action: () async -> Void) async -> Wrapped?
 ```
 
 ## License

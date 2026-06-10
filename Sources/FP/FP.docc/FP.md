@@ -15,7 +15,7 @@ let result = input
     |> format
 ```
 
-Every pipe operator (`|>`, `|>>`, `|>>>`, `|<`, and prefix `|>`) has an async overload. Sync and async steps mix freely — the chain becomes `async` as soon as one step needs it, and a single `await` covers the whole expression:
+Every pipe operator (`|>`, `|>>`, `|>>>`, and prefix `|>`) has an async overload. Sync and async steps mix freely — the chain becomes `async` as soon as one step needs it, and a single `await` covers the whole expression:
 
 ```swift
 let summary = await userId
@@ -25,6 +25,15 @@ let summary = await userId
 ```
 
 Adding the async overloads is purely additive: in a sync context only the sync overload can match, and in an async context Swift still prefers the sync overload when the closure is sync.
+
+Pipe operators bind looser than arithmetic, ranges, casts, and `??`, but tighter than comparisons, logical operators, and assignment — the same placement as Elixir's `|>` and F#'s pipe family. The full expression on the left flows into the function on the right:
+
+```swift
+1 + 2 |> double          // double(3) = 6 — not 1 + double(2)
+x |> transform == 6      // (x |> transform) == 6
+flag && x |> isValid     // flag && (x |> isValid)
+a ?? b |> process        // (a ?? b) |> process
+```
 
 ### Do Notation
 
@@ -299,10 +308,10 @@ for await result in stream
 
 ### Ordered Concurrent Mapping
 
-Map an `AsyncSequence` through an async transform in parallel while preserving source order — wall-clock time is bounded by the slowest element rather than the sum of all transforms, but emission still follows source arrival order:
+Map an `AsyncSequence` through an async transform in parallel while preserving source order — wall-clock time is bounded by the slowest element rather than the sum of all transforms, but emission still follows source arrival order. Concurrency is capped by `maxConcurrency` (unlimited by default), and in-flight transforms are cancelled cooperatively if the consumer stops iterating early:
 
 ```swift
-for await image in references.mapAsyncKeepOrder({ ref in
+for await image in references.mapAsyncKeepOrder(maxConcurrency: 8, { ref in
     await downloader.fetch(ref)
 }) {
     render(image)

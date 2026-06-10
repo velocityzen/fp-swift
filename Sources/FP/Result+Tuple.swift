@@ -1,5 +1,3 @@
-import Foundation
-
 // MARK: - Flatten tuple of Results into Result of tuple (sync)
 
 // MARK: Arity 2

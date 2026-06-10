@@ -9,34 +9,47 @@ struct ResultBoolTests {
         case notFound
     }
 
-    @Test("toBool returns true for success")
-    func toBoolSuccessReturnsTrue() {
+    @Test("isSuccess returns true for success")
+    func isSuccessReturnsTrueForSuccess() {
         let result: Result<Int, TestError> = .success(42)
 
-        #expect(result.toBool == true)
+        #expect(result.isSuccess == true)
     }
 
-    @Test("toBool returns false for failure")
-    func toBoolFailureReturnsFalse() {
+    @Test("isSuccess returns false for failure")
+    func isSuccessReturnsFalseForFailure() {
         let result: Result<Int, TestError> = .failure(.missing)
 
-        #expect(result.toBool == false)
+        #expect(result.isSuccess == false)
     }
 
-    @Test("toBool works with Void success type")
-    func toBoolWithVoidSuccess() {
+    @Test("isFailure returns true for failure")
+    func isFailureReturnsTrueForFailure() {
+        let result: Result<Int, TestError> = .failure(.missing)
+
+        #expect(result.isFailure == true)
+    }
+
+    @Test("isFailure returns false for success")
+    func isFailureReturnsFalseForSuccess() {
+        let result: Result<Int, TestError> = .success(42)
+
+        #expect(result.isFailure == false)
+    }
+
+    @Test("isSuccess works with Void success type")
+    func isSuccessWithVoidSuccess() {
         let result: Result<Void, TestError> = .success(())
 
-        #expect(result.toBool == true)
+        #expect(result.isSuccess == true)
     }
 
-    @Test("toBool works with different error types")
-    func toBoolWithDifferentErrors() {
+    @Test("isSuccess works with different error types")
+    func isSuccessWithDifferentErrors() {
         let result1: Result<Int, TestError> = .failure(.missing)
         let result2: Result<Int, TestError> = .failure(.notFound)
 
-        #expect(result1.toBool == false)
-        #expect(result2.toBool == false)
+        #expect(result1.isSuccess == false)
+        #expect(result2.isSuccess == false)
     }
-
 }

@@ -1,25 +1,22 @@
 /**
- * Result+IO - Functional Extensions for Result Type
+ * Result+tap - Side Effects for Result Chains
  *
- * ARCHITECTURAL PATTERN:
- * Use `.tap()` methods to perform side effects while keeping the Result chain flowing.
- * This enables functional-style error handling with clear success/failure paths.
+ * Use `.tap()` / `.tapError()` to perform side effects while keeping the
+ * Result chain flowing:
  *
- * Usage:
  *   someOperation()
  *       .tap { value in saveToCache(value) }
  *       .tapAsync { value in await sendAnalytics(value) }
  *       .map { value in transform(value) }
  *
  * Variants:
- * - `.tap()` - Sync side effect, keeps Result unchanged
- * - `.tapAsync()` - Async side effect, keeps Result unchanged
- * - Throwing variants convert Failure type to Error
- *
- * See CLAUDE.md "Code Hygiene Patterns > Functional Result Extensions"
+ * - `.tap()` / `.tapError()` - Sync side effect, keeps Result unchanged
+ * - `.tapAsync()` / `.tapErrorAsync()` - Async side effect, keeps Result unchanged
+ * - Throwing variants convert Failure type to Error; if the action throws,
+ *   the thrown error becomes the failure (replacing the original failure in
+ *   the tapError case)
+ * - Result-returning variants propagate the action's failure
  */
-import Foundation
-
 public extension Result {
 
     // MARK: Sync taps
@@ -204,41 +201,45 @@ public extension Result {
         return self
     }
 
-    /// Performs a throwing side effect on failure, converting thrown errors to failure.
+    /// Performs a throwing side effect on failure. If the action throws, the
+    /// thrown error replaces the original failure.
     func tapError(
         _ action: (Failure) throws -> Void
     ) -> Result<Success, Error> {
         switch self {
             case .success(let value):
                 return .success(value)
-            case .failure(let error):
+            case .failure(let originalError):
                 do {
-                    try action(error)
-                    return .failure(error)
-                } catch {
-                    return .failure(error)
+                    try action(originalError)
+                    return .failure(originalError)
+                } catch let thrownError {
+                    return .failure(thrownError)
                 }
         }
     }
 
     /// Performs a throwing side effect on failure, discarding the return value.
+    /// If the action throws, the thrown error replaces the original failure.
     func tapError<T>(
         _ action: (Failure) throws -> T
     ) -> Result<Success, Error> {
         switch self {
             case .success(let value):
                 return .success(value)
-            case .failure(let error):
+            case .failure(let originalError):
                 do {
-                    let _ = try action(error)
-                    return .failure(error)
-                } catch {
-                    return .failure(error)
+                    let _ = try action(originalError)
+                    return .failure(originalError)
+                } catch let thrownError {
+                    return .failure(thrownError)
                 }
         }
     }
 
-    /// Performs a Result-returning side effect on failure, propagating the original error.
+    /// Performs a Result-returning side effect on failure. If the action
+    /// succeeds, the original failure is preserved; if the action fails, its
+    /// failure replaces the original.
     func tapError<T>(
         _ action: (Failure) -> Result<T, Failure>
     ) -> Result<Success, Failure> {
@@ -274,41 +275,46 @@ public extension Result {
         return self
     }
 
-    /// Asynchronously performs a throwing side effect on failure.
+    /// Asynchronously performs a throwing side effect on failure. If the
+    /// action throws, the thrown error replaces the original failure.
     func tapErrorAsync(
         _ action: (Failure) async throws -> Void
     ) async -> Result<Success, Error> {
         switch self {
             case .success(let value):
                 return .success(value)
-            case .failure(let error):
+            case .failure(let originalError):
                 do {
-                    try await action(error)
-                    return .failure(error)
-                } catch {
-                    return .failure(error)
+                    try await action(originalError)
+                    return .failure(originalError)
+                } catch let thrownError {
+                    return .failure(thrownError)
                 }
         }
     }
 
-    /// Asynchronously performs a throwing side effect on failure, discarding the return value.
+    /// Asynchronously performs a throwing side effect on failure, discarding
+    /// the return value. If the action throws, the thrown error replaces the
+    /// original failure.
     func tapErrorAsync<T>(
         _ action: (Failure) async throws -> T
     ) async -> Result<Success, Error> {
         switch self {
             case .success(let value):
                 return .success(value)
-            case .failure(let error):
+            case .failure(let originalError):
                 do {
-                    let _ = try await action(error)
-                    return .failure(error)
-                } catch {
-                    return .failure(error)
+                    let _ = try await action(originalError)
+                    return .failure(originalError)
+                } catch let thrownError {
+                    return .failure(thrownError)
                 }
         }
     }
 
-    /// Asynchronously performs a Result-returning side effect on failure.
+    /// Asynchronously performs a Result-returning side effect on failure. If
+    /// the action succeeds, the original failure is preserved; if the action
+    /// fails, its failure replaces the original.
     func tapErrorAsync<T>(
         _ action: (Failure) async -> Result<T, Failure>
     ) async -> Result<Success, Failure> {

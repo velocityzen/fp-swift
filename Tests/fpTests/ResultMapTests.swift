@@ -74,6 +74,38 @@ struct ResultMapTests {
         #expect(mapped == .success(123))
     }
 
+    // MARK: - mapErrorAsync
+
+    @Test("mapErrorAsync transforms the failure error")
+    func mapErrorAsyncTransformsFailure() async {
+        struct WrappedError: Error, Equatable {
+            let original: TestError
+        }
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let mapped = await result.mapErrorAsync { error in
+            await Task.yield()
+            return WrappedError(original: error)
+        }
+
+        #expect(mapped == .failure(WrappedError(original: .invalid)))
+    }
+
+    @Test("mapErrorAsync preserves success without calling the transform")
+    func mapErrorAsyncPreservesSuccess() async {
+        let counter = AsyncCounter()
+        let result: Result<Int, TestError> = .success(42)
+
+        let mapped = await result.mapErrorAsync { _ in
+            await counter.increment()
+            return TestError.notFound
+        }
+
+        let count = await counter.count
+        #expect(mapped == .success(42))
+        #expect(count == 0)
+    }
+
     // MARK: - mapAsync (throwing, where Failure == Error)
 
     @Test("mapAsync throwing transforms success value")

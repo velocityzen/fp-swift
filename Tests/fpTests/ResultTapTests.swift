@@ -439,6 +439,73 @@ struct ResultTapTests {
         }
     }
 
+    @Test("tapError throwing replaces failure with thrown error")
+    func tapErrorThrowingReplacesFailureWithThrownError() {
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let tapped = result.tapError { _ throws in
+            throw TestError.failed
+        }
+
+        switch tapped {
+            case .success:
+                Issue.record("Expected failure")
+            case .failure(let error):
+                #expect(error as? TestError == .failed)
+        }
+    }
+
+    @Test("tapError throwing with return value replaces failure with thrown error")
+    func tapErrorThrowingWithReturnReplacesFailure() {
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let tapped = result.tapError { _ throws -> String in
+            throw TestError.failed
+        }
+
+        switch tapped {
+            case .success:
+                Issue.record("Expected failure")
+            case .failure(let error):
+                #expect(error as? TestError == .failed)
+        }
+    }
+
+    // MARK: - tapError (sync, Result return)
+
+    @Test("tapError Result-returning preserves original failure when action succeeds")
+    func tapErrorResultActionSucceedsPreservesOriginal() {
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let tapped = result.tapError { _ -> Result<String, TestError> in
+            .success("logged")
+        }
+
+        #expect(tapped == .failure(.invalid))
+    }
+
+    @Test("tapError Result-returning replaces failure when action fails")
+    func tapErrorResultActionFailsReplacesOriginal() {
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let tapped = result.tapError { _ -> Result<String, TestError> in
+            .failure(.failed)
+        }
+
+        #expect(tapped == .failure(.failed))
+    }
+
+    @Test("tapError Result-returning preserves success")
+    func tapErrorResultPreservesSuccess() {
+        let result: Result<Int, TestError> = .success(42)
+
+        let tapped = result.tapError { _ -> Result<String, TestError> in
+            .failure(.failed)
+        }
+
+        #expect(tapped == .success(42))
+    }
+
     // MARK: - tapErrorAsync (async, non-throwing)
 
     @Test("tapErrorAsync executes async action for failure")
@@ -521,6 +588,66 @@ struct ResultTapTests {
             case .failure:
                 Issue.record("Expected success")
         }
+    }
+
+    @Test("tapErrorAsync throwing replaces failure with thrown error")
+    func tapErrorAsyncThrowingReplacesFailureWithThrownError() async {
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let tapped = await result.tapErrorAsync { _ async throws in
+            await Task.yield()
+            throw TestError.failed
+        }
+
+        switch tapped {
+            case .success:
+                Issue.record("Expected failure")
+            case .failure(let error):
+                #expect(error as? TestError == .failed)
+        }
+    }
+
+    @Test("tapErrorAsync throwing with return value replaces failure with thrown error")
+    func tapErrorAsyncThrowingWithReturnReplacesFailure() async {
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let tapped = await result.tapErrorAsync { _ async throws -> String in
+            await Task.yield()
+            throw TestError.failed
+        }
+
+        switch tapped {
+            case .success:
+                Issue.record("Expected failure")
+            case .failure(let error):
+                #expect(error as? TestError == .failed)
+        }
+    }
+
+    // MARK: - tapErrorAsync (async, Result return)
+
+    @Test("tapErrorAsync Result-returning preserves original failure when action succeeds")
+    func tapErrorAsyncResultActionSucceedsPreservesOriginal() async {
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let tapped = await result.tapErrorAsync { _ -> Result<String, TestError> in
+            await Task.yield()
+            return .success("logged")
+        }
+
+        #expect(tapped == .failure(.invalid))
+    }
+
+    @Test("tapErrorAsync Result-returning replaces failure when action fails")
+    func tapErrorAsyncResultActionFailsReplacesOriginal() async {
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let tapped = await result.tapErrorAsync { _ -> Result<String, TestError> in
+            await Task.yield()
+            return .failure(.failed)
+        }
+
+        #expect(tapped == .failure(.failed))
     }
 
     // MARK: - Chaining

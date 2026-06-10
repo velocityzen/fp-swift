@@ -1,5 +1,3 @@
-import Foundation
-
 public extension Array {
     /// Returns a new array with all `nil` elements removed.
     ///

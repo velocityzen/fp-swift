@@ -1,5 +1,3 @@
-import Foundation
-
 public extension Array {
     /// Asynchronously maps each element to a new value.
     func mapAsync<T>(_ transform: (Element) async -> T) async -> [T] {
@@ -9,23 +7,6 @@ public extension Array {
             results.append(await transform(element))
         }
         return results
-    }
-
-    /// Asynchronously maps each element to a Result with typed errors.
-    func mapAsync<T, Failure: Error>(
-        _ transform: (Element) async -> Result<T, Failure>
-    ) async -> Result<[T], Failure> {
-        var results: [T] = []
-        results.reserveCapacity(count)
-        for element in self {
-            switch await transform(element) {
-                case .success(let value):
-                    results.append(value)
-                case .failure(let error):
-                    return .failure(error)
-            }
-        }
-        return .success(results)
     }
 
     /// Asynchronously transforms each element to a sequence and flattens the result.

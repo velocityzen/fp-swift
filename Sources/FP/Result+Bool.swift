@@ -1,28 +1,31 @@
 /**
- * Result+Bool - Boolean Conversion for Result Type
+ * Result+Bool - Boolean Checks for Result Type
  *
- * Provides a simple way to convert a Result to a boolean value,
- * useful for conditional checks where you only care about success/failure.
+ * Provides simple boolean checks for conditionals where you only care
+ * about success/failure.
  *
  * Usage:
  *   let result = someOperation()
- *   if result.toBool {
+ *   if result.isSuccess {
  *       print("Operation succeeded")
  *   }
  *
  *   // Or in ternary expressions
- *   let message = result.toBool ? "ok" : "error"
+ *   let message = result.isSuccess ? "ok" : "error"
  */
-import Foundation
-
 public extension Result {
     /// Returns `true` if the result is a success, `false` if it's a failure.
-    var toBool: Bool {
+    var isSuccess: Bool {
         switch self {
             case .success:
                 return true
             case .failure:
                 return false
         }
+    }
+
+    /// Returns `true` if the result is a failure, `false` if it's a success.
+    var isFailure: Bool {
+        !isSuccess
     }
 }

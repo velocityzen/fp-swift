@@ -1,5 +1,3 @@
-import Foundation
-
 public extension Result {
     /// Creates a Result from an optional, using the given error if nil.
     static func fromOptional(_ optional: Success?, error: Failure) -> Result<Success, Failure> {

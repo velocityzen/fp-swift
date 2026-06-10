@@ -1,5 +1,3 @@
-import Foundation
-
 public extension Result {
     /// Folds the Result by applying one of two functions depending on success or failure.
     @discardableResult

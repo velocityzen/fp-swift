@@ -1,5 +1,3 @@
-import Foundation
-
 // MARK: - AsyncSequence Extensions for Result
 
 public extension AsyncSequence {
@@ -46,7 +44,7 @@ public extension AsyncSequence {
     }
 
     /// Transforms the failure errors, preserving successes.
-    func mapFailure<Success, Failure, E>(
+    func mapError<Success, Failure, E>(
         _ transform: @Sendable @escaping (Failure) -> E
     ) -> AsyncMapSequence<Self, Result<Success, E>>
     where Element == Result<Success, Failure> {
@@ -56,12 +54,12 @@ public extension AsyncSequence {
     }
 
     /// Asynchronously transforms the failure errors, preserving successes.
-    func mapFailureAsync<Success, Failure, E: Error>(
+    func mapErrorAsync<Success, Failure, E: Error>(
         _ transform: @Sendable @escaping (Failure) async -> E
     ) -> AsyncMapSequence<Self, Result<Success, E>>
     where Element == Result<Success, Failure> {
         map { element in
-            await element.mapFailureAsync(transform)
+            await element.mapErrorAsync(transform)
         }
     }
 

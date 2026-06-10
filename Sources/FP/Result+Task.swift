@@ -1,4 +1,3 @@
-@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 public extension Result where Failure == Error, Success: Sendable {
     /// Creates a Result from a Task that returns a value and may throw
     static func fromTask(
@@ -25,7 +24,6 @@ public extension Result where Failure == Error, Success: Sendable {
     }
 }
 
-@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 public extension Result where Failure == Error {
     /// Creates a Result from a Task that returns a Result
     static func fromTask<S: Sendable>(
@@ -42,7 +40,6 @@ public extension Result where Failure == Error {
     }
 }
 
-@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 public extension Result where Failure == Never, Success: Sendable {
     /// Creates a Result from a non-throwing Task
     static func fromTask(

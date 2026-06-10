@@ -1,6 +1,18 @@
+/// Pipe operators bind looser than arithmetic, ranges, casts, and `??`, but
+/// tighter than comparisons, logical operators, and assignment — the same
+/// placement as Elixir's `|>` and F#'s pipe family. The full expression on
+/// the left flows into the function on the right:
+///
+/// ```swift
+/// 1 + 2 |> double          // double(3) — not 1 + double(2)
+/// x |> transform == 6      // (x |> transform) == 6
+/// flag && x |> isValid     // flag && (x |> isValid)
+/// a ?? b |> process        // (a ?? b) |> process
+/// ```
 precedencegroup PipePrecedence {
     associativity: left
-    higherThan: BitwiseShiftPrecedence
+    higherThan: ComparisonPrecedence
+    lowerThan: NilCoalescingPrecedence
 }
 
 infix operator |> : PipePrecedence
@@ -37,18 +49,6 @@ public func |>>> <A, B, C, Z>(lhs: C, rhs: (((A, B, C) -> Z), A, B)) -> Z {
 /// Asynchronously pipes a value as the third argument: `value |>>> (asyncFunction, firstArg, secondArg)`.
 public func |>>> <A, B, C, Z>(lhs: C, rhs: (((A, B, C) async -> Z), A, B)) async -> Z {
     await rhs.0(rhs.1, rhs.2, lhs)
-}
-
-infix operator |< : PipePrecedence
-
-/// Pipes a value as the last argument. Alias for `|>`.
-public func |< <A, Z>(lhs: A, rhs: (A) -> Z) -> Z {
-    return rhs(lhs)
-}
-
-/// Asynchronously pipes a value as the last argument. Async alias for `|>`.
-public func |< <A, Z>(lhs: A, rhs: (A) async -> Z) async -> Z {
-    await rhs(lhs)
 }
 
 prefix operator |>

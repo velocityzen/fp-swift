@@ -160,10 +160,11 @@ struct OptionalAsyncTests {
         let some: Int? = 1
         nonisolated(unsafe) var evaluated = false
 
-        _ = some.orElse({
-            evaluated = true
-            return 2
-        }())
+        _ = some.orElse(
+            {
+                evaluated = true
+                return 2
+            }())
 
         #expect(evaluated == false)
     }
@@ -239,10 +240,11 @@ struct OptionalAsyncTests {
         let some: Int? = 42
         nonisolated(unsafe) var evaluated = false
 
-        _ = some.getOrElse({
-            evaluated = true
-            return 0
-        }())
+        _ = some.getOrElse(
+            {
+                evaluated = true
+                return 0
+            }())
 
         #expect(evaluated == false)
     }

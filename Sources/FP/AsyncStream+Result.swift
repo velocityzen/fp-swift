@@ -1,5 +1,3 @@
-import Foundation
-
 // MARK: - AsyncStream Static Factories for Result
 
 public extension AsyncStream {

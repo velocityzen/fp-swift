@@ -10,3 +10,18 @@ actor AsyncCounter {
         return count
     }
 }
+
+/// Helper actor that records the high-water mark of concurrent executions
+actor ConcurrencyTracker {
+    private var current = 0
+    private(set) var highWater = 0
+
+    func enter() {
+        current += 1
+        highWater = max(highWater, current)
+    }
+
+    func exit() {
+        current -= 1
+    }
+}
