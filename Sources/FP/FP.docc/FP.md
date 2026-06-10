@@ -308,10 +308,10 @@ for await result in stream
 
 ### Ordered Concurrent Mapping
 
-Map an `AsyncSequence` through an async transform while preserving source order. Transforms run sequentially by default (`maxConcurrency: 1`); raise `maxConcurrency` to run them in parallel, bounding wall-clock time by the slowest element rather than the sum of all transforms while emission still follows source arrival order. In-flight transforms are cancelled cooperatively if the consumer stops iterating early:
+Map an `AsyncSequence` through an async transform while preserving source order. Transforms run sequentially by default (`concurrency: 1`); raise `concurrency` to run them in parallel, bounding wall-clock time by the slowest element rather than the sum of all transforms while emission still follows source arrival order. In-flight transforms are cancelled cooperatively if the consumer stops iterating early:
 
 ```swift
-for await image in references.mapAsyncKeepOrder(maxConcurrency: 8, { ref in
+for await image in references.mapAsyncKeepOrder(concurrency: 8, { ref in
     await downloader.fetch(ref)
 }) {
     render(image)

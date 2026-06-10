@@ -2,7 +2,7 @@
 extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendable {
     /// Maps each element through an async transform while preserving source
     /// order. By default transforms run one at a time; pass a
-    /// `maxConcurrency` greater than 1 to run them in parallel, bounding
+    /// `concurrency` greater than 1 to run them in parallel, bounding
     /// wall-clock time by the slowest element rather than the sum of all
     /// transforms.
     ///
@@ -19,23 +19,23 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     /// from the source and in-flight transforms are cancelled cooperatively.
     ///
     /// - Parameters:
-    ///   - maxConcurrency: Maximum number of transforms in flight at once;
+    ///   - concurrency: Maximum number of transforms in flight at once;
     ///     must be at least 1. Defaults to 1 — sequential execution. Pass a
     ///     larger value (or `.max`) to opt into parallelism.
     ///   - transform: The async transform applied to each element.
     ///
     /// ```swift
-    /// for await image in references.mapAsyncKeepOrder(maxConcurrency: 8, { ref in
+    /// for await image in references.mapAsyncKeepOrder(concurrency: 8, { ref in
     ///     await downloader.fetch(ref)
     /// }) {
     ///     render(image)
     /// }
     /// ```
     public func mapAsyncKeepOrder<T: Sendable>(
-        maxConcurrency: Int = 1,
+        concurrency: Int = 1,
         _ transform: @Sendable @escaping (Element) async -> T
     ) -> AsyncStream<T> {
-        precondition(maxConcurrency >= 1, "maxConcurrency must be at least 1")
+        precondition(concurrency >= 1, "concurrency must be at least 1")
         return AsyncStream<T> { continuation in
             let root = Task {
                 await withTaskGroup(of: Void.self) { group in
@@ -43,7 +43,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
                         of: (index: Int, value: T).self
                     )
                     // One token per completed transform; consumed by the
-                    // producer to keep at most `maxConcurrency` in flight.
+                    // producer to keep at most `concurrency` in flight.
                     let (tokens, tokensCont) = AsyncStream.makeStream(of: Void.self)
 
                     // Emitter: buffers out-of-order completions and yields
@@ -68,7 +68,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
                     var index = 0
                     var inFlight = 0
                     for await element in self {
-                        if inFlight >= maxConcurrency {
+                        if inFlight >= concurrency {
                             _ = await tokenIterator.next()
                             inFlight -= 1
                         }
@@ -102,8 +102,8 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
 
     /// Maps each `Result` element's success value through an async transform,
     /// preserving failures and source arrival order. Same concurrency model as
-    /// ``mapAsyncKeepOrder(maxConcurrency:_:)`` — sequential by default,
-    /// parallel up to `maxConcurrency` when you raise it.
+    /// ``mapAsyncKeepOrder(concurrency:_:)`` — sequential by default,
+    /// parallel up to `concurrency` when you raise it.
     ///
     /// Failures are not transformed — they pass through unchanged, emitted in
     /// their original position in the stream.
@@ -116,19 +116,19 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     /// }
     /// ```
     public func mapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
-        maxConcurrency: Int = 1,
+        concurrency: Int = 1,
         _ transform: @Sendable @escaping (Success) async -> T
     ) -> AsyncStream<Result<T, E>>
     where Element == Result<Success, E> {
-        mapAsyncKeepOrder(maxConcurrency: maxConcurrency) { element in
+        mapAsyncKeepOrder(concurrency: concurrency) { element in
             await element.mapAsync(transform)
         }
     }
 
     /// Maps each `Result` element's success value through a fallible async
     /// transform, preserving failures and source arrival order. Same
-    /// concurrency model as ``mapAsyncKeepOrder(maxConcurrency:_:)`` —
-    /// sequential by default, parallel up to `maxConcurrency` when you
+    /// concurrency model as ``mapAsyncKeepOrder(concurrency:_:)`` —
+    /// sequential by default, parallel up to `concurrency` when you
     /// raise it.
     ///
     /// Use this when each transform may fail. Source failures pass through
@@ -142,11 +142,11 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     /// }
     /// ```
     public func flatMapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
-        maxConcurrency: Int = 1,
+        concurrency: Int = 1,
         _ transform: @Sendable @escaping (Success) async -> Result<T, E>
     ) -> AsyncStream<Result<T, E>>
     where Element == Result<Success, E> {
-        mapAsyncKeepOrder(maxConcurrency: maxConcurrency) { element in
+        mapAsyncKeepOrder(concurrency: concurrency) { element in
             await element.flatMapAsync(transform)
         }
     }

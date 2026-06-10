@@ -486,10 +486,10 @@ for await result in stream
 
 ### Ordered Concurrent Mapping
 
-Map elements through an async transform while preserving source order. By default transforms run **one at a time** — pass `maxConcurrency` greater than 1 to opt into parallelism, bounding wall-clock time by the slowest element rather than the sum of all transforms while emission still follows source arrival order. If the consumer stops iterating early, no further elements are read from the source and in-flight transforms are cancelled cooperatively. Useful when an upstream provider streams items that should be processed concurrently but consumed in order (e.g. SSE image references that need to be fetched in parallel and rendered in order):
+Map elements through an async transform while preserving source order. By default transforms run **one at a time** — pass `concurrency` greater than 1 to opt into parallelism, bounding wall-clock time by the slowest element rather than the sum of all transforms while emission still follows source arrival order. If the consumer stops iterating early, no further elements are read from the source and in-flight transforms are cancelled cooperatively. Useful when an upstream provider streams items that should be processed concurrently but consumed in order (e.g. SSE image references that need to be fetched in parallel and rendered in order):
 
 ```swift
-for await image in references.mapAsyncKeepOrder(maxConcurrency: 8, { ref in
+for await image in references.mapAsyncKeepOrder(concurrency: 8, { ref in
     await downloader.fetch(ref)
 }) {
     render(image)
@@ -907,26 +907,26 @@ func tapErrorAsync(_ action: (Failure) async -> Void) -> AsyncMapSequence<Self, 
 
 ### Ordered Concurrent Mapping
 
-Element transforms run at most `maxConcurrency` at a time — sequential by default (`maxConcurrency: 1`), parallel when you raise it; output preserves source arrival order either way. Early termination by the consumer cancels in-flight transforms cooperatively.
+Element transforms run at most `concurrency` at a time — sequential by default (`concurrency: 1`), parallel when you raise it; output preserves source arrival order either way. Early termination by the consumer cancels in-flight transforms cooperatively.
 
 ```swift
 // General form
 func mapAsyncKeepOrder<T: Sendable>(
-    maxConcurrency: Int = 1,
+    concurrency: Int = 1,
     _ transform: @Sendable @escaping (Element) async -> T
 ) -> AsyncStream<T>
 where Self: Sendable, Failure == Never, Element: Sendable
 
 // Result overload — transforms successes, passes failures through
 func mapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
-    maxConcurrency: Int = 1,
+    concurrency: Int = 1,
     _ transform: @Sendable @escaping (Success) async -> T
 ) -> AsyncStream<Result<T, E>>
 where Self: Sendable, Failure == Never, Element == Result<Success, E>
 
 // Fallible transform — transform failures replace the success they came from
 func flatMapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
-    maxConcurrency: Int = 1,
+    concurrency: Int = 1,
     _ transform: @Sendable @escaping (Success) async -> Result<T, E>
 ) -> AsyncStream<Result<T, E>>
 where Self: Sendable, Failure == Never, Element == Result<Success, E>
