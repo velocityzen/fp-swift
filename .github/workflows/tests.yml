@@ -58,6 +58,10 @@ jobs:
             device-filter: iPhone
           - platform: tvOS
             device-filter: Apple TV
+          - platform: watchOS
+            device-filter: Apple Watch
+          - platform: visionOS
+            device-filter: Apple Vision
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
