@@ -67,7 +67,9 @@ struct AsyncSequenceOrderedTests {
             continuation.finish()
         }
 
+        #if os(macOS) || os(Linux)
         let start = ContinuousClock.now
+        #endif
         var values: [Int] = []
         for await value in stream.mapAsyncKeepOrder(
             concurrency: .max,
@@ -80,14 +82,21 @@ struct AsyncSequenceOrderedTests {
         {
             values.append(value)
         }
+        #if os(macOS) || os(Linux)
         let elapsed = ContinuousClock.now - start
+        #endif
 
         let highWater = await tracker.highWater
         #expect(values == [1, 2, 3, 4])
         // overlap observed directly,
         #expect(highWater >= 2)
-        // and confirmed by wall-clock: sequential would take at least 400ms
+        // and confirmed by wall-clock: sequential would take at least 400ms.
+        // Simulators can stall ~10s warming up under CI, so wall-clock upper
+        // bounds run on macOS/Linux only — the high-water check above is the
+        // overlap proof everywhere.
+        #if os(macOS) || os(Linux)
         #expect(elapsed < .milliseconds(400))
+        #endif
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
@@ -216,7 +225,9 @@ struct AsyncSequenceOrderedTests {
 
         let perElementSleep: UInt64 = 100_000_000  // 100ms
 
+        #if os(macOS) || os(Linux)
         let start = ContinuousClock.now
+        #endif
         var results: [Result<Int, TestError>] = []
         for await result in stream.mapAsyncKeepOrder(
             concurrency: .max,
@@ -227,11 +238,16 @@ struct AsyncSequenceOrderedTests {
         {
             results.append(result)
         }
+        #if os(macOS) || os(Linux)
         let elapsed = ContinuousClock.now - start
+        #endif
 
         #expect(results.count == 5)
-        // 4 successes sequential would be ~400ms.
+        // 4 successes sequential would be ~400ms. Simulators can stall ~10s
+        // warming up under CI, so wall-clock bounds run on macOS/Linux only.
+        #if os(macOS) || os(Linux)
         #expect(elapsed < .milliseconds(300))
+        #endif
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
@@ -386,7 +402,9 @@ struct AsyncSequenceOrderedTests {
 
         let perElementSleep: UInt64 = 100_000_000  // 100ms
 
+        #if os(macOS) || os(Linux)
         let start = ContinuousClock.now
+        #endif
         var results: [Result<Int, TestError>] = []
         for await result in stream.flatMapAsyncKeepOrder(
             concurrency: .max,
@@ -397,11 +415,16 @@ struct AsyncSequenceOrderedTests {
         {
             results.append(result)
         }
+        #if os(macOS) || os(Linux)
         let elapsed = ContinuousClock.now - start
+        #endif
 
         #expect(results.count == 5)
-        // 4 successes sequential would be ~400ms.
+        // 4 successes sequential would be ~400ms. Simulators can stall ~10s
+        // warming up under CI, so wall-clock bounds run on macOS/Linux only.
+        #if os(macOS) || os(Linux)
         #expect(elapsed < .milliseconds(300))
+        #endif
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)

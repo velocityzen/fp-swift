@@ -52,6 +52,7 @@ jobs:
     name: Run ${{ matrix.platform }} Simulator Tests
     runs-on: macos-26
     strategy:
+      fail-fast: false
       matrix:
         include:
           - platform: iOS
@@ -72,7 +73,7 @@ jobs:
           LINE=$(xcrun simctl list devices available | grep -m1 "${{ matrix.device-filter }}")
           UDID=$(echo "$LINE" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
           echo "Using simulator: $LINE"
-          xcodebuild test -scheme fp-swift -destination "id=$UDID" | tail -60
+          xcodebuild test -scheme fp-swift -destination "id=$UDID,arch=arm64" | tail -60
 
   test-linux:
     name: Run Linux Tests
