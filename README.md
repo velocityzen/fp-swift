@@ -28,7 +28,10 @@ A lightweight functional programming toolkit for Swift, providing composable uti
 ## Requirements
 
 - Swift 6.2+
-- macOS 10.15+ / iOS 13+ (the `mapAsyncKeepOrder` family requires macOS 15+ / iOS 18+)
+- macOS 10.15+ / iOS 13+ / tvOS 13+ / watchOS 6+ / visionOS 1+ / Linux
+- The `mapAsyncKeepOrder` family requires macOS 15+ / iOS 18+ / tvOS 18+ / watchOS 11+ / visionOS 2+ (no version gate on Linux)
+
+Every platform is exercised in CI: macOS 15 and 26, Ubuntu Linux, and the iOS, tvOS, watchOS, and visionOS simulators.
 
 ## Installation
 

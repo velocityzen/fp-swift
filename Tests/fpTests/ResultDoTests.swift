@@ -216,4 +216,88 @@ struct ResultDoTests {
 
         #expect(result == .failure(.notFound))
     }
+
+    // MARK: - Full arity ladder
+
+    @Test("bind accumulates ten values, exercising every arity")
+    func bindAccumulatesTen() {
+        let result = ResultDo<TestError>()
+            .bind { Result<Int, TestError>.success(1) }
+            .bind { _ in Result<Int, TestError>.success(2) }
+            .bind { _, _ in Result<Int, TestError>.success(3) }
+            .bind { _, _, _ in Result<Int, TestError>.success(4) }
+            .bind { _, _, _, _ in Result<Int, TestError>.success(5) }
+            .bind { _, _, _, _, _ in Result<Int, TestError>.success(6) }
+            .bind { _, _, _, _, _, _ in Result<Int, TestError>.success(7) }
+            .bind { _, _, _, _, _, _, _ in Result<Int, TestError>.success(8) }
+            .bind { _, _, _, _, _, _, _, _ in Result<Int, TestError>.success(9) }
+            .bind { _, _, _, _, _, _, _, _, _ in Result<Int, TestError>.success(10) }
+            .map { a, b, c, d, e, f, g, h, i, j in a + b + c + d + e + f + g + h + i + j }
+
+        #expect(result == .success(55))
+    }
+
+    @Test("let accumulates ten values, exercising every arity")
+    func letAccumulatesTen() {
+        // typed step-by-step: a single 10-deep chain exceeds the
+        // type checker's inference budget
+        let one: Result<Int, TestError> = ResultDo<TestError>().let { 1 }
+        let two: Result<(Int, Int), TestError> = one.let { a in a + 1 }
+        let three: Result<(Int, Int, Int), TestError> = two.let { _, b in b + 1 }
+        let four: Result<(Int, Int, Int, Int), TestError> = three.let { _, _, c in c + 1 }
+        let five: Result<(Int, Int, Int, Int, Int), TestError> =
+            four.let { _, _, _, d in d + 1 }
+        let six: Result<(Int, Int, Int, Int, Int, Int), TestError> =
+            five.let { _, _, _, _, e in e + 1 }
+        let seven: Result<(Int, Int, Int, Int, Int, Int, Int), TestError> =
+            six.let { _, _, _, _, _, f in f + 1 }
+        let eight: Result<(Int, Int, Int, Int, Int, Int, Int, Int), TestError> =
+            seven.let { _, _, _, _, _, _, g in g + 1 }
+        let nine: Result<(Int, Int, Int, Int, Int, Int, Int, Int, Int), TestError> =
+            eight.let { _, _, _, _, _, _, _, h in h + 1 }
+        let ten: Result<(Int, Int, Int, Int, Int, Int, Int, Int, Int, Int), TestError> =
+            nine.let { _, _, _, _, _, _, _, _, i in i + 1 }
+
+        let result = ten.map { a, b, c, d, e, f, g, h, i, j in
+            a + b + c + d + e + f + g + h + i + j
+        }
+        #expect(result == .success(55))
+    }
+
+    @Test("ten-step chain short-circuits at a late failure")
+    func tenStepChainShortCircuitsLate() {
+        nonisolated(unsafe) var stepsRun = 0
+        func step(_ n: Int) -> Result<Int, TestError> {
+            stepsRun += 1
+            return n == 7 ? .failure(.invalid) : .success(n)
+        }
+
+        let result = ResultDo<TestError>()
+            .bind { step(1) }
+            .bind { _ in step(2) }
+            .bind { _, _ in step(3) }
+            .bind { _, _, _ in step(4) }
+            .bind { _, _, _, _ in step(5) }
+            .bind { _, _, _, _, _ in step(6) }
+            .bind { _, _, _, _, _, _ in step(7) }
+            .bind { _, _, _, _, _, _, _ in step(8) }
+            .bind { _, _, _, _, _, _, _, _ in step(9) }
+            .bind { _, _, _, _, _, _, _, _, _ in step(10) }
+            .map { a, _, _, _, _, _, _, _, _, _ in a }
+
+        #expect(result == .failure(.invalid))
+        #expect(stepsRun == 7)
+    }
+
+    // MARK: - Result.Do accessor
+
+    @Test("Result.Do starts a chain")
+    func resultDoAccessorStartsChain() {
+        let result = Result<Int, TestError>.Do
+            .bind { Result<Int, TestError>.success(21) }
+            .let { a in a * 2 }
+            .map { _, b in b }
+
+        #expect(result == .success(42))
+    }
 }

@@ -197,4 +197,129 @@ struct ResultDoAsyncTests {
 
         #expect(result == .success("5 * 3 = 15"))
     }
+
+    // MARK: - Full arity ladder
+
+    @Test("bindAsync accumulates ten values, exercising every arity")
+    func bindAsyncAccumulatesTen() async {
+        let result = await ResultDo<TestError>()
+            .bindAsync { Result<Int, TestError>.success(1) }
+            .bindAsync { _ in Result<Int, TestError>.success(2) }
+            .bindAsync { _, _ in Result<Int, TestError>.success(3) }
+            .bindAsync { _, _, _ in Result<Int, TestError>.success(4) }
+            .bindAsync { _, _, _, _ in Result<Int, TestError>.success(5) }
+            .bindAsync { _, _, _, _, _ in Result<Int, TestError>.success(6) }
+            .bindAsync { _, _, _, _, _, _ in Result<Int, TestError>.success(7) }
+            .bindAsync { _, _, _, _, _, _, _ in Result<Int, TestError>.success(8) }
+            .bindAsync { _, _, _, _, _, _, _, _ in Result<Int, TestError>.success(9) }
+            .bindAsync { _, _, _, _, _, _, _, _, _ in Result<Int, TestError>.success(10) }
+            .map { a, b, c, d, e, f, g, h, i, j in a + b + c + d + e + f + g + h + i + j }
+
+        #expect(result == .success(55))
+    }
+
+    @Test("letAsync accumulates ten values, exercising every arity")
+    func letAsyncAccumulatesTen() async {
+        // typed step-by-step: a single 10-deep chain exceeds the
+        // type checker's inference budget
+        let one: Result<Int, TestError> = await ResultDo<TestError>().letAsync { 1 }
+        let two: Result<(Int, Int), TestError> = await one.letAsync { a in a + 1 }
+        let three: Result<(Int, Int, Int), TestError> = await two.letAsync { _, b in b + 1 }
+        let four: Result<(Int, Int, Int, Int), TestError> =
+            await three.letAsync { _, _, c in c + 1 }
+        let five: Result<(Int, Int, Int, Int, Int), TestError> =
+            await four.letAsync { _, _, _, d in d + 1 }
+        let six: Result<(Int, Int, Int, Int, Int, Int), TestError> =
+            await five.letAsync { _, _, _, _, e in e + 1 }
+        let seven: Result<(Int, Int, Int, Int, Int, Int, Int), TestError> =
+            await six.letAsync { _, _, _, _, _, f in f + 1 }
+        let eight: Result<(Int, Int, Int, Int, Int, Int, Int, Int), TestError> =
+            await seven.letAsync { _, _, _, _, _, _, g in g + 1 }
+        let nine: Result<(Int, Int, Int, Int, Int, Int, Int, Int, Int), TestError> =
+            await eight.letAsync { _, _, _, _, _, _, _, h in h + 1 }
+        let ten: Result<(Int, Int, Int, Int, Int, Int, Int, Int, Int, Int), TestError> =
+            await nine.letAsync { _, _, _, _, _, _, _, _, i in i + 1 }
+
+        let result = ten.map { a, b, c, d, e, f, g, h, i, j in
+            a + b + c + d + e + f + g + h + i + j
+        }
+        #expect(result == .success(55))
+    }
+
+    @Test("ten-step async chain short-circuits at a late failure")
+    func tenStepAsyncChainShortCircuitsLate() async {
+        let counter = AsyncCounter()
+        func step(_ n: Int) async -> Result<Int, TestError> {
+            await counter.increment()
+            return n == 7 ? .failure(.invalid) : .success(n)
+        }
+
+        let result = await ResultDo<TestError>()
+            .bindAsync { await step(1) }
+            .bindAsync { _ in await step(2) }
+            .bindAsync { _, _ in await step(3) }
+            .bindAsync { _, _, _ in await step(4) }
+            .bindAsync { _, _, _, _ in await step(5) }
+            .bindAsync { _, _, _, _, _ in await step(6) }
+            .bindAsync { _, _, _, _, _, _ in await step(7) }
+            .bindAsync { _, _, _, _, _, _, _ in await step(8) }
+            .bindAsync { _, _, _, _, _, _, _, _ in await step(9) }
+            .bindAsync { _, _, _, _, _, _, _, _, _ in await step(10) }
+            .map { a, _, _, _, _, _, _, _, _, _ in a }
+
+        let stepsRun = await counter.count
+        #expect(result == .failure(.invalid))
+        #expect(stepsRun == 7)
+    }
+
+    @Test("ten-step async chain passes a first-step failure through every bindAsync arity")
+    func tenStepAsyncChainShortCircuitsEarly() async {
+        let counter = AsyncCounter()
+        func step(_ n: Int) async -> Result<Int, TestError> {
+            await counter.increment()
+            return n == 1 ? .failure(.notFound) : .success(n)
+        }
+
+        let result = await ResultDo<TestError>()
+            .bindAsync { await step(1) }
+            .bindAsync { _ in await step(2) }
+            .bindAsync { _, _ in await step(3) }
+            .bindAsync { _, _, _ in await step(4) }
+            .bindAsync { _, _, _, _ in await step(5) }
+            .bindAsync { _, _, _, _, _ in await step(6) }
+            .bindAsync { _, _, _, _, _, _ in await step(7) }
+            .bindAsync { _, _, _, _, _, _, _ in await step(8) }
+            .bindAsync { _, _, _, _, _, _, _, _ in await step(9) }
+            .bindAsync { _, _, _, _, _, _, _, _, _ in await step(10) }
+            .map { a, _, _, _, _, _, _, _, _, _ in a }
+
+        let stepsRun = await counter.count
+        #expect(result == .failure(.notFound))
+        #expect(stepsRun == 1)
+    }
+
+    @Test("letAsync passes an existing failure through every arity")
+    func letAsyncPassesFailureThroughAllArities() async {
+        let one: Result<Int, TestError> = await ResultDo<TestError>()
+            .bindAsync { Result<Int, TestError>.failure(.invalid) }
+        let two: Result<(Int, Int), TestError> = await one.letAsync { a in a + 1 }
+        let three: Result<(Int, Int, Int), TestError> = await two.letAsync { _, b in b + 1 }
+        let four: Result<(Int, Int, Int, Int), TestError> =
+            await three.letAsync { _, _, c in c + 1 }
+        let five: Result<(Int, Int, Int, Int, Int), TestError> =
+            await four.letAsync { _, _, _, d in d + 1 }
+        let six: Result<(Int, Int, Int, Int, Int, Int), TestError> =
+            await five.letAsync { _, _, _, _, e in e + 1 }
+        let seven: Result<(Int, Int, Int, Int, Int, Int, Int), TestError> =
+            await six.letAsync { _, _, _, _, _, f in f + 1 }
+        let eight: Result<(Int, Int, Int, Int, Int, Int, Int, Int), TestError> =
+            await seven.letAsync { _, _, _, _, _, _, g in g + 1 }
+        let nine: Result<(Int, Int, Int, Int, Int, Int, Int, Int, Int), TestError> =
+            await eight.letAsync { _, _, _, _, _, _, _, h in h + 1 }
+        let ten: Result<(Int, Int, Int, Int, Int, Int, Int, Int, Int, Int), TestError> =
+            await nine.letAsync { _, _, _, _, _, _, _, _, i in i + 1 }
+
+        let result = ten.map { a, _, _, _, _, _, _, _, _, _ in a }
+        #expect(result == .failure(.invalid))
+    }
 }

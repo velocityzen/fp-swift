@@ -278,4 +278,46 @@ struct ResultMatchTests {
 
         #expect(sideEffect == "failure-invalid")
     }
+
+    // MARK: - Remaining branch coverage
+
+    @Test("match with autoclosure success and failure closure returns default on success")
+    func matchAutoclosureSuccessOnSuccess() {
+        let result: Result<Int, TestError> = .success(42)
+
+        let value = result.match("ok", { _ in "error" })
+
+        #expect(value == "ok")
+    }
+
+    @Test("matchAsync with async success closure returns the default on failure")
+    func matchAsyncAutoclosureFailureOnFailure() async {
+        let result: Result<Int, TestError> = .failure(.invalid)
+
+        let value = await result.matchAsync(
+            { value in
+                await Task.yield()
+                return "value: \(value)"
+            },
+            "fallback"
+        )
+
+        #expect(value == "fallback")
+    }
+
+    @Test("matchAsync with autoclosure success returns the default on success")
+    func matchAsyncAutoclosureSuccessOnSuccess() async {
+        let result: Result<Int, TestError> = .success(7)
+
+        let value = await result.matchAsync(
+            "ok",
+            { error in
+                await Task.yield()
+                return "error: \(error)"
+            }
+        )
+
+        #expect(value == "ok")
+    }
+
 }

@@ -354,4 +354,28 @@ struct ArrayResultTests {
 
         #expect(result == .failure(.invalid))
     }
+
+    // MARK: - traverse (plain transform, Never failure)
+
+    @Test("traverse with a plain transform always succeeds")
+    func traversePlainTransform() {
+        let numbers = [1, 2, 3]
+
+        let result: Result<[Int], Never> = numbers.traverse { $0 * 2 }
+
+        #expect(result == .success([2, 4, 6]))
+    }
+
+    @Test("traverseAsync with a plain transform always succeeds")
+    func traverseAsyncPlainTransform() async {
+        let numbers = [1, 2, 3]
+
+        let result: Result<[String], Never> = await numbers.traverseAsync { n in
+            await Task.yield()
+            return "v\(n)"
+        }
+
+        #expect(result == .success(["v1", "v2", "v3"]))
+    }
+
 }

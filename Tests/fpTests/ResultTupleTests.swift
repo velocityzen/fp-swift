@@ -409,4 +409,179 @@ struct ResultTupleTests {
             Issue.record("Expected failure")
         }
     }
+
+    // MARK: - Flatten 10 (full arity ladder)
+
+    @Test("flatten combines ten results, exercising every arity")
+    func flattenTenSuccess() {
+        let result = flatten(
+            Result<Int, TestError>.success(1),
+            Result<Int, TestError>.success(2),
+            Result<Int, TestError>.success(3),
+            Result<Int, TestError>.success(4),
+            Result<Int, TestError>.success(5),
+            Result<Int, TestError>.success(6),
+            Result<Int, TestError>.success(7),
+            Result<Int, TestError>.success(8),
+            Result<Int, TestError>.success(9),
+            Result<Int, TestError>.success(10)
+        )
+
+        let sum = result.map { a, b, c, d, e, f, g, h, i, j in
+            a + b + c + d + e + f + g + h + i + j
+        }
+        #expect(sum == .success(55))
+    }
+
+    @Test("flatten of ten returns the first failure")
+    func flattenTenFirstFailure() {
+        let result = flatten(
+            Result<Int, TestError>.failure(.failed),
+            Result<Int, TestError>.success(2),
+            Result<Int, TestError>.success(3),
+            Result<Int, TestError>.success(4),
+            Result<Int, TestError>.success(5),
+            Result<Int, TestError>.success(6),
+            Result<Int, TestError>.success(7),
+            Result<Int, TestError>.success(8),
+            Result<Int, TestError>.success(9),
+            Result<Int, TestError>.success(10)
+        )
+
+        let mapped = result.map { _, _, _, _, _, _, _, _, _, _ in 0 }
+        #expect(mapped == .failure(.failed))
+    }
+
+    @Test("flatten of ten returns a failure in the last position")
+    func flattenTenLastFailure() {
+        let result = flatten(
+            Result<Int, TestError>.success(1),
+            Result<Int, TestError>.success(2),
+            Result<Int, TestError>.success(3),
+            Result<Int, TestError>.success(4),
+            Result<Int, TestError>.success(5),
+            Result<Int, TestError>.success(6),
+            Result<Int, TestError>.success(7),
+            Result<Int, TestError>.success(8),
+            Result<Int, TestError>.success(9),
+            Result<Int, TestError>.failure(.other)
+        )
+
+        let mapped = result.map { _, _, _, _, _, _, _, _, _, _ in 0 }
+        #expect(mapped == .failure(.other))
+    }
+
+    // MARK: - FlattenAsync 6-10
+
+    @Test("flattenAsync combines six async results in parallel")
+    func flattenAsyncSix() async {
+        @Sendable func val(_ n: Int) async -> Result<Int, TestError> {
+            await Task.yield()
+            return .success(n)
+        }
+
+        let result = await flattenAsync(
+            await val(1),
+            await val(2),
+            await val(3),
+            await val(4),
+            await val(5),
+            await val(6)
+        )
+
+        let sum = result.map { a, b, c, d, e, f in a + b + c + d + e + f }
+        #expect(sum == .success(21))
+    }
+
+    @Test("flattenAsync combines seven async results in parallel")
+    func flattenAsyncSeven() async {
+        @Sendable func val(_ n: Int) async -> Result<Int, TestError> {
+            await Task.yield()
+            return .success(n)
+        }
+
+        let result = await flattenAsync(
+            await val(1),
+            await val(2),
+            await val(3),
+            await val(4),
+            await val(5),
+            await val(6),
+            await val(7)
+        )
+
+        let sum = result.map { a, b, c, d, e, f, g in a + b + c + d + e + f + g }
+        #expect(sum == .success(28))
+    }
+
+    @Test("flattenAsync combines eight async results in parallel")
+    func flattenAsyncEight() async {
+        @Sendable func val(_ n: Int) async -> Result<Int, TestError> {
+            await Task.yield()
+            return .success(n)
+        }
+
+        let result = await flattenAsync(
+            await val(1),
+            await val(2),
+            await val(3),
+            await val(4),
+            await val(5),
+            await val(6),
+            await val(7),
+            await val(8)
+        )
+
+        let sum = result.map { a, b, c, d, e, f, g, h in a + b + c + d + e + f + g + h }
+        #expect(sum == .success(36))
+    }
+
+    @Test("flattenAsync combines nine async results in parallel")
+    func flattenAsyncNine() async {
+        @Sendable func val(_ n: Int) async -> Result<Int, TestError> {
+            await Task.yield()
+            return .success(n)
+        }
+
+        let result = await flattenAsync(
+            await val(1),
+            await val(2),
+            await val(3),
+            await val(4),
+            await val(5),
+            await val(6),
+            await val(7),
+            await val(8),
+            await val(9)
+        )
+
+        let sum = result.map { a, b, c, d, e, f, g, h, i in a + b + c + d + e + f + g + h + i }
+        #expect(sum == .success(45))
+    }
+
+    @Test("flattenAsync combines ten async results in parallel")
+    func flattenAsyncTen() async {
+        @Sendable func val(_ n: Int) async -> Result<Int, TestError> {
+            await Task.yield()
+            return .success(n)
+        }
+
+        let result = await flattenAsync(
+            await val(1),
+            await val(2),
+            await val(3),
+            await val(4),
+            await val(5),
+            await val(6),
+            await val(7),
+            await val(8),
+            await val(9),
+            await val(10)
+        )
+
+        let sum = result.map { a, b, c, d, e, f, g, h, i, j in a + b + c + d + e + f + g + h + i + j
+        }
+        #expect(sum == .success(55))
+    }
+
 }
