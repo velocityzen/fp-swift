@@ -42,13 +42,16 @@ struct AsyncSequenceOrderedTests {
         }
 
         var values: [Int] = []
-        for await value in stream.mapAsyncKeepOrder(maxConcurrency: .max, { element in
-            // Earlier elements sleep longer — without strict-order
-            // emission, the output would be reordered.
-            let nanos = UInt64((5 - element) * 20_000_000)
-            try? await Task.sleep(nanoseconds: nanos)
-            return element
-        }) {
+        for await value in stream.mapAsyncKeepOrder(
+            maxConcurrency: .max,
+            { element in
+                // Earlier elements sleep longer — without strict-order
+                // emission, the output would be reordered.
+                let nanos = UInt64((5 - element) * 20_000_000)
+                try? await Task.sleep(nanoseconds: nanos)
+                return element
+            })
+        {
             values.append(value)
         }
 
@@ -66,12 +69,15 @@ struct AsyncSequenceOrderedTests {
 
         let start = ContinuousClock.now
         var values: [Int] = []
-        for await value in stream.mapAsyncKeepOrder(maxConcurrency: .max, { element in
-            await tracker.enter()
-            try? await Task.sleep(for: .milliseconds(100))
-            await tracker.exit()
-            return element
-        }) {
+        for await value in stream.mapAsyncKeepOrder(
+            maxConcurrency: .max,
+            { element in
+                await tracker.enter()
+                try? await Task.sleep(for: .milliseconds(100))
+                await tracker.exit()
+                return element
+            })
+        {
             values.append(value)
         }
         let elapsed = ContinuousClock.now - start
@@ -177,12 +183,15 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Result<Int, TestError>] = []
-        for await result in stream.mapAsyncKeepOrder(maxConcurrency: .max, { (value: Int) -> Int in
-            // Earlier successes sleep longer.
-            let nanos = UInt64((4 - value) * 20_000_000)
-            try? await Task.sleep(nanoseconds: nanos)
-            return value
-        }) {
+        for await result in stream.mapAsyncKeepOrder(
+            maxConcurrency: .max,
+            { (value: Int) -> Int in
+                // Earlier successes sleep longer.
+                let nanos = UInt64((4 - value) * 20_000_000)
+                try? await Task.sleep(nanoseconds: nanos)
+                return value
+            })
+        {
             results.append(result)
         }
 
@@ -209,10 +218,13 @@ struct AsyncSequenceOrderedTests {
 
         let start = ContinuousClock.now
         var results: [Result<Int, TestError>] = []
-        for await result in stream.mapAsyncKeepOrder(maxConcurrency: .max, { (value: Int) -> Int in
-            try? await Task.sleep(nanoseconds: perElementSleep)
-            return value
-        }) {
+        for await result in stream.mapAsyncKeepOrder(
+            maxConcurrency: .max,
+            { (value: Int) -> Int in
+                try? await Task.sleep(nanoseconds: perElementSleep)
+                return value
+            })
+        {
             results.append(result)
         }
         let elapsed = ContinuousClock.now - start
@@ -345,12 +357,15 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Result<Int, TestError>] = []
-        for await result in stream.flatMapAsyncKeepOrder(maxConcurrency: .max, { (value: Int) -> Result<Int, TestError> in
-            // Earlier successes sleep longer.
-            let nanos = UInt64((4 - value) * 20_000_000)
-            try? await Task.sleep(nanoseconds: nanos)
-            return .success(value)
-        }) {
+        for await result in stream.flatMapAsyncKeepOrder(
+            maxConcurrency: .max,
+            { (value: Int) -> Result<Int, TestError> in
+                // Earlier successes sleep longer.
+                let nanos = UInt64((4 - value) * 20_000_000)
+                try? await Task.sleep(nanoseconds: nanos)
+                return .success(value)
+            })
+        {
             results.append(result)
         }
 
@@ -373,10 +388,13 @@ struct AsyncSequenceOrderedTests {
 
         let start = ContinuousClock.now
         var results: [Result<Int, TestError>] = []
-        for await result in stream.flatMapAsyncKeepOrder(maxConcurrency: .max, { (value: Int) -> Result<Int, TestError> in
-            try? await Task.sleep(nanoseconds: perElementSleep)
-            return .success(value)
-        }) {
+        for await result in stream.flatMapAsyncKeepOrder(
+            maxConcurrency: .max,
+            { (value: Int) -> Result<Int, TestError> in
+                try? await Task.sleep(nanoseconds: perElementSleep)
+                return .success(value)
+            })
+        {
             results.append(result)
         }
         let elapsed = ContinuousClock.now - start
@@ -516,15 +534,18 @@ struct AsyncSequenceOrderedTests {
         }
 
         let consumer = Task {
-            for await _ in source.mapAsyncKeepOrder(maxConcurrency: .max, { (element: Int) -> Int in
-                await started.increment()
-                // sleeps far longer than the test; throws immediately on cancellation
-                try? await Task.sleep(for: .seconds(10))
-                if Task.isCancelled {
-                    await cancelled.increment()
-                }
-                return element
-            }) {}
+            for await _ in source.mapAsyncKeepOrder(
+                maxConcurrency: .max,
+                { (element: Int) -> Int in
+                    await started.increment()
+                    // sleeps far longer than the test; throws immediately on cancellation
+                    try? await Task.sleep(for: .seconds(10))
+                    if Task.isCancelled {
+                        await cancelled.increment()
+                    }
+                    return element
+                })
+            {}
         }
 
         // let all three transforms start, then walk away
@@ -626,6 +647,37 @@ struct AsyncSequenceOrderedTests {
         // overlapped, they finish in ~50ms — well under the sum
         #expect(parallel < .milliseconds(200))
         #expect(parallel < sequential)
+    }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test("mapAsyncKeepOrder defaults to sequential execution")
+    func defaultIsSequential() async {
+        let tracker = ConcurrencyTracker()
+        let source = AsyncStream<Int> { continuation in
+            for i in 1...4 {
+                continuation.yield(i)
+            }
+            continuation.finish()
+        }
+
+        let start = ContinuousClock.now
+        var results: [Int] = []
+        for await value in source.mapAsyncKeepOrder({ element in
+            await tracker.enter()
+            try? await Task.sleep(for: .milliseconds(30))
+            await tracker.exit()
+            return element
+        }) {
+            results.append(value)
+        }
+        let elapsed = ContinuousClock.now - start
+
+        let highWater = await tracker.highWater
+        #expect(results == [1, 2, 3, 4])
+        // no overlap by default,
+        #expect(highWater == 1)
+        // and four 30ms sleeps one at a time can never beat their 120ms sum
+        #expect(elapsed >= .milliseconds(120))
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
