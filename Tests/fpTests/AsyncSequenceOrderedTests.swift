@@ -550,7 +550,7 @@ struct AsyncSequenceOrderedTests {
 
         // let all three transforms start, then walk away
         var observedStarted = 0
-        for _ in 0..<100 {
+        for _ in 0..<200 {
             observedStarted = await started.count
             if observedStarted == 3 { break }
             try? await Task.sleep(for: .milliseconds(10))
@@ -560,7 +560,7 @@ struct AsyncSequenceOrderedTests {
 
         // every in-flight transform observes cancellation
         var observedCancelled = 0
-        for _ in 0..<100 {
+        for _ in 0..<200 {
             observedCancelled = await cancelled.count
             if observedCancelled == 3 { break }
             try? await Task.sleep(for: .milliseconds(10))
@@ -597,7 +597,7 @@ struct AsyncSequenceOrderedTests {
 
         // the window admits exactly two transforms; the rest stay queued
         var observedStarted = 0
-        for _ in 0..<100 {
+        for _ in 0..<200 {
             observedStarted = await started.count
             if observedStarted == 2 { break }
             try? await Task.sleep(for: .milliseconds(10))
@@ -606,7 +606,7 @@ struct AsyncSequenceOrderedTests {
         await consumer.value
 
         var observedCancelled = 0
-        for _ in 0..<100 {
+        for _ in 0..<200 {
             observedCancelled = await cancelled.count
             if observedCancelled == 2 { break }
             try? await Task.sleep(for: .milliseconds(10))

@@ -72,6 +72,13 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
                             _ = await tokenIterator.next()
                             inFlight -= 1
                         }
+                        // Check the task's own flag, not just the group's:
+                        // after cancellation a cancelled transform can hand
+                        // the producer its token before the group's cancel
+                        // record propagates (observed on the macOS 15
+                        // runtime), and addTaskUnlessCancelled alone would
+                        // then admit another element.
+                        if Task.isCancelled { break }
                         let currentIndex = index
                         index += 1
                         let added = group.addTaskUnlessCancelled {
