@@ -378,4 +378,140 @@ struct ArrayResultTests {
         #expect(result == .success(["v1", "v2", "v3"]))
     }
 
+    // MARK: - traverseAsync (parallel)
+
+    @Test("parallel traverseAsync preserves source order")
+    func parallelTraversePreservesOrder() async {
+        let numbers = [1, 2, 3, 4, 5, 6]
+
+        let result = await numbers.traverseAsync(concurrency: .max) { n -> Result<Int, TestError> in
+            // earlier elements are slower; order must still hold
+            try? await Task.sleep(for: .milliseconds((7 - n) * 10))
+            return .success(n * 10)
+        }
+
+        #expect(result == .success([10, 20, 30, 40, 50, 60]))
+    }
+
+    @Test("parallel traverseAsync never exceeds the concurrency limit")
+    func parallelTraverseRespectsConcurrencyLimit() async {
+        let tracker = ConcurrencyTracker()
+        let numbers = Array(1...10)
+
+        let result = await numbers.traverseAsync(concurrency: 3) { n -> Result<Int, TestError> in
+            await tracker.enter()
+            try? await Task.sleep(for: .milliseconds(20))
+            await tracker.exit()
+            return .success(n)
+        }
+
+        let highWater = await tracker.highWater
+        #expect(result == .success(Array(1...10)))
+        #expect(highWater <= 3)
+    }
+
+    @Test("parallel traverseAsync overlaps transforms")
+    func parallelTraverseOverlaps() async {
+        let tracker = ConcurrencyTracker()
+        let numbers = [1, 2, 3, 4]
+
+        let result = await numbers.traverseAsync(concurrency: .max) { n -> Result<Int, TestError> in
+            await tracker.enter()
+            try? await Task.sleep(for: .milliseconds(50))
+            await tracker.exit()
+            return .success(n)
+        }
+
+        let highWater = await tracker.highWater
+        #expect(result == .success([1, 2, 3, 4]))
+        #expect(highWater >= 2)
+    }
+
+    @Test("parallel traverseAsync with concurrency 1 runs sequentially")
+    func parallelTraverseConcurrencyOneIsSequential() async {
+        let tracker = ConcurrencyTracker()
+        let numbers = [1, 2, 3, 4]
+
+        let result = await numbers.traverseAsync(concurrency: 1) { n -> Result<Int, TestError> in
+            await tracker.enter()
+            try? await Task.sleep(for: .milliseconds(5))
+            await tracker.exit()
+            return .success(n)
+        }
+
+        let highWater = await tracker.highWater
+        #expect(result == .success([1, 2, 3, 4]))
+        #expect(highWater == 1)
+    }
+
+    @Test("parallel traverseAsync returns the lowest-index failure")
+    func parallelTraverseReturnsLowestIndexFailure() async {
+        let numbers = [0, 1, 2]
+
+        let result = await numbers.traverseAsync(concurrency: 3) { n -> Result<Int, TestError> in
+            if n == 0 {
+                // slow failure at the lowest index
+                try? await Task.sleep(for: .milliseconds(60))
+                return .failure(.invalid)
+            }
+            if n == 1 {
+                // fast failure at a higher index
+                return .failure(.notFound)
+            }
+            return .success(n)
+        }
+
+        #expect(result == .failure(.invalid))
+    }
+
+    @Test("parallel traverseAsync stops starting transforms and cancels in flight on failure")
+    func parallelTraverseCancelsOnFailure() async {
+        let started = AsyncCounter()
+        let cancelled = AsyncCounter()
+        let numbers = Array(0..<5)
+
+        let result = await numbers.traverseAsync(concurrency: 2) { n -> Result<Int, TestError> in
+            await started.increment()
+            if n == 0 {
+                return .failure(.invalid)
+            }
+            // sleeps far longer than the test; throws immediately on cancellation
+            try? await Task.sleep(for: .seconds(10))
+            if Task.isCancelled {
+                await cancelled.increment()
+            }
+            return .success(n)
+        }
+
+        let startedCount = await started.count
+        let cancelledCount = await cancelled.count
+        #expect(result == .failure(.invalid))
+        // window of 2: elements 0 and 1 start; the failure stops the rest
+        #expect(startedCount == 2)
+        #expect(cancelledCount == 1)
+    }
+
+    @Test("parallel traverseAsync handles an empty array")
+    func parallelTraverseEmptyArray() async {
+        let empty: [Int] = []
+
+        let result = await empty.traverseAsync(concurrency: 4) { n -> Result<Int, TestError> in
+            .success(n)
+        }
+
+        #expect(result == .success([]))
+    }
+
+    @Test("parallel traverseAsync with a plain transform preserves order")
+    func parallelTraversePlainTransform() async {
+        let numbers = [1, 2, 3, 4]
+
+        let result: Result<[String], Never> = await numbers.traverseAsync(concurrency: .max) { n in
+            try? await Task.sleep(for: .milliseconds((5 - n) * 10))
+            return "v\(n)"
+        }
+
+        #expect(result == .success(["v1", "v2", "v3", "v4"]))
+    }
+
 }

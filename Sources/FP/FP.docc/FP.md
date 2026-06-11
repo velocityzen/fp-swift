@@ -58,7 +58,7 @@ func createOrderAsync(userId: Int, itemId: Int) async -> Result<Order, AppError>
     await ResultDo<AppError>()
         .bindAsync { await fetchUser(id: userId) }
         .bindAsync { user in await fetchItem(id: itemId) }
-        .let { user, item in item.price * user.discountRate }
+        .letAsync { user, item in await discountedPrice(item, for: user) }
         .bindAsync { user, item, price in
             await validateOrder(user: user, item: item, price: price)
         }
@@ -80,6 +80,27 @@ func processUser(id: Int) async -> Result<ProcessedUser, Error> {
 }
 ```
 
+Existing `Task`s convert the same way:
+
+```swift
+let task = Task { try await api.fetchUser(id: 1) }
+let result = await Result.fromTask(task)
+```
+
+### Transforming Errors
+
+The standard library's `mapError` gets async counterparts on `Result`, and both forms on `AsyncSequence`s of Results:
+
+```swift
+let normalized = await fetchUser(id: 1).mapErrorAsync { error in
+    await classifier.classify(error)
+}
+
+for await result in stream.mapError({ AppError.wrap($0) }) {
+    // ...
+}
+```
+
 ### Pattern Matching with Match
 
 ```swift
@@ -93,6 +114,21 @@ result.match(
     { value in print("Success: \(value)") },
     { error in print("Error: \(error)") }
 )
+
+// Async variants accept async closures on either side
+let message = await result.matchAsync(
+    { value in await render(value) },
+    "fallback"
+)
+```
+
+### Boolean Checks
+
+```swift
+let result: Result<User, AppError> = fetchUser(id: 1)
+
+if result.isSuccess { celebrate() }
+if result.isFailure { scheduleRetry() }
 ```
 
 ### Converting Optionals to Results
@@ -228,8 +264,19 @@ func processOrders(_ orderIds: [Int]) async -> Result<[Order], OrderError> {
         await fetchAndValidateOrder(id: id)
     }
 }
-// Fails fast on first error, returns all orders on success
+// Sequential: each element awaits the previous one, fails fast on
+// first error, returns all orders on success
 ```
+
+Pass `concurrency:` to run transforms in parallel — results keep source order, the lowest-index failure wins, and in-flight transforms are cancelled cooperatively on failure:
+
+```swift
+let orders = await orderIds.traverseAsync(concurrency: 4) { id in
+    await fetchAndValidateOrder(id: id)
+}
+```
+
+Both `traverseAsync(concurrency:)` and `mapAsyncKeepOrder` run transforms in parallel with ordered output. Use `traverseAsync` for an all-or-nothing pass over a finite array — one `Result` at the end, the lowest-index failure wins, a failure cancels the rest. Use `mapAsyncKeepOrder` when you want each result as soon as order allows, have an endless source, or want failures kept in position in the stream.
 
 ### Separating Result Arrays
 
@@ -350,6 +397,7 @@ let stream = AsyncStream<Result<Int, MyError>> { continuation in
     continuation.success(1)
     continuation.failure(.someError)
     continuation.finishWithSuccess(2)
+    // or end with an error: continuation.finishWithFailure(.fatal)
 }
 ```
 

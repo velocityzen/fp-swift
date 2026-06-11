@@ -1,4 +1,4 @@
-/**
+/*
  * Result+tap - Side Effects for Result Chains
  *
  * Use `.tap()` / `.tapError()` to perform side effects while keeping the

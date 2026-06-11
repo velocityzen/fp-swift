@@ -1,4 +1,4 @@
-/**
+/*
  * Result+Bool - Boolean Checks for Result Type
  *
  * Provides simple boolean checks for conditionals where you only care

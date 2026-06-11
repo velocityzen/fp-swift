@@ -420,11 +420,21 @@ let result = userIds.traverse { id -> Result<User, AppError> in
 }
 // Returns .success([User]) or .failure on first error
 
-// Async traverse
+// Async traverse — sequential: each element awaits the previous one,
+// and elements after a failure never run
 let result = await userIds.traverseAsync { id in
     await fetchUserAsync(id: id)
 }
+
+// Parallel traverse — up to `concurrency` transforms in flight at once.
+// Results keep source order; fails with the lowest-index failure and
+// cancels in-flight transforms cooperatively.
+let result = await userIds.traverseAsync(concurrency: 4) { id in
+    await fetchUserAsync(id: id)
+}
 ```
+
+Both `traverseAsync(concurrency:)` and `mapAsyncKeepOrder` run transforms in parallel with ordered output. Use `traverseAsync` for an all-or-nothing pass over a finite array — one `Result` at the end, the lowest-index failure wins, a failure cancels the rest. Use `mapAsyncKeepOrder` when you want each result as soon as order allows, have an endless source, or want failures kept in position in the stream.
 
 #### Async Mapping
 
@@ -498,6 +508,8 @@ for await image in references.mapAsyncKeepOrder(concurrency: 8, { ref in
     render(image)
 }
 ```
+
+For an all-or-nothing parallel pass over a finite array, see `traverseAsync(concurrency:)` in [Traverse](#traverse) instead.
 
 When the source is a stream of `Result`, an overload transforms only the success values and passes failures through unchanged — preserving order across both:
 
@@ -830,8 +842,21 @@ func flattenAsync<A: Sendable, B: Sendable, E: Error>(
 ```swift
 func traverse<Success>(_ transform: (Element) -> Success) -> Result<[Success], Never>
 func traverse<Success, Failure>(_ transform: (Element) -> Result<Success, Failure>) -> Result<[Success], Failure>
+
+// Sequential — each element awaits the previous one
 func traverseAsync<Success>(_ transform: (Element) async -> Success) async -> Result<[Success], Never>
 func traverseAsync<Success, Failure>(_ transform: (Element) async -> Result<Success, Failure>) async -> Result<[Success], Failure>
+
+// Parallel — up to `concurrency` in flight, results in source order,
+// lowest-index failure wins, in-flight transforms cancelled on failure
+func traverseAsync<Success: Sendable>(
+    concurrency: Int,
+    _ transform: @Sendable @escaping (Element) async -> Success
+) async -> Result<[Success], Never> where Element: Sendable
+func traverseAsync<Success: Sendable, Failure: Error>(
+    concurrency: Int,
+    _ transform: @Sendable @escaping (Element) async -> Result<Success, Failure>
+) async -> Result<[Success], Failure> where Element: Sendable
 ```
 
 ### Separate / Successes / Failures

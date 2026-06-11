@@ -18,6 +18,9 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     /// If the consumer stops iterating early, no further elements are read
     /// from the source and in-flight transforms are cancelled cooperatively.
     ///
+    /// For an all-or-nothing parallel pass over a finite array, see
+    /// `traverseAsync(concurrency:_:)` on `Array` instead.
+    ///
     /// - Parameters:
     ///   - concurrency: Maximum number of transforms in flight at once;
     ///     must be at least 1. Defaults to 1 — sequential execution. Pass a
@@ -102,7 +105,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
 
     /// Maps each `Result` element's success value through an async transform,
     /// preserving failures and source arrival order. Same concurrency model as
-    /// ``mapAsyncKeepOrder(concurrency:_:)`` — sequential by default,
+    /// ``mapAsyncKeepOrder(concurrency:_:)->AsyncStream<T>`` — sequential by default,
     /// parallel up to `concurrency` when you raise it.
     ///
     /// Failures are not transformed — they pass through unchanged, emitted in
@@ -127,7 +130,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
 
     /// Maps each `Result` element's success value through a fallible async
     /// transform, preserving failures and source arrival order. Same
-    /// concurrency model as ``mapAsyncKeepOrder(concurrency:_:)`` —
+    /// concurrency model as ``mapAsyncKeepOrder(concurrency:_:)->AsyncStream<T>`` —
     /// sequential by default, parallel up to `concurrency` when you
     /// raise it.
     ///

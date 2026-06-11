@@ -97,7 +97,7 @@ public extension Result {
         }
     }
 
-    /// Asynchronous variant of ``getOrElse(_:)-(_)`` taking a closure of the failure.
+    /// Asynchronous variant of ``getOrElse(_:)-((Failure)->Success)``.
     func getOrElseAsync(
         _ onFailure: (Failure) async -> Success
     ) async -> Success {
@@ -174,8 +174,7 @@ public extension Result {
 
     /// Exits the process on failure, ignoring the success value. Useful at
     /// the end of a pipeline that has already consumed the success (via
-    /// ``tap(_:)-((Success)->Void)`` or similar) and just needs to terminate
-    /// on error.
+    /// `tap` or similar) and just needs to terminate on error.
     ///
     /// On failure, writes `"<prefix><error>\n"` to stderr and calls
     /// `Foundation.exit(exitCode)`. On success, does nothing.
