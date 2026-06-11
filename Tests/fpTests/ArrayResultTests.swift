@@ -386,7 +386,7 @@ struct ArrayResultTests {
 
         let result = await numbers.traverseAsync(concurrency: .max) { n -> Result<Int, TestError> in
             // earlier elements are slower; order must still hold
-            try? await Task.sleep(for: .milliseconds((7 - n) * 10))
+            try? await Task.sleep(nanoseconds: UInt64((7 - n) * 10_000_000))
             return .success(n * 10)
         }
 
@@ -400,7 +400,7 @@ struct ArrayResultTests {
 
         let result = await numbers.traverseAsync(concurrency: 3) { n -> Result<Int, TestError> in
             await tracker.enter()
-            try? await Task.sleep(for: .milliseconds(20))
+            try? await Task.sleep(nanoseconds: 20_000_000)
             await tracker.exit()
             return .success(n)
         }
@@ -417,7 +417,7 @@ struct ArrayResultTests {
 
         let result = await numbers.traverseAsync(concurrency: .max) { n -> Result<Int, TestError> in
             await tracker.enter()
-            try? await Task.sleep(for: .milliseconds(50))
+            try? await Task.sleep(nanoseconds: 50_000_000)
             await tracker.exit()
             return .success(n)
         }
@@ -434,7 +434,7 @@ struct ArrayResultTests {
 
         let result = await numbers.traverseAsync(concurrency: 1) { n -> Result<Int, TestError> in
             await tracker.enter()
-            try? await Task.sleep(for: .milliseconds(5))
+            try? await Task.sleep(nanoseconds: 5_000_000)
             await tracker.exit()
             return .success(n)
         }
@@ -451,7 +451,7 @@ struct ArrayResultTests {
         let result = await numbers.traverseAsync(concurrency: 3) { n -> Result<Int, TestError> in
             if n == 0 {
                 // slow failure at the lowest index
-                try? await Task.sleep(for: .milliseconds(60))
+                try? await Task.sleep(nanoseconds: 60_000_000)
                 return .failure(.invalid)
             }
             if n == 1 {
@@ -476,7 +476,7 @@ struct ArrayResultTests {
                 return .failure(.invalid)
             }
             // sleeps far longer than the test; throws immediately on cancellation
-            try? await Task.sleep(for: .seconds(10))
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
             if Task.isCancelled {
                 await cancelled.increment()
             }
@@ -507,7 +507,7 @@ struct ArrayResultTests {
         let numbers = [1, 2, 3, 4]
 
         let result: Result<[String], Never> = await numbers.traverseAsync(concurrency: .max) { n in
-            try? await Task.sleep(for: .milliseconds((5 - n) * 10))
+            try? await Task.sleep(nanoseconds: UInt64((5 - n) * 10_000_000))
             return "v\(n)"
         }
 
