@@ -15,11 +15,11 @@
 /// least two operations always run, so a failure is always available.
 ///
 /// Operations are taken as autoclosures, so each call is deferred and raced
-/// rather than evaluated up front — the same ergonomics as `allAsync`:
+/// rather than evaluated up front — the same ergonomics as `withAll`:
 ///
 /// ```swift
 /// // Hit several mirrors, take whichever responds successfully first.
-/// let payload = await raceAsync(
+/// let payload = await withAny(
 ///     await fetch(from: primaryMirror),
 ///     await fetch(from: backupMirror),
 ///     await fetch(from: archiveMirror)
@@ -29,7 +29,7 @@
 /// ```
 ///
 /// To race a dynamic number of operations, build an array of closures and use
-/// the `raceAsync([...])` array overload instead.
+/// the `withAny([...])` array overload instead.
 ///
 /// Cancellation of the losers is cooperative: an in-flight operation stops
 /// promptly only if it checks `Task.isCancelled` (or awaits a
@@ -37,41 +37,41 @@
 /// completion before this function returns, even after a winner is chosen.
 ///
 /// Supports 2 to 10 operations; for more, use the array overload.
-public func raceAsync<Success: Sendable, Failure: Error>(
+public func withAny<Success: Sendable, Failure: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await raceAsync([a, b])
+    await withAny([a, b])
 }
 
-public func raceAsync<Success: Sendable, Failure: Error>(
+public func withAny<Success: Sendable, Failure: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await raceAsync([a, b, c])
+    await withAny([a, b, c])
 }
 
-public func raceAsync<Success: Sendable, Failure: Error>(
+public func withAny<Success: Sendable, Failure: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ d: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await raceAsync([a, b, c, d])
+    await withAny([a, b, c, d])
 }
 
-public func raceAsync<Success: Sendable, Failure: Error>(
+public func withAny<Success: Sendable, Failure: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ d: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ f: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await raceAsync([a, b, c, d, f])
+    await withAny([a, b, c, d, f])
 }
 
-public func raceAsync<Success: Sendable, Failure: Error>(
+public func withAny<Success: Sendable, Failure: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
@@ -79,10 +79,10 @@ public func raceAsync<Success: Sendable, Failure: Error>(
     _ f: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ g: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await raceAsync([a, b, c, d, f, g])
+    await withAny([a, b, c, d, f, g])
 }
 
-public func raceAsync<Success: Sendable, Failure: Error>(
+public func withAny<Success: Sendable, Failure: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
@@ -91,10 +91,10 @@ public func raceAsync<Success: Sendable, Failure: Error>(
     _ g: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ h: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await raceAsync([a, b, c, d, f, g, h])
+    await withAny([a, b, c, d, f, g, h])
 }
 
-public func raceAsync<Success: Sendable, Failure: Error>(
+public func withAny<Success: Sendable, Failure: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
@@ -104,10 +104,10 @@ public func raceAsync<Success: Sendable, Failure: Error>(
     _ h: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ i: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await raceAsync([a, b, c, d, f, g, h, i])
+    await withAny([a, b, c, d, f, g, h, i])
 }
 
-public func raceAsync<Success: Sendable, Failure: Error>(
+public func withAny<Success: Sendable, Failure: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
@@ -118,10 +118,10 @@ public func raceAsync<Success: Sendable, Failure: Error>(
     _ i: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ j: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await raceAsync([a, b, c, d, f, g, h, i, j])
+    await withAny([a, b, c, d, f, g, h, i, j])
 }
 
-public func raceAsync<Success: Sendable, Failure: Error>(
+public func withAny<Success: Sendable, Failure: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
@@ -133,14 +133,14 @@ public func raceAsync<Success: Sendable, Failure: Error>(
     _ j: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ k: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await raceAsync([a, b, c, d, f, g, h, i, j, k])
+    await withAny([a, b, c, d, f, g, h, i, j, k])
 }
 
 // MARK: - Race a dynamic array of operations
 
 /// Runs every operation in `operations` concurrently and returns the first to
 /// finish **with a success**, cancelling the rest. This is the array form of
-/// the variadic `raceAsync` — use it to race a number of operations not known
+/// the variadic `withAny` — use it to race a number of operations not known
 /// until runtime (e.g. one per endpoint loaded from config).
 ///
 /// Failures are passed over while the rest keep running; the first `.success`
@@ -150,17 +150,17 @@ public func raceAsync<Success: Sendable, Failure: Error>(
 /// ```swift
 /// let attempts: [@Sendable () async -> Result<Payload, NetworkError>] =
 ///     mirrors.map { mirror in { await fetch(from: mirror) } }
-/// let payload = await raceAsync(attempts)
+/// let payload = await withAny(attempts)
 /// ```
 ///
 /// - Parameter operations: The operations to race. Must not be empty.
 /// - Returns: The first successful `Result`, or — if none succeed — the last
 ///   failure to complete.
 /// - Precondition: `operations` is non-empty.
-public func raceAsync<Success: Sendable, Failure: Error>(
+public func withAny<Success: Sendable, Failure: Error>(
     _ operations: [@Sendable () async -> Result<Success, Failure>]
 ) async -> Result<Success, Failure> {
-    precondition(!operations.isEmpty, "raceAsync requires at least one operation")
+    precondition(!operations.isEmpty, "withAny requires at least one operation")
 
     return await withTaskGroup(of: Result<Success, Failure>.self) { group in
         for operation in operations {

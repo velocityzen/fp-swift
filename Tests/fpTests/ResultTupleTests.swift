@@ -9,14 +9,14 @@ struct ResultTupleTests {
         case other
     }
 
-    // MARK: - All 2
+    // MARK: - Flatten 2
 
-    @Test("all 2 succeeds with both results")
-    func all2Succeeds() {
+    @Test("flatten 2 succeeds with both results")
+    func flatten2Succeeds() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .success("hello")
 
-        let result = all(a, b)
+        let result = flatten(a, b)
 
         if case .success(let value) = result {
             #expect(value.0 == 1)
@@ -26,12 +26,12 @@ struct ResultTupleTests {
         }
     }
 
-    @Test("all 2 fails when first fails")
-    func all2FailsFirst() {
+    @Test("flatten 2 fails when first fails")
+    func flatten2FailsFirst() {
         let a: Result<Int, TestError> = .failure(.failed)
         let b: Result<String, TestError> = .success("hello")
 
-        let result = all(a, b)
+        let result = flatten(a, b)
 
         if case .failure(let error) = result {
             #expect(error == .failed)
@@ -40,12 +40,12 @@ struct ResultTupleTests {
         }
     }
 
-    @Test("all 2 fails when second fails")
-    func all2FailsSecond() {
+    @Test("flatten 2 fails when second fails")
+    func flatten2FailsSecond() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .failure(.other)
 
-        let result = all(a, b)
+        let result = flatten(a, b)
 
         if case .failure(let error) = result {
             #expect(error == .other)
@@ -54,15 +54,15 @@ struct ResultTupleTests {
         }
     }
 
-    // MARK: - All 3
+    // MARK: - Flatten 3
 
-    @Test("all 3 succeeds with all results")
-    func all3Succeeds() {
+    @Test("flatten 3 succeeds with all results")
+    func flatten3Succeeds() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .success("hello")
         let c: Result<Double, TestError> = .success(3.14)
 
-        let result = all(a, b, c)
+        let result = flatten(a, b, c)
 
         if case .success(let value) = result {
             #expect(value.0 == 1)
@@ -73,13 +73,13 @@ struct ResultTupleTests {
         }
     }
 
-    @Test("all 3 fails when any fails")
-    func all3Fails() {
+    @Test("flatten 3 fails when any fails")
+    func flatten3Fails() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .failure(.failed)
         let c: Result<Double, TestError> = .success(3.14)
 
-        let result = all(a, b, c)
+        let result = flatten(a, b, c)
 
         if case .failure(let error) = result {
             #expect(error == .failed)
@@ -88,16 +88,16 @@ struct ResultTupleTests {
         }
     }
 
-    // MARK: - All 4
+    // MARK: - Flatten 4
 
-    @Test("all 4 succeeds with all results")
-    func all4Succeeds() {
+    @Test("flatten 4 succeeds with all results")
+    func flatten4Succeeds() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .success("hello")
         let c: Result<Double, TestError> = .success(3.14)
         let d: Result<Bool, TestError> = .success(true)
 
-        let result = all(a, b, c, d)
+        let result = flatten(a, b, c, d)
 
         if case .success(let value) = result {
             #expect(value.0 == 1)
@@ -109,14 +109,14 @@ struct ResultTupleTests {
         }
     }
 
-    @Test("all 4 fails when any fails")
-    func all4Fails() {
+    @Test("flatten 4 fails when any fails")
+    func flatten4Fails() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .success("hello")
         let c: Result<Double, TestError> = .success(3.14)
         let d: Result<Bool, TestError> = .failure(.other)
 
-        let result = all(a, b, c, d)
+        let result = flatten(a, b, c, d)
 
         if case .failure(let error) = result {
             #expect(error == .other)
@@ -125,17 +125,17 @@ struct ResultTupleTests {
         }
     }
 
-    // MARK: - All 5
+    // MARK: - Flatten 5
 
-    @Test("all 5 succeeds with all results")
-    func all5Succeeds() {
+    @Test("flatten 5 succeeds with all results")
+    func flatten5Succeeds() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .success("a")
         let c: Result<Int, TestError> = .success(2)
         let d: Result<String, TestError> = .success("b")
         let f: Result<Int, TestError> = .success(3)
 
-        let result = all(a, b, c, d, f)
+        let result = flatten(a, b, c, d, f)
 
         if case .success(let value) = result {
             #expect(value.0 == 1)
@@ -148,10 +148,10 @@ struct ResultTupleTests {
         }
     }
 
-    // MARK: - All 6
+    // MARK: - Flatten 6
 
-    @Test("all 6 succeeds with all results")
-    func all6Succeeds() {
+    @Test("flatten 6 succeeds with all results")
+    func flatten6Succeeds() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .success("a")
         let c: Result<Int, TestError> = .success(2)
@@ -159,7 +159,7 @@ struct ResultTupleTests {
         let f: Result<Int, TestError> = .success(3)
         let g: Result<String, TestError> = .success("c")
 
-        let result = all(a, b, c, d, f, g)
+        let result = flatten(a, b, c, d, f, g)
 
         if case .success(let value) = result {
             #expect(value.0 == 1)
@@ -175,12 +175,12 @@ struct ResultTupleTests {
 
     // MARK: - Named tuple with map
 
-    @Test("all with named tuple via map")
-    func allWithNamedTuple() {
+    @Test("flatten with named tuple via map")
+    func flattenWithNamedTuple() {
         let a: Result<Int, TestError> = .success(42)
         let b: Result<String, TestError> = .success("hello")
 
-        let result = all(a, b).map { (id: $0, name: $1) }
+        let result = flatten(a, b).map { (id: $0, name: $1) }
 
         if case .success(let value) = result {
             #expect(value.id == 42)
@@ -190,10 +190,10 @@ struct ResultTupleTests {
         }
     }
 
-    // MARK: - All 7
+    // MARK: - Flatten 7
 
-    @Test("all 7 succeeds with all results")
-    func all7Succeeds() {
+    @Test("flatten 7 succeeds with all results")
+    func flatten7Succeeds() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .success("a")
         let c: Result<Int, TestError> = .success(2)
@@ -202,7 +202,7 @@ struct ResultTupleTests {
         let g: Result<String, TestError> = .success("c")
         let h: Result<Int, TestError> = .success(4)
 
-        let result = all(a, b, c, d, f, g, h)
+        let result = flatten(a, b, c, d, f, g, h)
 
         if case .success(let value) = result {
             #expect(value.0 == 1)
@@ -217,10 +217,10 @@ struct ResultTupleTests {
         }
     }
 
-    // MARK: - All 8
+    // MARK: - Flatten 8
 
-    @Test("all 8 succeeds with all results")
-    func all8Succeeds() {
+    @Test("flatten 8 succeeds with all results")
+    func flatten8Succeeds() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .success("a")
         let c: Result<Int, TestError> = .success(2)
@@ -230,7 +230,7 @@ struct ResultTupleTests {
         let h: Result<Int, TestError> = .success(4)
         let i: Result<String, TestError> = .success("d")
 
-        let result = all(a, b, c, d, f, g, h, i)
+        let result = flatten(a, b, c, d, f, g, h, i)
 
         if case .success(let value) = result {
             #expect(value.0 == 1)
@@ -246,10 +246,10 @@ struct ResultTupleTests {
         }
     }
 
-    // MARK: - All 9
+    // MARK: - Flatten 9
 
-    @Test("all 9 succeeds with all results")
-    func all9Succeeds() {
+    @Test("flatten 9 succeeds with all results")
+    func flatten9Succeeds() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .success("a")
         let c: Result<Int, TestError> = .success(2)
@@ -260,7 +260,7 @@ struct ResultTupleTests {
         let i: Result<String, TestError> = .success("d")
         let j: Result<Int, TestError> = .success(5)
 
-        let result = all(a, b, c, d, f, g, h, i, j)
+        let result = flatten(a, b, c, d, f, g, h, i, j)
 
         if case .success(let value) = result {
             #expect(value.0 == 1)
@@ -277,10 +277,10 @@ struct ResultTupleTests {
         }
     }
 
-    // MARK: - All 10
+    // MARK: - Flatten 10
 
-    @Test("all 10 succeeds with all results")
-    func all10Succeeds() {
+    @Test("flatten 10 succeeds with all results")
+    func flatten10Succeeds() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .success("a")
         let c: Result<Int, TestError> = .success(2)
@@ -292,7 +292,7 @@ struct ResultTupleTests {
         let j: Result<Int, TestError> = .success(5)
         let k: Result<String, TestError> = .success("e")
 
-        let result = all(a, b, c, d, f, g, h, i, j, k)
+        let result = flatten(a, b, c, d, f, g, h, i, j, k)
 
         if case .success(let value) = result {
             #expect(value.0 == 1)
@@ -312,12 +312,12 @@ struct ResultTupleTests {
 
     // MARK: - Preserves error type
 
-    @Test("all preserves typed error")
-    func allPreservesErrorType() {
+    @Test("flatten preserves typed error")
+    func flattenPreservesErrorType() {
         let a: Result<Int, TestError> = .success(1)
         let b: Result<String, TestError> = .failure(.failed)
 
-        let result: Result<(Int, String), TestError> = all(a, b)
+        let result: Result<(Int, String), TestError> = flatten(a, b)
 
         if case .failure(let error) = result {
             #expect(error == .failed)
@@ -326,14 +326,14 @@ struct ResultTupleTests {
         }
     }
 
-    // MARK: - Async allAsync Tests
+    // MARK: - Async withAll Tests
 
-    @Test("allAsync 2 succeeds with both async results")
-    func allAsync2Succeeds() async {
+    @Test("withAll 2 succeeds with both async results")
+    func withAll2Succeeds() async {
         let getInt: @Sendable () async -> Result<Int, TestError> = { .success(1) }
         let getString: @Sendable () async -> Result<String, TestError> = { .success("hello") }
 
-        let result = await allAsync(await getInt(), await getString())
+        let result = await withAll(await getInt(), await getString())
 
         if case .success(let value) = result {
             #expect(value.0 == 1)
@@ -343,12 +343,12 @@ struct ResultTupleTests {
         }
     }
 
-    @Test("allAsync 2 fails when any async result fails")
-    func allAsync2Fails() async {
+    @Test("withAll 2 fails when any async result fails")
+    func withAll2Fails() async {
         let getInt: @Sendable () async -> Result<Int, TestError> = { .success(1) }
         let getString: @Sendable () async -> Result<String, TestError> = { .failure(.failed) }
 
-        let result = await allAsync(await getInt(), await getString())
+        let result = await withAll(await getInt(), await getString())
 
         if case .failure(let error) = result {
             #expect(error == .failed)
@@ -357,13 +357,13 @@ struct ResultTupleTests {
         }
     }
 
-    @Test("allAsync 3 succeeds with all async results")
-    func allAsync3Succeeds() async {
+    @Test("withAll 3 succeeds with flatten async results")
+    func withAll3Succeeds() async {
         let getA: @Sendable () async -> Result<Int, TestError> = { .success(1) }
         let getB: @Sendable () async -> Result<String, TestError> = { .success("a") }
         let getC: @Sendable () async -> Result<Double, TestError> = { .success(3.14) }
 
-        let result = await allAsync(await getA(), await getB(), await getC())
+        let result = await withAll(await getA(), await getB(), await getC())
 
         if case .success(let value) = result {
             #expect(value.0 == 1)
@@ -374,14 +374,14 @@ struct ResultTupleTests {
         }
     }
 
-    @Test("allAsync 4 succeeds with all async results")
-    func allAsync4Succeeds() async {
+    @Test("withAll 4 succeeds with flatten async results")
+    func withAll4Succeeds() async {
         let getA: @Sendable () async -> Result<Int, TestError> = { .success(1) }
         let getB: @Sendable () async -> Result<String, TestError> = { .success("a") }
         let getC: @Sendable () async -> Result<Double, TestError> = { .success(3.14) }
         let getD: @Sendable () async -> Result<Bool, TestError> = { .success(true) }
 
-        let result = await allAsync(await getA(), await getB(), await getC(), await getD())
+        let result = await withAll(await getA(), await getB(), await getC(), await getD())
 
         if case .success(let value) = result {
             #expect(value.0 == 1)
@@ -393,12 +393,12 @@ struct ResultTupleTests {
         }
     }
 
-    @Test("allAsync preserves typed error for async operations")
-    func allAsyncPreservesError() async {
+    @Test("withAll preserves typed error for async operations")
+    func withAllPreservesError() async {
         let getInt: @Sendable () async -> Result<Int, TestError> = { .failure(.other) }
         let getString: @Sendable () async -> Result<String, TestError> = { .success("hello") }
 
-        let result: Result<(Int, String), TestError> = await allAsync(
+        let result: Result<(Int, String), TestError> = await withAll(
             await getInt(),
             await getString()
         )
@@ -410,11 +410,11 @@ struct ResultTupleTests {
         }
     }
 
-    // MARK: - All 10 (full arity ladder)
+    // MARK: - Flatten 10 (full arity ladder)
 
-    @Test("all combines ten results, exercising every arity")
-    func allTenSuccess() {
-        let result = all(
+    @Test("flatten combines ten results, exercising every arity")
+    func flattenTenSuccess() {
+        let result = flatten(
             Result<Int, TestError>.success(1),
             Result<Int, TestError>.success(2),
             Result<Int, TestError>.success(3),
@@ -433,9 +433,9 @@ struct ResultTupleTests {
         #expect(sum == .success(55))
     }
 
-    @Test("all of ten returns the first failure")
-    func allTenFirstFailure() {
-        let result = all(
+    @Test("flatten of ten returns the first failure")
+    func flattenTenFirstFailure() {
+        let result = flatten(
             Result<Int, TestError>.failure(.failed),
             Result<Int, TestError>.success(2),
             Result<Int, TestError>.success(3),
@@ -452,9 +452,9 @@ struct ResultTupleTests {
         #expect(mapped == .failure(.failed))
     }
 
-    @Test("all of ten returns a failure in the last position")
-    func allTenLastFailure() {
-        let result = all(
+    @Test("flatten of ten returns a failure in the last position")
+    func flattenTenLastFailure() {
+        let result = flatten(
             Result<Int, TestError>.success(1),
             Result<Int, TestError>.success(2),
             Result<Int, TestError>.success(3),
@@ -473,14 +473,14 @@ struct ResultTupleTests {
 
     // MARK: - AllAsync 6-10
 
-    @Test("allAsync combines six async results in parallel")
-    func allAsyncSix() async {
+    @Test("withAll combines six async results in parallel")
+    func withAllSix() async {
         @Sendable func val(_ n: Int) async -> Result<Int, TestError> {
             await Task.yield()
             return .success(n)
         }
 
-        let result = await allAsync(
+        let result = await withAll(
             await val(1),
             await val(2),
             await val(3),
@@ -493,14 +493,14 @@ struct ResultTupleTests {
         #expect(sum == .success(21))
     }
 
-    @Test("allAsync combines seven async results in parallel")
-    func allAsyncSeven() async {
+    @Test("withAll combines seven async results in parallel")
+    func withAllSeven() async {
         @Sendable func val(_ n: Int) async -> Result<Int, TestError> {
             await Task.yield()
             return .success(n)
         }
 
-        let result = await allAsync(
+        let result = await withAll(
             await val(1),
             await val(2),
             await val(3),
@@ -514,14 +514,14 @@ struct ResultTupleTests {
         #expect(sum == .success(28))
     }
 
-    @Test("allAsync combines eight async results in parallel")
-    func allAsyncEight() async {
+    @Test("withAll combines eight async results in parallel")
+    func withAllEight() async {
         @Sendable func val(_ n: Int) async -> Result<Int, TestError> {
             await Task.yield()
             return .success(n)
         }
 
-        let result = await allAsync(
+        let result = await withAll(
             await val(1),
             await val(2),
             await val(3),
@@ -536,14 +536,14 @@ struct ResultTupleTests {
         #expect(sum == .success(36))
     }
 
-    @Test("allAsync combines nine async results in parallel")
-    func allAsyncNine() async {
+    @Test("withAll combines nine async results in parallel")
+    func withAllNine() async {
         @Sendable func val(_ n: Int) async -> Result<Int, TestError> {
             await Task.yield()
             return .success(n)
         }
 
-        let result = await allAsync(
+        let result = await withAll(
             await val(1),
             await val(2),
             await val(3),
@@ -559,14 +559,14 @@ struct ResultTupleTests {
         #expect(sum == .success(45))
     }
 
-    @Test("allAsync combines ten async results in parallel")
-    func allAsyncTen() async {
+    @Test("withAll combines ten async results in parallel")
+    func withAllTen() async {
         @Sendable func val(_ n: Int) async -> Result<Int, TestError> {
             await Task.yield()
             return .success(n)
         }
 
-        let result = await allAsync(
+        let result = await withAll(
             await val(1),
             await val(2),
             await val(3),

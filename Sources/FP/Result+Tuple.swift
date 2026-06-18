@@ -5,7 +5,7 @@
 /// Combines multiple Results into a single Result containing a tuple of all success values.
 ///
 /// Returns the first failure if any Result fails. Supports 2 to 10 arguments.
-public func all<A, B, E: Error>(
+public func flatten<A, B, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>
 ) -> Result<(A, B), E> {
@@ -18,34 +18,34 @@ public func all<A, B, E: Error>(
     }
 }
 
-public func all<A, B, C, E: Error>(
+public func flatten<A, B, C, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
     _ c: Result<C, E>
 ) -> Result<(A, B, C), E> {
-    all(a, b).flatMap { (a, b) in c.map { c in (a, b, c) } }
+    flatten(a, b).flatMap { (a, b) in c.map { c in (a, b, c) } }
 }
 
-public func all<A, B, C, D, E: Error>(
+public func flatten<A, B, C, D, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
     _ c: Result<C, E>,
     _ d: Result<D, E>
 ) -> Result<(A, B, C, D), E> {
-    all(a, b, c).flatMap { (a, b, c) in d.map { d in (a, b, c, d) } }
+    flatten(a, b, c).flatMap { (a, b, c) in d.map { d in (a, b, c, d) } }
 }
 
-public func all<A, B, C, D, F, E: Error>(
+public func flatten<A, B, C, D, F, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
     _ c: Result<C, E>,
     _ d: Result<D, E>,
     _ f: Result<F, E>
 ) -> Result<(A, B, C, D, F), E> {
-    all(a, b, c, d).flatMap { (a, b, c, d) in f.map { f in (a, b, c, d, f) } }
+    flatten(a, b, c, d).flatMap { (a, b, c, d) in f.map { f in (a, b, c, d, f) } }
 }
 
-public func all<A, B, C, D, F, G, E: Error>(
+public func flatten<A, B, C, D, F, G, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
     _ c: Result<C, E>,
@@ -53,10 +53,10 @@ public func all<A, B, C, D, F, G, E: Error>(
     _ f: Result<F, E>,
     _ g: Result<G, E>
 ) -> Result<(A, B, C, D, F, G), E> {
-    all(a, b, c, d, f).flatMap { (a, b, c, d, f) in g.map { g in (a, b, c, d, f, g) } }
+    flatten(a, b, c, d, f).flatMap { (a, b, c, d, f) in g.map { g in (a, b, c, d, f, g) } }
 }
 
-public func all<A, B, C, D, F, G, H, E: Error>(
+public func flatten<A, B, C, D, F, G, H, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
     _ c: Result<C, E>,
@@ -65,10 +65,10 @@ public func all<A, B, C, D, F, G, H, E: Error>(
     _ g: Result<G, E>,
     _ h: Result<H, E>
 ) -> Result<(A, B, C, D, F, G, H), E> {
-    all(a, b, c, d, f, g).flatMap { (a, b, c, d, f, g) in h.map { h in (a, b, c, d, f, g, h) } }
+    flatten(a, b, c, d, f, g).flatMap { (a, b, c, d, f, g) in h.map { h in (a, b, c, d, f, g, h) } }
 }
 
-public func all<A, B, C, D, F, G, H, I, E: Error>(
+public func flatten<A, B, C, D, F, G, H, I, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
     _ c: Result<C, E>,
@@ -78,12 +78,12 @@ public func all<A, B, C, D, F, G, H, I, E: Error>(
     _ h: Result<H, E>,
     _ i: Result<I, E>
 ) -> Result<(A, B, C, D, F, G, H, I), E> {
-    all(a, b, c, d, f, g, h).flatMap { (a, b, c, d, f, g, h) in
+    flatten(a, b, c, d, f, g, h).flatMap { (a, b, c, d, f, g, h) in
         i.map { i in (a, b, c, d, f, g, h, i) }
     }
 }
 
-public func all<A, B, C, D, F, G, H, I, J, E: Error>(
+public func flatten<A, B, C, D, F, G, H, I, J, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
     _ c: Result<C, E>,
@@ -94,12 +94,12 @@ public func all<A, B, C, D, F, G, H, I, J, E: Error>(
     _ i: Result<I, E>,
     _ j: Result<J, E>
 ) -> Result<(A, B, C, D, F, G, H, I, J), E> {
-    all(a, b, c, d, f, g, h, i).flatMap { (a, b, c, d, f, g, h, i) in
+    flatten(a, b, c, d, f, g, h, i).flatMap { (a, b, c, d, f, g, h, i) in
         j.map { j in (a, b, c, d, f, g, h, i, j) }
     }
 }
 
-public func all<A, B, C, D, F, G, H, I, J, K, E: Error>(
+public func flatten<A, B, C, D, F, G, H, I, J, K, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
     _ c: Result<C, E>,
@@ -111,7 +111,7 @@ public func all<A, B, C, D, F, G, H, I, J, K, E: Error>(
     _ j: Result<J, E>,
     _ k: Result<K, E>
 ) -> Result<(A, B, C, D, F, G, H, I, J, K), E> {
-    all(a, b, c, d, f, g, h, i, j).flatMap { (a, b, c, d, f, g, h, i, j) in
+    flatten(a, b, c, d, f, g, h, i, j).flatMap { (a, b, c, d, f, g, h, i, j) in
         k.map { k in (a, b, c, d, f, g, h, i, j, k) }
     }
 }
@@ -123,19 +123,19 @@ public func all<A, B, C, D, F, G, H, I, J, K, E: Error>(
 /// Runs multiple async Result-producing operations in parallel and combines their success values into a tuple.
 ///
 /// Returns the first failure if any operation fails. Supports 2 to 10 arguments.
-public func allAsync<A: Sendable, B: Sendable, E: Error>(
+public func withAll<A: Sendable, B: Sendable, E: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>
 ) async -> Result<(A, B), E> {
     async let resultA = a()
     async let resultB = b()
     let (ra, rb) = await (resultA, resultB)
-    return all(ra, rb)
+    return flatten(ra, rb)
 }
 
 // MARK: Arity 3
 
-public func allAsync<A: Sendable, B: Sendable, C: Sendable, E: Error>(
+public func withAll<A: Sendable, B: Sendable, C: Sendable, E: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>,
     _ c: @Sendable @autoclosure @escaping () async -> Result<C, E>
@@ -144,12 +144,12 @@ public func allAsync<A: Sendable, B: Sendable, C: Sendable, E: Error>(
     async let resultB = b()
     async let resultC = c()
     let (ra, rb, rc) = await (resultA, resultB, resultC)
-    return all(ra, rb, rc)
+    return flatten(ra, rb, rc)
 }
 
 // MARK: Arity 4
 
-public func allAsync<A: Sendable, B: Sendable, C: Sendable, D: Sendable, E: Error>(
+public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, E: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>,
     _ c: @Sendable @autoclosure @escaping () async -> Result<C, E>,
@@ -160,12 +160,12 @@ public func allAsync<A: Sendable, B: Sendable, C: Sendable, D: Sendable, E: Erro
     async let resultC = c()
     async let resultD = d()
     let (ra, rb, rc, rd) = await (resultA, resultB, resultC, resultD)
-    return all(ra, rb, rc, rd)
+    return flatten(ra, rb, rc, rd)
 }
 
 // MARK: Arity 5
 
-public func allAsync<A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, E: Error>(
+public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, E: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>,
     _ c: @Sendable @autoclosure @escaping () async -> Result<C, E>,
@@ -178,12 +178,12 @@ public func allAsync<A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Send
     async let resultD = d()
     async let resultF = f()
     let (ra, rb, rc, rd, rf) = await (resultA, resultB, resultC, resultD, resultF)
-    return all(ra, rb, rc, rd, rf)
+    return flatten(ra, rb, rc, rd, rf)
 }
 
 // MARK: Arity 6
 
-public func allAsync<
+public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, E: Error
 >(
     _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
@@ -200,12 +200,12 @@ public func allAsync<
     async let resultF = f()
     async let resultG = g()
     let (ra, rb, rc, rd, rf, rg) = await (resultA, resultB, resultC, resultD, resultF, resultG)
-    return all(ra, rb, rc, rd, rf, rg)
+    return flatten(ra, rb, rc, rd, rf, rg)
 }
 
 // MARK: Arity 7
 
-public func allAsync<
+public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
     E: Error
 >(
@@ -227,12 +227,12 @@ public func allAsync<
     let (ra, rb, rc, rd, rf, rg, rh) = await (
         resultA, resultB, resultC, resultD, resultF, resultG, resultH
     )
-    return all(ra, rb, rc, rd, rf, rg, rh)
+    return flatten(ra, rb, rc, rd, rf, rg, rh)
 }
 
 // MARK: Arity 8
 
-public func allAsync<
+public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
     I: Sendable, E: Error
 >(
@@ -256,12 +256,12 @@ public func allAsync<
     let (ra, rb, rc, rd, rf, rg, rh, ri) = await (
         resultA, resultB, resultC, resultD, resultF, resultG, resultH, resultI
     )
-    return all(ra, rb, rc, rd, rf, rg, rh, ri)
+    return flatten(ra, rb, rc, rd, rf, rg, rh, ri)
 }
 
 // MARK: Arity 9
 
-public func allAsync<
+public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
     I: Sendable, J: Sendable, E: Error
 >(
@@ -287,12 +287,12 @@ public func allAsync<
     let (ra, rb, rc, rd, rf, rg, rh, ri, rj) = await (
         resultA, resultB, resultC, resultD, resultF, resultG, resultH, resultI, resultJ
     )
-    return all(ra, rb, rc, rd, rf, rg, rh, ri, rj)
+    return flatten(ra, rb, rc, rd, rf, rg, rh, ri, rj)
 }
 
 // MARK: Arity 10
 
-public func allAsync<
+public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
     I: Sendable, J: Sendable, K: Sendable, E: Error
 >(
@@ -320,5 +320,5 @@ public func allAsync<
     let (ra, rb, rc, rd, rf, rg, rh, ri, rj, rk) = await (
         resultA, resultB, resultC, resultD, resultF, resultG, resultH, resultI, resultJ, resultK
     )
-    return all(ra, rb, rc, rd, rf, rg, rh, ri, rj, rk)
+    return flatten(ra, rb, rc, rd, rf, rg, rh, ri, rj, rk)
 }

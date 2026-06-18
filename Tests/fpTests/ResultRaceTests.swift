@@ -19,7 +19,7 @@ struct ResultRaceTests {
             return .success(2)
         }
 
-        let result = await raceAsync(await fast(), await slow())
+        let result = await withAny(await fast(), await slow())
 
         #expect(result == .success(1))
     }
@@ -32,7 +32,7 @@ struct ResultRaceTests {
             return .success(42)
         }
 
-        let result = await raceAsync(await failsFast(), await succeedsSlow())
+        let result = await withAny(await failsFast(), await succeedsSlow())
 
         #expect(result == .success(42))
     }
@@ -45,7 +45,7 @@ struct ResultRaceTests {
         }
         let fast: @Sendable () async -> Result<Int, TestError> = { .success(7) }
 
-        let result = await raceAsync(
+        let result = await withAny(
             await slow(), await slow(), await slow(), await slow(), await slow(),
             await slow(), await fast(), await slow(), await slow(), await slow()
         )
@@ -70,7 +70,7 @@ struct ResultRaceTests {
             },
         ]
 
-        let result = await raceAsync(ops)
+        let result = await withAny(ops)
 
         #expect(result == .success(99))
     }
@@ -85,7 +85,7 @@ struct ResultRaceTests {
             },
         ]
 
-        let result = await raceAsync(ops)
+        let result = await withAny(ops)
 
         #expect(result == .failure(.other))
     }
@@ -95,8 +95,8 @@ struct ResultRaceTests {
         let success: [@Sendable () async -> Result<Int, TestError>] = [{ .success(7) }]
         let failure: [@Sendable () async -> Result<Int, TestError>] = [{ .failure(.failed) }]
 
-        let succeeded = await raceAsync(success)
-        let failed = await raceAsync(failure)
+        let succeeded = await withAny(success)
+        let failed = await withAny(failure)
 
         #expect(succeeded == .success(7))
         #expect(failed == .failure(.failed))
@@ -122,7 +122,7 @@ struct ResultRaceTests {
             },
         ]
 
-        let result = await raceAsync(ops)
+        let result = await withAny(ops)
 
         let highWater = await tracker.highWater
         #expect(result == .success(1) || result == .success(2))
@@ -144,7 +144,7 @@ struct ResultRaceTests {
             },
         ]
 
-        let result = await raceAsync(ops)
+        let result = await withAny(ops)
 
         let cancelledCount = await cancelled.count
         #expect(result == .success(1))

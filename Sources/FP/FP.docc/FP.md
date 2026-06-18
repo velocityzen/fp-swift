@@ -248,7 +248,7 @@ loadCached(id: 1).finally { spinner.stop() }
 
 ```swift
 // All three operations run in parallel
-let result = await allAsync(
+let result = await withAll(
     await fetchUser(id: userId),
     await fetchNotifications(for: userId),
     await fetchRecommendations(for: userId)
@@ -262,7 +262,7 @@ Run several operations concurrently and take the first to finish **with a succes
 
 ```swift
 // Whichever mirror succeeds first wins; the slower ones are cancelled.
-let payload = await raceAsync(
+let payload = await withAny(
     await fetch(from: primaryMirror),
     await fetch(from: backupMirror),
     await fetch(from: archiveMirror)
@@ -270,15 +270,28 @@ let payload = await raceAsync(
 // Result<Payload, NetworkError>
 ```
 
-Operations are autoclosures, so calls are deferred and raced — the same ergonomics as `allAsync`. The variadic form takes 2–10 operations; to race a count known only at runtime, pass a (non-empty) array of closures:
+Operations are autoclosures, so calls are deferred and raced — the same ergonomics as `withAll`. The variadic form takes 2–10 operations; to race a count known only at runtime, pass a (non-empty) array of closures:
 
 ```swift
 let attempts: [@Sendable () async -> Result<Payload, NetworkError>] =
     mirrors.map { mirror in { await fetch(from: mirror) } }
-let payload = await raceAsync(attempts)
+let payload = await withAny(attempts)
 ```
 
-Cancellation is cooperative — a long racer that ignores `Task.isCancelled` still runs to completion before `raceAsync` returns.
+Cancellation is cooperative — a long racer that ignores `Task.isCancelled` still runs to completion before `withAny` returns.
+
+### Running with a Timeout
+
+Give an operation a deadline. If it finishes within `duration`, its `Result` is returned; otherwise the operation is cancelled and `.failure(timeoutError)` is returned.
+
+```swift
+let profile = await withTimeout(.seconds(5), failingWith: .timeout) {
+    await fetchProfile(id: id)
+}
+// Result<Profile, AppError>
+```
+
+Unlike `withAny`, this is a race against a *timer* and resolves on the first operation to **finish**, not the first to succeed — so a failure that arrives before the deadline is returned as-is, never replaced by the timeout error. Cancellation is cooperative. Because it takes a `Duration`, `withTimeout` requires macOS 13+ / iOS 16+.
 
 ### Batch Processing with Traverse
 

@@ -18,6 +18,7 @@ A lightweight functional programming toolkit for Swift, providing composable uti
   - [Result Extensions](#result-extensions)
   - [Combining Results](#combining-results)
   - [Racing Results](#racing-results)
+  - [Timeouts](#timeouts)
   - [Array Extensions](#array-extensions)
   - [AsyncSequence Result Processing](#asyncsequence-result-processing)
   - [Ordered Concurrent Mapping](#ordered-concurrent-mapping)
@@ -25,8 +26,8 @@ A lightweight functional programming toolkit for Swift, providing composable uti
   - [Optional Extensions](#optional-extensions)
 - [API Reference](#result-extensions-api)
   - [Result Extensions API](#result-extensions-api)
-  - [All Functions API](#all-functions-api)
-  - [Race Function API](#race-function-api)
+  - [Combining Functions API](#combining-functions-api)
+  - [Racing and Timeout Functions API](#racing-and-timeout-functions-api)
   - [Array Extensions API](#array-extensions-api)
   - [AsyncSequence Extensions API](#asyncsequence-extensions-api)
   - [AsyncStream Extensions API](#asyncstream-extensions-api)
@@ -37,6 +38,7 @@ A lightweight functional programming toolkit for Swift, providing composable uti
 - Swift 6.2+
 - macOS 10.15+ / iOS 13+ / tvOS 13+ / watchOS 6+ / visionOS 1+ / Linux
 - The `mapAsyncKeepOrder` family requires macOS 15+ / iOS 18+ / tvOS 18+ / watchOS 11+ / visionOS 2+ (no version gate on Linux)
+- `withTimeout` requires macOS 13+ / iOS 16+ / tvOS 16+ / watchOS 9+ / visionOS 1+ (it takes a `Duration`)
 
 Every platform is exercised in CI: macOS 15 and 26, Ubuntu Linux, and the iOS, tvOS, watchOS, and visionOS simulators.
 
@@ -377,12 +379,12 @@ let userResult: Result<User, AppError> = fetchUser(id: 1)
 let profileResult: Result<Profile, AppError> = fetchProfile(id: 1)
 let settingsResult: Result<Settings, AppError> = fetchSettings(id: 1)
 
-// Sync all - combine already-computed Results
-let combined = all(userResult, profileResult, settingsResult)
+// Sync flatten - combine already-computed Results
+let combined = flatten(userResult, profileResult, settingsResult)
 // Result<(User, Profile, Settings), AppError>
 
 // Use map to create named tuple for easier access
-let namedResult = all(userResult, profileResult)
+let namedResult = flatten(userResult, profileResult)
     .map { (user: $0, profile: $1) }
 // Result<(user: User, profile: Profile), AppError>
 
@@ -392,14 +394,14 @@ if case .success(let data) = namedResult {
 }
 ```
 
-#### Parallel Combination with allAsync
+#### Parallel Combination with withAll
 
 Run multiple async operations in parallel and combine their results:
 
 ```swift
 func loadDashboard(userId: Int) async -> Result<Dashboard, AppError> {
     // All three operations run in parallel
-    let result = await allAsync(
+    let result = await withAll(
         await fetchUser(id: userId),
         await fetchNotifications(for: userId),
         await fetchRecommendations(for: userId)
@@ -419,7 +421,7 @@ Run several async operations concurrently and take the first one to finish **wit
 ```swift
 func fastestMirror(for path: String) async -> Result<Data, NetworkError> {
     // Whichever mirror responds successfully first wins; the others are cancelled.
-    await raceAsync(
+    await withAny(
         await fetch(from: primaryMirror, path),
         await fetch(from: backupMirror, path),
         await fetch(from: archiveMirror, path)
@@ -427,15 +429,29 @@ func fastestMirror(for path: String) async -> Result<Data, NetworkError> {
 }
 ```
 
-Operations are taken as autoclosures (the same ergonomics as `allAsync`), so calls are deferred and raced rather than evaluated up front. The variadic form supports 2–10 operations; to race a number known only at runtime, pass an array of closures:
+Operations are taken as autoclosures (the same ergonomics as `withAll`), so calls are deferred and raced rather than evaluated up front. The variadic form supports 2–10 operations; to race a number known only at runtime, pass an array of closures:
 
 ```swift
 let attempts: [@Sendable () async -> Result<Data, NetworkError>] =
     mirrors.map { mirror in { await fetch(from: mirror, path) } }
-let data = await raceAsync(attempts)  // must be non-empty
+let data = await withAny(attempts)  // must be non-empty
 ```
 
-Cancellation of the losers is cooperative: a long racer that never checks `Task.isCancelled` still runs to completion before `raceAsync` returns.
+Cancellation of the losers is cooperative: a long racer that never checks `Task.isCancelled` still runs to completion before `withAny` returns.
+
+### Timeouts
+
+Run an async operation with a deadline. If it finishes within `duration`, its `Result` is returned; otherwise the operation is cancelled and `.failure(timeoutError)` is returned. A failure that arrives before the timeout is *not* swallowed — it's returned as-is.
+
+```swift
+func loadProfile(id: Int) async -> Result<Profile, AppError> {
+    await withTimeout(.seconds(5), failingWith: .timeout) {
+        await fetchProfile(id: id)
+    }
+}
+```
+
+It's a race between the operation and a timer — whichever finishes first wins — so this isn't `withAny` (which waits for the first *success*); a fast failure here returns immediately. Cancellation is cooperative: when the timeout fires, the operation stops promptly only if it observes `Task.isCancelled`. Because it takes a `Duration`, `withTimeout` requires macOS 13+ / iOS 16+ / tvOS 16+ / watchOS 9+ / visionOS 1+.
 
 ### Array Extensions
 
@@ -846,43 +862,54 @@ func finally(_ action: () -> Void) -> Result<Success, Failure>
 func finallyAsync(_ action: () async -> Void) async -> Result<Success, Failure>
 ```
 
-## All Functions API
+## Combining Functions API
 
 Combine multiple Results into a single Result containing a tuple of all success values. If any Result fails, returns the first failure.
 
-### Sync (all)
+### Sync (flatten)
 ```swift
 // Supports 2-10 arguments
-func all<A, B, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>) -> Result<(A, B), E>
-func all<A, B, C, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>, _ c: Result<C, E>) -> Result<(A, B, C), E>
+func flatten<A, B, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>) -> Result<(A, B), E>
+func flatten<A, B, C, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>, _ c: Result<C, E>) -> Result<(A, B, C), E>
 // ... up to 10 arguments
 ```
 
-### Async (allAsync, Parallel Execution)
+### Async (withAll, Parallel Execution)
 ```swift
 // Supports 2-10 arguments, runs all operations in parallel
-func allAsync<A: Sendable, B: Sendable, E: Error>(
+func withAll<A: Sendable, B: Sendable, E: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>
 ) async -> Result<(A, B), E>
 // ... up to 10 arguments
 ```
 
-## Race Function API
+## Racing and Timeout Functions API
 
-Run async operations concurrently and return the first to succeed, cancelling the rest. A failure that finishes first is passed over; if all fail, the last failure to complete is returned. At least one operation is required.
+`withAny` runs async operations concurrently and returns the first to succeed, cancelling the rest. A failure that finishes first is passed over; if all fail, the last failure to complete is returned. At least one operation is required.
 
 ```swift
-// Variadic (autoclosure), 2-10 operations — same ergonomics as allAsync
-func raceAsync<Success: Sendable, Failure: Error>(
+// Variadic (autoclosure), 2-10 operations — same ergonomics as withAll
+func withAny<Success: Sendable, Failure: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure>
 // ... up to 10 arguments
 
 // Array form for a dynamic number of operations (must be non-empty)
-func raceAsync<Success: Sendable, Failure: Error>(
+func withAny<Success: Sendable, Failure: Error>(
     _ operations: [@Sendable () async -> Result<Success, Failure>]
+) async -> Result<Success, Failure>
+```
+
+`withTimeout` runs one operation, returning its result if it finishes within `duration`, or `.failure(timeoutError)` if it doesn't — cancelling the operation. A failure that arrives before the timeout is returned as-is, not swallowed. Requires macOS 13+ / iOS 16+ (for `Duration`).
+
+```swift
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
+func withTimeout<Success: Sendable, Failure: Error>(
+    _ duration: Duration,
+    failingWith timeoutError: Failure,
+    _ operation: @Sendable @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure>
 ```
 
