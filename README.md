@@ -16,7 +16,8 @@ A lightweight functional programming toolkit for Swift, providing composable uti
 - [Features](#features)
   - [Pipe Operators](#pipe-operators)
   - [Result Extensions](#result-extensions)
-  - [Flatten Results](#flatten-results)
+  - [Combining Results](#combining-results)
+  - [Racing Results](#racing-results)
   - [Array Extensions](#array-extensions)
   - [AsyncSequence Result Processing](#asyncsequence-result-processing)
   - [Ordered Concurrent Mapping](#ordered-concurrent-mapping)
@@ -24,7 +25,8 @@ A lightweight functional programming toolkit for Swift, providing composable uti
   - [Optional Extensions](#optional-extensions)
 - [API Reference](#result-extensions-api)
   - [Result Extensions API](#result-extensions-api)
-  - [Flatten Functions API](#flatten-functions-api)
+  - [All Functions API](#all-functions-api)
+  - [Race Function API](#race-function-api)
   - [Array Extensions API](#array-extensions-api)
   - [AsyncSequence Extensions API](#asyncsequence-extensions-api)
   - [AsyncStream Extensions API](#asyncstream-extensions-api)
@@ -366,7 +368,7 @@ if result.isFailure {
 }
 ```
 
-### Flatten Results
+### Combining Results
 
 Combine multiple Results into a single Result with a tuple of values:
 
@@ -375,12 +377,12 @@ let userResult: Result<User, AppError> = fetchUser(id: 1)
 let profileResult: Result<Profile, AppError> = fetchProfile(id: 1)
 let settingsResult: Result<Settings, AppError> = fetchSettings(id: 1)
 
-// Sync flatten - combine already-computed Results
-let combined = flatten(userResult, profileResult, settingsResult)
+// Sync all - combine already-computed Results
+let combined = all(userResult, profileResult, settingsResult)
 // Result<(User, Profile, Settings), AppError>
 
 // Use map to create named tuple for easier access
-let namedResult = flatten(userResult, profileResult)
+let namedResult = all(userResult, profileResult)
     .map { (user: $0, profile: $1) }
 // Result<(user: User, profile: Profile), AppError>
 
@@ -390,14 +392,14 @@ if case .success(let data) = namedResult {
 }
 ```
 
-#### Async Flatten with Parallel Execution
+#### Parallel Combination with allAsync
 
 Run multiple async operations in parallel and combine their results:
 
 ```swift
 func loadDashboard(userId: Int) async -> Result<Dashboard, AppError> {
     // All three operations run in parallel
-    let result = await flattenAsync(
+    let result = await allAsync(
         await fetchUser(id: userId),
         await fetchNotifications(for: userId),
         await fetchRecommendations(for: userId)
@@ -409,6 +411,31 @@ func loadDashboard(userId: Int) async -> Result<Dashboard, AppError> {
     }
 }
 ```
+
+### Racing Results
+
+Run several async operations concurrently and take the first one to finish **with a success** — not merely the first to finish. A fast `.failure` is passed over while the rest keep running, so a slower success still wins. The winner cancels the remaining operations; if every operation fails, the last failure to complete is returned.
+
+```swift
+func fastestMirror(for path: String) async -> Result<Data, NetworkError> {
+    // Whichever mirror responds successfully first wins; the others are cancelled.
+    await raceAsync(
+        await fetch(from: primaryMirror, path),
+        await fetch(from: backupMirror, path),
+        await fetch(from: archiveMirror, path)
+    )
+}
+```
+
+Operations are taken as autoclosures (the same ergonomics as `allAsync`), so calls are deferred and raced rather than evaluated up front. The variadic form supports 2–10 operations; to race a number known only at runtime, pass an array of closures:
+
+```swift
+let attempts: [@Sendable () async -> Result<Data, NetworkError>] =
+    mirrors.map { mirror in { await fetch(from: mirror, path) } }
+let data = await raceAsync(attempts)  // must be non-empty
+```
+
+Cancellation of the losers is cooperative: a long racer that never checks `Task.isCancelled` still runs to completion before `raceAsync` returns.
 
 ### Array Extensions
 
@@ -819,26 +846,44 @@ func finally(_ action: () -> Void) -> Result<Success, Failure>
 func finallyAsync(_ action: () async -> Void) async -> Result<Success, Failure>
 ```
 
-## Flatten Functions API
+## All Functions API
 
 Combine multiple Results into a single Result containing a tuple of all success values. If any Result fails, returns the first failure.
 
-### Sync Flatten
+### Sync (all)
 ```swift
 // Supports 2-10 arguments
-func flatten<A, B, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>) -> Result<(A, B), E>
-func flatten<A, B, C, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>, _ c: Result<C, E>) -> Result<(A, B, C), E>
+func all<A, B, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>) -> Result<(A, B), E>
+func all<A, B, C, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>, _ c: Result<C, E>) -> Result<(A, B, C), E>
 // ... up to 10 arguments
 ```
 
-### Async Flatten (Parallel Execution)
+### Async (allAsync, Parallel Execution)
 ```swift
 // Supports 2-10 arguments, runs all operations in parallel
-func flattenAsync<A: Sendable, B: Sendable, E: Error>(
+func allAsync<A: Sendable, B: Sendable, E: Error>(
     _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>
 ) async -> Result<(A, B), E>
 // ... up to 10 arguments
+```
+
+## Race Function API
+
+Run async operations concurrently and return the first to succeed, cancelling the rest. A failure that finishes first is passed over; if all fail, the last failure to complete is returned. At least one operation is required.
+
+```swift
+// Variadic (autoclosure), 2-10 operations — same ergonomics as allAsync
+func raceAsync<Success: Sendable, Failure: Error>(
+    _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
+) async -> Result<Success, Failure>
+// ... up to 10 arguments
+
+// Array form for a dynamic number of operations (must be non-empty)
+func raceAsync<Success: Sendable, Failure: Error>(
+    _ operations: [@Sendable () async -> Result<Success, Failure>]
+) async -> Result<Success, Failure>
 ```
 
 ## Array Extensions API

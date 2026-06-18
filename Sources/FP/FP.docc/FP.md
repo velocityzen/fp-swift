@@ -244,17 +244,41 @@ await fetchUser(id: 1).finallyAsync { await spinner.stop() }
 loadCached(id: 1).finally { spinner.stop() }
 ```
 
-### Parallel Execution with Flatten
+### Combining Async Results in Parallel
 
 ```swift
 // All three operations run in parallel
-let result = await flattenAsync(
+let result = await allAsync(
     await fetchUser(id: userId),
     await fetchNotifications(for: userId),
     await fetchRecommendations(for: userId)
 )
 // Result<(User, [Notification], [Recommendation]), AppError>
 ```
+
+### Racing for the First Success
+
+Run several operations concurrently and take the first to finish **with a success**. Unlike a plain "first to finish wins" race, a `.failure` that completes first is passed over while the rest keep running — a fast failure never beats a slower success. The winner cancels the remaining operations; if all of them fail, the last failure to complete is returned.
+
+```swift
+// Whichever mirror succeeds first wins; the slower ones are cancelled.
+let payload = await raceAsync(
+    await fetch(from: primaryMirror),
+    await fetch(from: backupMirror),
+    await fetch(from: archiveMirror)
+)
+// Result<Payload, NetworkError>
+```
+
+Operations are autoclosures, so calls are deferred and raced — the same ergonomics as `allAsync`. The variadic form takes 2–10 operations; to race a count known only at runtime, pass a (non-empty) array of closures:
+
+```swift
+let attempts: [@Sendable () async -> Result<Payload, NetworkError>] =
+    mirrors.map { mirror in { await fetch(from: mirror) } }
+let payload = await raceAsync(attempts)
+```
+
+Cancellation is cooperative — a long racer that ignores `Task.isCancelled` still runs to completion before `raceAsync` returns.
 
 ### Batch Processing with Traverse
 
