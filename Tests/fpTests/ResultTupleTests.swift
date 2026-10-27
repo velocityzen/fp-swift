@@ -422,14 +422,25 @@ struct ResultTupleTests {
         }
         let failing: @Sendable () async -> Result<String, TestError> = { .failure(.failed) }
 
+        #if os(macOS) || os(Linux)
         let start = ContinuousClock.now
+        #endif
         let result = await withAll(await slow(), await failing(), await slow())
+        #if os(macOS) || os(Linux)
         let elapsed = ContinuousClock.now - start
+        #endif
 
         let observedCancelled = await cancelled.count
         #expect(result.map { _ in true } == .failure(.failed))
+        // both slow operations were cancelled rather than awaited,
         #expect(observedCancelled == 2)
+        // and confirmed by wall-clock: waiting for them would take 10s.
+        // Simulators can stall for many seconds under CI, so the wall-clock
+        // bound runs on macOS/Linux only — the cancellation count above is
+        // the fail-fast proof everywhere.
+        #if os(macOS) || os(Linux)
         #expect(elapsed < .seconds(5))
+        #endif
     }
 
     @Test("withAll keeps argument order when operations finish out of order")
