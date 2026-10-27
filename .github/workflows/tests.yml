@@ -43,8 +43,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-15
           - os: macos-26
+          - os: macos-27
     runs-on: ${{ matrix.os }}
     env:
       SWIFT_VERSION: "6.4"

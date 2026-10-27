@@ -40,7 +40,7 @@ A lightweight functional programming toolkit for Swift, providing composable uti
 - The `mapAsyncKeepOrder` family requires macOS 15+ / iOS 18+ / tvOS 18+ / watchOS 11+ / visionOS 2+ (no version gate on Linux)
 - `withTimeout` requires macOS 13+ / iOS 16+ / tvOS 16+ / watchOS 9+ / visionOS 1+ (it takes a `Duration`)
 
-Every platform is exercised in CI: macOS 15 and 26, Ubuntu Linux, and the iOS, tvOS, watchOS, and visionOS simulators.
+Every platform is exercised in CI: macOS 26 and 27, Ubuntu Linux, and the iOS, tvOS, watchOS, and visionOS simulators.
 
 ## Installation
 
