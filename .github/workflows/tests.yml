@@ -6,18 +6,34 @@ on:
   pull_request:
     types: [opened, reopened, synchronize]
 
+env:
+  # swiftly (swift.org's toolchain installer) for the jobs that install Swift
+  # on macOS. The versioned .pkg is pinned and checked, so a new swiftly
+  # release cannot change CI unnoticed.
+  SWIFTLY_VERSION: "1.2.0"
+  SWIFTLY_SHA256: a1b48692b00ea6902957423473c87bee7c7f3e18c015a4a09317102f6820b987
+
 jobs:
   lint:
     name: Lint
-    runs-on: macos-15
+    runs-on: macos-26
+    env:
+      # swift-format comes with the toolchain, so it is pinned with it.
+      SWIFT_VERSION: "6.4"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: 6.3
+      - name: Install Swift ${{ env.SWIFT_VERSION }}
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/swiftly.pkg" "https://download.swift.org/swiftly/darwin/swiftly-$SWIFTLY_VERSION.pkg"
+          echo "$SWIFTLY_SHA256  $RUNNER_TEMP/swiftly.pkg" | shasum -a 256 -c -
+          installer -pkg "$RUNNER_TEMP/swiftly.pkg" -target CurrentUserHomeDirectory
+          ~/.swiftly/bin/swiftly init --assume-yes --quiet-shell-followup --skip-install
+          . "$HOME/.swiftly/env.sh"
+          swiftly install --assume-yes --use "$SWIFT_VERSION"
+          echo "$HOME/.swiftly/bin" >> "$GITHUB_PATH"
 
       - name: Lint
         run: swift format lint --strict --recursive Sources Tests
@@ -30,14 +46,24 @@ jobs:
           - os: macos-15
           - os: macos-26
     runs-on: ${{ matrix.os }}
+    env:
+      SWIFT_VERSION: "6.4"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: 6.3
+      # The runner's default Xcode ships an older Swift; install the exact
+      # toolchain with swiftly so macOS and Linux build with the same compiler.
+      - name: Install Swift ${{ env.SWIFT_VERSION }}
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/swiftly.pkg" "https://download.swift.org/swiftly/darwin/swiftly-$SWIFTLY_VERSION.pkg"
+          echo "$SWIFTLY_SHA256  $RUNNER_TEMP/swiftly.pkg" | shasum -a 256 -c -
+          installer -pkg "$RUNNER_TEMP/swiftly.pkg" -target CurrentUserHomeDirectory
+          ~/.swiftly/bin/swiftly init --assume-yes --quiet-shell-followup --skip-install
+          . "$HOME/.swiftly/env.sh"
+          swiftly install --assume-yes --use "$SWIFT_VERSION"
+          echo "$HOME/.swiftly/bin" >> "$GITHUB_PATH"
 
       - name: Swift version
         run: swift --version
@@ -63,9 +89,19 @@ jobs:
             device-filter: Apple Watch
           - platform: visionOS
             device-filter: Apple Vision
+    env:
+      # swift-tools-version 6.3 needs Xcode 26.4 or later; Xcode 26.6 ships
+      # Swift 6.3.3. Selected explicitly so a change of the image's default
+      # Xcode cannot change the compiler or SDKs.
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          swift --version
 
       - name: Run tests (${{ matrix.platform }} Simulator)
         run: |
@@ -76,22 +112,20 @@ jobs:
           xcodebuild test -scheme fp-swift -destination "id=$UDID,arch=arm64" | tail -60
 
   test-linux:
-    name: Run Linux Tests
+    name: Run Linux Tests (Swift ${{ matrix.swift }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 6.3 is the package's swift-tools-version, the oldest compiler it
+        # claims to support; 6.4 is the compiler the other jobs use.
+        swift: ["6.3", "6.4"]
+    container:
+      image: swift:${{ matrix.swift }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-
-      - name: Install Swift
-        run: |
-          curl -O https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz
-          tar zxf swiftly-$(uname -m).tar.gz
-          ./swiftly init --quiet-shell-followup --assume-yes --skip-install
-          . "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
-          hash -r
-          swiftly install --use 6.3
-          echo "$SWIFTLY_BIN_DIR" >> "$GITHUB_PATH"
 
       - name: Swift version
         run: swift --version
