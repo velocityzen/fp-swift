@@ -14,7 +14,11 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "FP"),
+            name: "FP",
+            swiftSettings: [
+                .enableUpcomingFeature("NonisolatedNonsendingByDefault")
+            ]
+        ),
         .testTarget(
             name: "fpTests",
             dependencies: ["FP"]

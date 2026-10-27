@@ -124,8 +124,8 @@ public func flatten<A, B, C, D, F, G, H, I, J, K, E: Error>(
 ///
 /// Returns the first failure if any operation fails. Supports 2 to 10 arguments.
 public func withAll<A: Sendable, B: Sendable, E: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>
 ) async -> Result<(A, B), E> {
     async let resultA = a()
     async let resultB = b()
@@ -136,9 +136,9 @@ public func withAll<A: Sendable, B: Sendable, E: Error>(
 // MARK: Arity 3
 
 public func withAll<A: Sendable, B: Sendable, C: Sendable, E: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<C, E>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<C, E>
 ) async -> Result<(A, B, C), E> {
     async let resultA = a()
     async let resultB = b()
@@ -150,10 +150,10 @@ public func withAll<A: Sendable, B: Sendable, C: Sendable, E: Error>(
 // MARK: Arity 4
 
 public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, E: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<C, E>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<D, E>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<C, E>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<D, E>
 ) async -> Result<(A, B, C, D), E> {
     async let resultA = a()
     async let resultB = b()
@@ -166,11 +166,11 @@ public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, E: Error
 // MARK: Arity 5
 
 public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, E: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<C, E>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<D, E>,
-    _ f: @Sendable @autoclosure @escaping () async -> Result<F, E>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<C, E>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<D, E>,
+    _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<F, E>
 ) async -> Result<(A, B, C, D, F), E> {
     async let resultA = a()
     async let resultB = b()
@@ -186,12 +186,12 @@ public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Senda
 public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, E: Error
 >(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<C, E>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<D, E>,
-    _ f: @Sendable @autoclosure @escaping () async -> Result<F, E>,
-    _ g: @Sendable @autoclosure @escaping () async -> Result<G, E>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<C, E>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<D, E>,
+    _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<F, E>,
+    _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<G, E>
 ) async -> Result<(A, B, C, D, F, G), E> {
     async let resultA = a()
     async let resultB = b()
@@ -209,13 +209,13 @@ public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
     E: Error
 >(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<C, E>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<D, E>,
-    _ f: @Sendable @autoclosure @escaping () async -> Result<F, E>,
-    _ g: @Sendable @autoclosure @escaping () async -> Result<G, E>,
-    _ h: @Sendable @autoclosure @escaping () async -> Result<H, E>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<C, E>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<D, E>,
+    _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<F, E>,
+    _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<G, E>,
+    _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<H, E>
 ) async -> Result<(A, B, C, D, F, G, H), E> {
     async let resultA = a()
     async let resultB = b()
@@ -236,14 +236,14 @@ public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
     I: Sendable, E: Error
 >(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<C, E>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<D, E>,
-    _ f: @Sendable @autoclosure @escaping () async -> Result<F, E>,
-    _ g: @Sendable @autoclosure @escaping () async -> Result<G, E>,
-    _ h: @Sendable @autoclosure @escaping () async -> Result<H, E>,
-    _ i: @Sendable @autoclosure @escaping () async -> Result<I, E>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<C, E>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<D, E>,
+    _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<F, E>,
+    _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<G, E>,
+    _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<H, E>,
+    _ i: @concurrent @Sendable @autoclosure @escaping () async -> Result<I, E>
 ) async -> Result<(A, B, C, D, F, G, H, I), E> {
     async let resultA = a()
     async let resultB = b()
@@ -265,15 +265,15 @@ public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
     I: Sendable, J: Sendable, E: Error
 >(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<C, E>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<D, E>,
-    _ f: @Sendable @autoclosure @escaping () async -> Result<F, E>,
-    _ g: @Sendable @autoclosure @escaping () async -> Result<G, E>,
-    _ h: @Sendable @autoclosure @escaping () async -> Result<H, E>,
-    _ i: @Sendable @autoclosure @escaping () async -> Result<I, E>,
-    _ j: @Sendable @autoclosure @escaping () async -> Result<J, E>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<C, E>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<D, E>,
+    _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<F, E>,
+    _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<G, E>,
+    _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<H, E>,
+    _ i: @concurrent @Sendable @autoclosure @escaping () async -> Result<I, E>,
+    _ j: @concurrent @Sendable @autoclosure @escaping () async -> Result<J, E>
 ) async -> Result<(A, B, C, D, F, G, H, I, J), E> {
     async let resultA = a()
     async let resultB = b()
@@ -296,16 +296,16 @@ public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
     I: Sendable, J: Sendable, K: Sendable, E: Error
 >(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<C, E>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<D, E>,
-    _ f: @Sendable @autoclosure @escaping () async -> Result<F, E>,
-    _ g: @Sendable @autoclosure @escaping () async -> Result<G, E>,
-    _ h: @Sendable @autoclosure @escaping () async -> Result<H, E>,
-    _ i: @Sendable @autoclosure @escaping () async -> Result<I, E>,
-    _ j: @Sendable @autoclosure @escaping () async -> Result<J, E>,
-    _ k: @Sendable @autoclosure @escaping () async -> Result<K, E>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<C, E>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<D, E>,
+    _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<F, E>,
+    _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<G, E>,
+    _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<H, E>,
+    _ i: @concurrent @Sendable @autoclosure @escaping () async -> Result<I, E>,
+    _ j: @concurrent @Sendable @autoclosure @escaping () async -> Result<J, E>,
+    _ k: @concurrent @Sendable @autoclosure @escaping () async -> Result<K, E>
 ) async -> Result<(A, B, C, D, F, G, H, I, J, K), E> {
     async let resultA = a()
     async let resultB = b()

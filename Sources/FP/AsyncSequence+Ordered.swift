@@ -36,7 +36,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     /// ```
     public func mapAsyncKeepOrder<T: Sendable>(
         concurrency: Int = 1,
-        _ transform: @Sendable @escaping (Element) async -> T
+        _ transform: @concurrent @Sendable @escaping (Element) async -> T
     ) -> AsyncStream<T> {
         precondition(concurrency >= 1, "concurrency must be at least 1")
         return AsyncStream<T> { continuation in
@@ -120,7 +120,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     /// ```
     public func mapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
         concurrency: Int = 1,
-        _ transform: @Sendable @escaping (Success) async -> T
+        _ transform: @concurrent @Sendable @escaping (Success) async -> T
     ) -> AsyncStream<Result<T, E>>
     where Element == Result<Success, E> {
         mapAsyncKeepOrder(concurrency: concurrency) { element in
@@ -146,7 +146,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     /// ```
     public func flatMapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
         concurrency: Int = 1,
-        _ transform: @Sendable @escaping (Success) async -> Result<T, E>
+        _ transform: @concurrent @Sendable @escaping (Success) async -> Result<T, E>
     ) -> AsyncStream<Result<T, E>>
     where Element == Result<Success, E> {
         mapAsyncKeepOrder(concurrency: concurrency) { element in

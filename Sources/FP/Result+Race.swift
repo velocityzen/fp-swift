@@ -38,100 +38,100 @@
 ///
 /// Supports 2 to 10 operations; for more, use the array overload.
 public func withAny<Success: Sendable, Failure: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
     await withAny([a, b])
 }
 
 public func withAny<Success: Sendable, Failure: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
     await withAny([a, b, c])
 }
 
 public func withAny<Success: Sendable, Failure: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
     await withAny([a, b, c, d])
 }
 
 public func withAny<Success: Sendable, Failure: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ f: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
     await withAny([a, b, c, d, f])
 }
 
 public func withAny<Success: Sendable, Failure: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ f: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ g: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
     await withAny([a, b, c, d, f, g])
 }
 
 public func withAny<Success: Sendable, Failure: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ f: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ g: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ h: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
     await withAny([a, b, c, d, f, g, h])
 }
 
 public func withAny<Success: Sendable, Failure: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ f: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ g: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ h: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ i: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ i: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
     await withAny([a, b, c, d, f, g, h, i])
 }
 
 public func withAny<Success: Sendable, Failure: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ f: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ g: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ h: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ i: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ j: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ i: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ j: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
     await withAny([a, b, c, d, f, g, h, i, j])
 }
 
 public func withAny<Success: Sendable, Failure: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ c: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ d: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ f: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ g: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ h: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ i: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ j: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ k: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
+    _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ i: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ j: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
+    _ k: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
     await withAny([a, b, c, d, f, g, h, i, j, k])
 }
@@ -148,7 +148,7 @@ public func withAny<Success: Sendable, Failure: Error>(
 /// complete is returned. Cancellation of the losers is cooperative.
 ///
 /// ```swift
-/// let attempts: [@Sendable () async -> Result<Payload, NetworkError>] =
+/// let attempts: [@concurrent @Sendable () async -> Result<Payload, NetworkError>] =
 ///     mirrors.map { mirror in { await fetch(from: mirror) } }
 /// let payload = await withAny(attempts)
 /// ```
@@ -158,7 +158,7 @@ public func withAny<Success: Sendable, Failure: Error>(
 ///   failure to complete.
 /// - Precondition: `operations` is non-empty.
 public func withAny<Success: Sendable, Failure: Error>(
-    _ operations: [@Sendable () async -> Result<Success, Failure>]
+    _ operations: [@concurrent @Sendable () async -> Result<Success, Failure>]
 ) async -> Result<Success, Failure> {
     precondition(!operations.isEmpty, "withAny requires at least one operation")
 

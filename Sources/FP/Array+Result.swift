@@ -102,7 +102,7 @@ public extension Array {
     ///   source order (never fails)
     func traverseAsync<Success: Sendable>(
         concurrency: Int,
-        _ transform: @Sendable @escaping (Element) async -> Success
+        _ transform: @concurrent @Sendable @escaping (Element) async -> Success
     ) async -> Result<[Success], Never> where Element: Sendable {
         precondition(concurrency >= 1, "concurrency must be at least 1")
         let values = await withTaskGroup(of: (index: Int, value: Success).self) { group in
@@ -148,7 +148,7 @@ public extension Array {
     ///   source order, or the lowest-index failure
     func traverseAsync<Success: Sendable, Failure: Error>(
         concurrency: Int,
-        _ transform: @Sendable @escaping (Element) async -> Result<Success, Failure>
+        _ transform: @concurrent @Sendable @escaping (Element) async -> Result<Success, Failure>
     ) async -> Result<[Success], Failure> where Element: Sendable {
         precondition(concurrency >= 1, "concurrency must be at least 1")
         return await withTaskGroup(

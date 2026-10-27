@@ -273,7 +273,7 @@ let payload = await withAny(
 Operations are autoclosures, so calls are deferred and raced — the same ergonomics as `withAll`. The variadic form takes 2–10 operations; to race a count known only at runtime, pass a (non-empty) array of closures:
 
 ```swift
-let attempts: [@Sendable () async -> Result<Payload, NetworkError>] =
+let attempts: [@concurrent @Sendable () async -> Result<Payload, NetworkError>] =
     mirrors.map { mirror in { await fetch(from: mirror) } }
 let payload = await withAny(attempts)
 ```

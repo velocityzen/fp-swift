@@ -31,7 +31,7 @@
 public func withTimeout<Success: Sendable, Failure: Error>(
     _ duration: Duration,
     failingWith timeoutError: Failure,
-    _ operation: @Sendable @escaping () async -> Result<Success, Failure>
+    _ operation: @concurrent @Sendable @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
     await withTaskGroup(of: Result<Success, Failure>.self) { group in
         group.addTask { await operation() }
