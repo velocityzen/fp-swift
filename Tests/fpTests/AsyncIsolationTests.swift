@@ -162,7 +162,8 @@ struct AsyncIsolationTests {
         let log = Log()
         let ok: Result<Int, TestError> = .success(1)
 
-        let result = await ok
+        let result =
+            await ok
             .bindAsync { value -> Result<Int, TestError> in
                 log.record("bind")
                 return .success(value + 1)
