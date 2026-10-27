@@ -831,6 +831,10 @@ struct AsyncSequenceOrderedTests {
             continuation.finish()
         }
 
+        // Element 1 waits on this gate, so it stays unfinished until the
+        // test has looked, however slowly the runner schedules tasks.
+        let (gate, gateCont) = AsyncStream.makeStream(of: Void.self)
+
         let consumer = Task {
             var values: [Int] = []
             for await value in source.mapAsyncKeepOrder(
@@ -838,7 +842,7 @@ struct AsyncSequenceOrderedTests {
                 { (element: Int) -> Int in
                     await started.increment()
                     if element == 1 {
-                        try? await Task.sleep(for: .milliseconds(200))
+                        for await _ in gate {}
                     }
                     return element
                 })
@@ -849,8 +853,16 @@ struct AsyncSequenceOrderedTests {
         }
 
         // element 1 holds back everything after it; only its window may run
-        try? await Task.sleep(for: .milliseconds(100))
-        let startedWhileBlocked = await started.count
+        var startedWhileBlocked = 0
+        for _ in 0..<200 {
+            startedWhileBlocked = await started.count
+            if startedWhileBlocked >= 3 { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        // give an unbounded pipeline time to start more
+        try? await Task.sleep(for: .milliseconds(50))
+        startedWhileBlocked = await started.count
+        gateCont.finish()
         let values = await consumer.value
 
         #expect(startedWhileBlocked == 3)
@@ -886,6 +898,7 @@ struct AsyncSequenceOrderedTests {
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test("mapAsyncKeepOrder cancels in-flight transforms when the stream is dropped")
     func droppingTheStreamCancelsInFlight() async {
+        let started = AsyncCounter()
         let cancelled = AsyncCounter()
         let source = AsyncStream<Int> { continuation in
             for i in 1...3 {
@@ -900,6 +913,7 @@ struct AsyncSequenceOrderedTests {
             let mapped = source.mapAsyncKeepOrder(
                 concurrency: 3,
                 { (element: Int) -> Int in
+                    await started.increment()
                     if element > 1 {
                         try? await Task.sleep(for: .seconds(10))
                         if Task.isCancelled {
@@ -909,6 +923,11 @@ struct AsyncSequenceOrderedTests {
                     return element
                 })
             for await value in mapped {
+                // let elements 2 and 3 start before the stream is dropped
+                for _ in 0..<200 {
+                    if await started.count == 3 { break }
+                    try? await Task.sleep(for: .milliseconds(10))
+                }
                 return value
             }
             return nil
