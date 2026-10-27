@@ -36,11 +36,9 @@ A lightweight functional programming toolkit for Swift, providing composable uti
 ## Requirements
 
 - Swift 6.3+
-- macOS 12+ / iOS 15+ / tvOS 15+ / watchOS 9+ / visionOS 1+ / Linux
-- The `mapAsyncKeepOrder` family requires macOS 15+ / iOS 18+ / tvOS 18+ / watchOS 11+ / visionOS 2+ (no version gate on Linux)
-- `withTimeout` requires macOS 13+ / iOS 16+ / tvOS 16+ / watchOS 9+ / visionOS 1+ (it takes a `Duration`)
+- macOS 26+ / iOS 26+ / tvOS 26+ / watchOS 26+ / visionOS 26+ / Linux
 
-Every platform is exercised in CI: macOS 26 and 27, Ubuntu Linux, and the iOS, tvOS, watchOS, and visionOS simulators.
+Every platform is exercised in CI: macOS 26, Ubuntu Linux, and the iOS, tvOS, watchOS, and visionOS simulators.
 
 ## Installation
 
@@ -453,7 +451,7 @@ func loadProfile(id: Int) async -> Result<Profile, AppError> {
 }
 ```
 
-It's a race between the operation and a timer — whichever finishes first wins — so this isn't `withAny` (which waits for the first *success*); a fast failure here returns immediately. Cancellation is cooperative: when the timeout fires, the operation stops promptly only if it observes `Task.isCancelled`. Because it takes a `Duration`, `withTimeout` requires macOS 13+ / iOS 16+ / tvOS 16+ / watchOS 9+ / visionOS 1+.
+It's a race between the operation and a timer — whichever finishes first wins — so this isn't `withAny` (which waits for the first *success*); a fast failure here returns immediately. Cancellation is cooperative: when the timeout fires, the operation stops promptly only if it observes `Task.isCancelled`.
 
 ### Array Extensions
 
@@ -904,7 +902,7 @@ func withAny<Success: Sendable, Failure: Error>(
 ) async -> Result<Success, Failure>
 ```
 
-`withTimeout` runs one operation, returning its result if it finishes within `duration`, or `.failure(timeoutError)` if it doesn't — cancelling the operation. A failure that arrives before the timeout is returned as-is, not swallowed. Requires macOS 13+ / iOS 16+ (for `Duration`).
+`withTimeout` runs one operation, returning its result if it finishes within `duration`, or `.failure(timeoutError)` if it doesn't — cancelling the operation. A failure that arrives before the timeout is returned as-is, not swallowed.
 
 ```swift
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)

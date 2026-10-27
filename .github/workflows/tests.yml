@@ -39,13 +39,8 @@ jobs:
         run: swift format lint --strict --recursive Sources Tests
 
   test-macos:
-    name: Run macOS Tests (${{ matrix.os }})
-    strategy:
-      matrix:
-        include:
-          - os: macos-26
-          - os: macos-27
-    runs-on: ${{ matrix.os }}
+    name: Run macOS Tests
+    runs-on: macos-26
     env:
       SWIFT_VERSION: "6.4"
 

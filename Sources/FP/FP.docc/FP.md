@@ -293,7 +293,7 @@ let profile = await withTimeout(.seconds(5), failingWith: .timeout) {
 // Result<Profile, AppError>
 ```
 
-Unlike `withAny`, this is a race against a *timer* and resolves on the first operation to **finish**, not the first to succeed — so a failure that arrives before the deadline is returned as-is, never replaced by the timeout error. Cancellation is cooperative. Because it takes a `Duration`, `withTimeout` requires macOS 13+ / iOS 16+.
+Unlike `withAny`, this is a race against a *timer* and resolves on the first operation to **finish**, not the first to succeed — so a failure that arrives before the deadline is returned as-is, never replaced by the timeout error. Cancellation is cooperative.
 
 ### Batch Processing with Traverse
 
