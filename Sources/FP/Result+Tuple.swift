@@ -122,15 +122,20 @@ public func flatten<A, B, C, D, F, G, H, I, J, K, E: Error>(
 
 /// Runs multiple async Result-producing operations in parallel and combines their success values into a tuple.
 ///
-/// Returns the first failure if any operation fails. Supports 2 to 10 arguments.
+/// Returns the first failure to arrive and cancels the operations still
+/// running; cancellation is cooperative, so this waits until they stop.
+/// Supports 2 to 10 arguments.
 public func withAll<A: Sendable, B: Sendable, E: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>
 ) async -> Result<(A, B), E> {
-    async let resultA = a()
-    async let resultB = b()
-    let (ra, rb) = await (resultA, resultB)
-    return flatten(ra, rb)
+    await collectAll([
+        { await a().map { $0 } },
+        { await b().map { $0 } },
+    ]).map { values in
+        // `collectAll` keeps argument order, so each cast matches its type.
+        (values[0] as! A, values[1] as! B)
+    }
 }
 
 // MARK: Arity 3
@@ -140,11 +145,13 @@ public func withAll<A: Sendable, B: Sendable, C: Sendable, E: Error>(
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
     _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<C, E>
 ) async -> Result<(A, B, C), E> {
-    async let resultA = a()
-    async let resultB = b()
-    async let resultC = c()
-    let (ra, rb, rc) = await (resultA, resultB, resultC)
-    return flatten(ra, rb, rc)
+    await collectAll([
+        { await a().map { $0 } },
+        { await b().map { $0 } },
+        { await c().map { $0 } },
+    ]).map { values in
+        (values[0] as! A, values[1] as! B, values[2] as! C)
+    }
 }
 
 // MARK: Arity 4
@@ -155,12 +162,14 @@ public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, E: Error
     _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<C, E>,
     _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<D, E>
 ) async -> Result<(A, B, C, D), E> {
-    async let resultA = a()
-    async let resultB = b()
-    async let resultC = c()
-    async let resultD = d()
-    let (ra, rb, rc, rd) = await (resultA, resultB, resultC, resultD)
-    return flatten(ra, rb, rc, rd)
+    await collectAll([
+        { await a().map { $0 } },
+        { await b().map { $0 } },
+        { await c().map { $0 } },
+        { await d().map { $0 } },
+    ]).map { values in
+        (values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D)
+    }
 }
 
 // MARK: Arity 5
@@ -172,13 +181,15 @@ public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Senda
     _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<D, E>,
     _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<F, E>
 ) async -> Result<(A, B, C, D, F), E> {
-    async let resultA = a()
-    async let resultB = b()
-    async let resultC = c()
-    async let resultD = d()
-    async let resultF = f()
-    let (ra, rb, rc, rd, rf) = await (resultA, resultB, resultC, resultD, resultF)
-    return flatten(ra, rb, rc, rd, rf)
+    await collectAll([
+        { await a().map { $0 } },
+        { await b().map { $0 } },
+        { await c().map { $0 } },
+        { await d().map { $0 } },
+        { await f().map { $0 } },
+    ]).map { values in
+        (values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D, values[4] as! F)
+    }
 }
 
 // MARK: Arity 6
@@ -193,14 +204,19 @@ public func withAll<
     _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<F, E>,
     _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<G, E>
 ) async -> Result<(A, B, C, D, F, G), E> {
-    async let resultA = a()
-    async let resultB = b()
-    async let resultC = c()
-    async let resultD = d()
-    async let resultF = f()
-    async let resultG = g()
-    let (ra, rb, rc, rd, rf, rg) = await (resultA, resultB, resultC, resultD, resultF, resultG)
-    return flatten(ra, rb, rc, rd, rf, rg)
+    await collectAll([
+        { await a().map { $0 } },
+        { await b().map { $0 } },
+        { await c().map { $0 } },
+        { await d().map { $0 } },
+        { await f().map { $0 } },
+        { await g().map { $0 } },
+    ]).map { values in
+        (
+            values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D, values[4] as! F,
+            values[5] as! G
+        )
+    }
 }
 
 // MARK: Arity 7
@@ -217,17 +233,20 @@ public func withAll<
     _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<G, E>,
     _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<H, E>
 ) async -> Result<(A, B, C, D, F, G, H), E> {
-    async let resultA = a()
-    async let resultB = b()
-    async let resultC = c()
-    async let resultD = d()
-    async let resultF = f()
-    async let resultG = g()
-    async let resultH = h()
-    let (ra, rb, rc, rd, rf, rg, rh) = await (
-        resultA, resultB, resultC, resultD, resultF, resultG, resultH
-    )
-    return flatten(ra, rb, rc, rd, rf, rg, rh)
+    await collectAll([
+        { await a().map { $0 } },
+        { await b().map { $0 } },
+        { await c().map { $0 } },
+        { await d().map { $0 } },
+        { await f().map { $0 } },
+        { await g().map { $0 } },
+        { await h().map { $0 } },
+    ]).map { values in
+        (
+            values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D, values[4] as! F,
+            values[5] as! G, values[6] as! H
+        )
+    }
 }
 
 // MARK: Arity 8
@@ -245,18 +264,21 @@ public func withAll<
     _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<H, E>,
     _ i: @concurrent @Sendable @autoclosure @escaping () async -> Result<I, E>
 ) async -> Result<(A, B, C, D, F, G, H, I), E> {
-    async let resultA = a()
-    async let resultB = b()
-    async let resultC = c()
-    async let resultD = d()
-    async let resultF = f()
-    async let resultG = g()
-    async let resultH = h()
-    async let resultI = i()
-    let (ra, rb, rc, rd, rf, rg, rh, ri) = await (
-        resultA, resultB, resultC, resultD, resultF, resultG, resultH, resultI
-    )
-    return flatten(ra, rb, rc, rd, rf, rg, rh, ri)
+    await collectAll([
+        { await a().map { $0 } },
+        { await b().map { $0 } },
+        { await c().map { $0 } },
+        { await d().map { $0 } },
+        { await f().map { $0 } },
+        { await g().map { $0 } },
+        { await h().map { $0 } },
+        { await i().map { $0 } },
+    ]).map { values in
+        (
+            values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D, values[4] as! F,
+            values[5] as! G, values[6] as! H, values[7] as! I
+        )
+    }
 }
 
 // MARK: Arity 9
@@ -275,19 +297,22 @@ public func withAll<
     _ i: @concurrent @Sendable @autoclosure @escaping () async -> Result<I, E>,
     _ j: @concurrent @Sendable @autoclosure @escaping () async -> Result<J, E>
 ) async -> Result<(A, B, C, D, F, G, H, I, J), E> {
-    async let resultA = a()
-    async let resultB = b()
-    async let resultC = c()
-    async let resultD = d()
-    async let resultF = f()
-    async let resultG = g()
-    async let resultH = h()
-    async let resultI = i()
-    async let resultJ = j()
-    let (ra, rb, rc, rd, rf, rg, rh, ri, rj) = await (
-        resultA, resultB, resultC, resultD, resultF, resultG, resultH, resultI, resultJ
-    )
-    return flatten(ra, rb, rc, rd, rf, rg, rh, ri, rj)
+    await collectAll([
+        { await a().map { $0 } },
+        { await b().map { $0 } },
+        { await c().map { $0 } },
+        { await d().map { $0 } },
+        { await f().map { $0 } },
+        { await g().map { $0 } },
+        { await h().map { $0 } },
+        { await i().map { $0 } },
+        { await j().map { $0 } },
+    ]).map { values in
+        (
+            values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D, values[4] as! F,
+            values[5] as! G, values[6] as! H, values[7] as! I, values[8] as! J
+        )
+    }
 }
 
 // MARK: Arity 10
@@ -307,18 +332,46 @@ public func withAll<
     _ j: @concurrent @Sendable @autoclosure @escaping () async -> Result<J, E>,
     _ k: @concurrent @Sendable @autoclosure @escaping () async -> Result<K, E>
 ) async -> Result<(A, B, C, D, F, G, H, I, J, K), E> {
-    async let resultA = a()
-    async let resultB = b()
-    async let resultC = c()
-    async let resultD = d()
-    async let resultF = f()
-    async let resultG = g()
-    async let resultH = h()
-    async let resultI = i()
-    async let resultJ = j()
-    async let resultK = k()
-    let (ra, rb, rc, rd, rf, rg, rh, ri, rj, rk) = await (
-        resultA, resultB, resultC, resultD, resultF, resultG, resultH, resultI, resultJ, resultK
-    )
-    return flatten(ra, rb, rc, rd, rf, rg, rh, ri, rj, rk)
+    await collectAll([
+        { await a().map { $0 } },
+        { await b().map { $0 } },
+        { await c().map { $0 } },
+        { await d().map { $0 } },
+        { await f().map { $0 } },
+        { await g().map { $0 } },
+        { await h().map { $0 } },
+        { await i().map { $0 } },
+        { await j().map { $0 } },
+        { await k().map { $0 } },
+    ]).map { values in
+        (
+            values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D, values[4] as! F,
+            values[5] as! G, values[6] as! H, values[7] as! I, values[8] as! J, values[9] as! K
+        )
+    }
+}
+
+/// Runs `operations` in parallel and collects their successes in argument
+/// order. The first failure to arrive cancels the operations still running
+/// and is returned once they have stopped.
+private func collectAll<E: Error>(
+    _ operations: [@concurrent @Sendable () async -> Result<any Sendable, E>]
+) async -> Result<[any Sendable], E> {
+    await withTaskGroup(of: (index: Int, result: Result<any Sendable, E>).self) { group in
+        for (index, operation) in operations.enumerated() {
+            group.addTask { (index, await operation()) }
+        }
+
+        var values = [(any Sendable)?](repeating: nil, count: operations.count)
+        for await completed in group {
+            switch completed.result {
+                case .success(let value):
+                    values[completed.index] = value
+                case .failure(let error):
+                    group.cancelAll()
+                    return .failure(error)
+            }
+        }
+        return .success(values.compactMap { $0 })
+    }
 }

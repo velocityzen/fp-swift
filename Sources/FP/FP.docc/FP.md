@@ -256,6 +256,8 @@ let result = await withAll(
 // Result<(User, [Notification], [Recommendation]), AppError>
 ```
 
+The first failure to arrive is returned right away and cancels the operations still running (cancellation is cooperative).
+
 ### Racing for the First Success
 
 Run several operations concurrently and take the first to finish **with a success**. Unlike a plain "first to finish wins" race, a `.failure` that completes first is passed over while the rest keep running — a fast failure never beats a slower success. The winner cancels the remaining operations; if all of them fail, the last failure to complete is returned.

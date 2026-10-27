@@ -786,4 +786,143 @@ struct AsyncSequenceOrderedTests {
             ])
         #expect(highWater <= 2)
     }
+
+    // MARK: - backpressure
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test("mapAsyncKeepOrder does not run ahead of a slow consumer")
+    func backpressureBoundsWorkAheadOfConsumer() async {
+        let started = AsyncCounter()
+        let source = AsyncStream<Int> { continuation in
+            for i in 1...100 {
+                continuation.yield(i)
+            }
+            continuation.finish()
+        }
+
+        let mapped = source.mapAsyncKeepOrder(
+            concurrency: 3,
+            { (element: Int) -> Int in
+                await started.increment()
+                return element
+            })
+        var iterator = mapped.makeAsyncIterator()
+        let first = await iterator.next()
+        let second = await iterator.next()
+        // Every transform is instant, so without backpressure all 100 would
+        // run while the consumer is idle.
+        try? await Task.sleep(for: .milliseconds(100))
+
+        let observedStarted = await started.count
+        #expect(first == 1)
+        #expect(second == 2)
+        // two consumed, plus at most `concurrency` running or waiting
+        #expect(observedStarted <= 5)
+    }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test("mapAsyncKeepOrder bounds results waiting behind a slow early element")
+    func backpressureBoundsReorderBuffer() async {
+        let started = AsyncCounter()
+        let source = AsyncStream<Int> { continuation in
+            for i in 1...100 {
+                continuation.yield(i)
+            }
+            continuation.finish()
+        }
+
+        let consumer = Task {
+            var values: [Int] = []
+            for await value in source.mapAsyncKeepOrder(
+                concurrency: 3,
+                { (element: Int) -> Int in
+                    await started.increment()
+                    if element == 1 {
+                        try? await Task.sleep(for: .milliseconds(200))
+                    }
+                    return element
+                })
+            {
+                values.append(value)
+            }
+            return values
+        }
+
+        // element 1 holds back everything after it; only its window may run
+        try? await Task.sleep(for: .milliseconds(100))
+        let startedWhileBlocked = await started.count
+        let values = await consumer.value
+
+        #expect(startedWhileBlocked == 3)
+        #expect(values == Array(1...100))
+    }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test("mapAsyncKeepOrder with concurrency 1 reads nothing ahead of the consumer")
+    func sequentialReadsNothingAhead() async {
+        let started = AsyncCounter()
+        let source = AsyncStream<Int> { continuation in
+            for i in 1...10 {
+                continuation.yield(i)
+            }
+            continuation.finish()
+        }
+
+        let mapped = source.mapAsyncKeepOrder({ (element: Int) -> Int in
+            await started.increment()
+            return element
+        })
+        var iterator = mapped.makeAsyncIterator()
+        let first = await iterator.next()
+        let second = await iterator.next()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        let observedStarted = await started.count
+        #expect(first == 1)
+        #expect(second == 2)
+        #expect(observedStarted == 2)
+    }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test("mapAsyncKeepOrder cancels in-flight transforms when the stream is dropped")
+    func droppingTheStreamCancelsInFlight() async {
+        let cancelled = AsyncCounter()
+        let source = AsyncStream<Int> { continuation in
+            for i in 1...3 {
+                continuation.yield(i)
+            }
+            // never finishes
+        }
+
+        // The consumer stops without its task being cancelled; releasing
+        // the stream is the only signal the pipeline gets.
+        func takeFirst() async -> Int? {
+            let mapped = source.mapAsyncKeepOrder(
+                concurrency: 3,
+                { (element: Int) -> Int in
+                    if element > 1 {
+                        try? await Task.sleep(for: .seconds(10))
+                        if Task.isCancelled {
+                            await cancelled.increment()
+                        }
+                    }
+                    return element
+                })
+            for await value in mapped {
+                return value
+            }
+            return nil
+        }
+
+        let first = await takeFirst()
+
+        var observedCancelled = 0
+        for _ in 0..<200 {
+            observedCancelled = await cancelled.count
+            if observedCancelled == 2 { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(first == 1)
+        #expect(observedCancelled == 2)
+    }
 }

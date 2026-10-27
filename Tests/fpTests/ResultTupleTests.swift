@@ -410,6 +410,48 @@ struct ResultTupleTests {
         }
     }
 
+    @Test("withAll returns the first failure without waiting for slower operations")
+    func withAllFailsFast() async {
+        let cancelled = AsyncCounter()
+        let slow: @Sendable () async -> Result<Int, TestError> = {
+            try? await Task.sleep(for: .seconds(10))
+            if Task.isCancelled {
+                await cancelled.increment()
+            }
+            return .success(1)
+        }
+        let failing: @Sendable () async -> Result<String, TestError> = { .failure(.failed) }
+
+        let start = ContinuousClock.now
+        let result = await withAll(await slow(), await failing(), await slow())
+        let elapsed = ContinuousClock.now - start
+
+        let observedCancelled = await cancelled.count
+        #expect(result.map { _ in true } == .failure(.failed))
+        #expect(observedCancelled == 2)
+        #expect(elapsed < .seconds(5))
+    }
+
+    @Test("withAll keeps argument order when operations finish out of order")
+    func withAllKeepsArgumentOrder() async {
+        let late: @Sendable () async -> Result<Int, TestError> = {
+            try? await Task.sleep(for: .milliseconds(50))
+            return .success(1)
+        }
+        let early: @Sendable () async -> Result<String, TestError> = { .success("two") }
+        let middle: @Sendable () async -> Result<Double, TestError> = {
+            try? await Task.sleep(for: .milliseconds(20))
+            return .success(3)
+        }
+
+        let result = await withAll(await late(), await early(), await middle())
+
+        let values = try? result.get()
+        #expect(values?.0 == 1)
+        #expect(values?.1 == "two")
+        #expect(values?.2 == 3)
+    }
+
     // MARK: - Flatten 10 (full arity ladder)
 
     @Test("flatten combines ten results, exercising every arity")

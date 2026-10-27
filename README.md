@@ -414,6 +414,8 @@ func loadDashboard(userId: Int) async -> Result<Dashboard, AppError> {
 }
 ```
 
+The first failure to arrive is returned right away and cancels the operations still running (cancellation is cooperative).
+
 ### Racing Results
 
 Run several async operations concurrently and take the first one to finish **with a success** — not merely the first to finish. A fast `.failure` is passed over while the rest keep running, so a slower success still wins. The winner cancels the remaining operations; if every operation fails, the last failure to complete is returned.
