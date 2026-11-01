@@ -164,7 +164,8 @@ struct OptionalAsyncTests {
             {
                 evaluated = true
                 return 2
-            }())
+            }()
+        )
 
         #expect(evaluated == false)
     }
@@ -244,7 +245,8 @@ struct OptionalAsyncTests {
             {
                 evaluated = true
                 return 0
-            }())
+            }()
+        )
 
         #expect(evaluated == false)
     }

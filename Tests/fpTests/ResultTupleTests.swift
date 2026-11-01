@@ -423,11 +423,11 @@ struct ResultTupleTests {
         let failing: @Sendable () async -> Result<String, TestError> = { .failure(.failed) }
 
         #if os(macOS) || os(Linux)
-        let start = ContinuousClock.now
+            let start = ContinuousClock.now
         #endif
         let result = await withAll(await slow(), await failing(), await slow())
         #if os(macOS) || os(Linux)
-        let elapsed = ContinuousClock.now - start
+            let elapsed = ContinuousClock.now - start
         #endif
 
         let observedCancelled = await cancelled.count
@@ -439,7 +439,7 @@ struct ResultTupleTests {
         // bound runs on macOS/Linux only — the cancellation count above is
         // the fail-fast proof everywhere.
         #if os(macOS) || os(Linux)
-        #expect(elapsed < .seconds(5))
+            #expect(elapsed < .seconds(5))
         #endif
     }
 

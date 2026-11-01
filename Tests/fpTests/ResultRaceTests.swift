@@ -46,8 +46,16 @@ struct ResultRaceTests {
         let fast: @Sendable () async -> Result<Int, TestError> = { .success(7) }
 
         let result = await withAny(
-            await slow(), await slow(), await slow(), await slow(), await slow(),
-            await slow(), await fast(), await slow(), await slow(), await slow()
+            await slow(),
+            await slow(),
+            await slow(),
+            await slow(),
+            await slow(),
+            await slow(),
+            await fast(),
+            await slow(),
+            await slow(),
+            await slow()
         )
 
         #expect(result == .success(7))

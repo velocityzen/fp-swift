@@ -281,7 +281,8 @@ struct ResultFailureTests {
             {
                 evaluated = true
                 return 0
-            }())
+            }()
+        )
 
         #expect(evaluated == false)
     }
@@ -406,49 +407,51 @@ struct ResultFailureTests {
 
     // Exit tests need process spawning — unavailable on iOS/tvOS.
     #if os(macOS) || os(Linux)
-    @Test("getOrExit on failure writes prefix and error to stderr and exits with the given code")
-    func getOrExitExitsOnFailure() async {
-        let result = await #expect(
-            processExitsWith: .exitCode(2),
-            observing: [\.standardErrorContent]
-        ) {
-            let failure: Result<Int, TestError> = .failure(.primary)
-            _ = failure.getOrExit(prefix: "fatal: ", exitCode: 2)
-        }
-
-        let stderr = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-        #expect(stderr.contains("fatal: primary"))
-    }
-
-    @Test("getOrExit on failure defaults to exit code 1 and the Error prefix")
-    func getOrExitDefaultsOnFailure() async {
-        let result = await #expect(
-            processExitsWith: .exitCode(1),
-            observing: [\.standardErrorContent]
-        ) {
-            let failure: Result<Int, TestError> = .failure(.primary)
-            _ = failure.getOrExit()
-        }
-
-        let stderr = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-        #expect(stderr.contains("Error: primary"))
-    }
-
-    @Test("getOrExit on failure writes the custom message")
-    func getOrExitCustomMessageOnFailure() async {
-        let result = await #expect(
-            processExitsWith: .exitCode(3),
-            observing: [\.standardErrorContent]
-        ) {
-            let failure: Result<Int, TestError> = .failure(.primary)
-            _ = failure.getOrExit(exitCode: 3) { error in
-                "could not load: \(error)\n"
+        @Test(
+            "getOrExit on failure writes prefix and error to stderr and exits with the given code"
+        )
+        func getOrExitExitsOnFailure() async {
+            let result = await #expect(
+                processExitsWith: .exitCode(2),
+                observing: [\.standardErrorContent]
+            ) {
+                let failure: Result<Int, TestError> = .failure(.primary)
+                _ = failure.getOrExit(prefix: "fatal: ", exitCode: 2)
             }
+
+            let stderr = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
+            #expect(stderr.contains("fatal: primary"))
         }
 
-        let stderr = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-        #expect(stderr.contains("could not load: primary"))
-    }
+        @Test("getOrExit on failure defaults to exit code 1 and the Error prefix")
+        func getOrExitDefaultsOnFailure() async {
+            let result = await #expect(
+                processExitsWith: .exitCode(1),
+                observing: [\.standardErrorContent]
+            ) {
+                let failure: Result<Int, TestError> = .failure(.primary)
+                _ = failure.getOrExit()
+            }
+
+            let stderr = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
+            #expect(stderr.contains("Error: primary"))
+        }
+
+        @Test("getOrExit on failure writes the custom message")
+        func getOrExitCustomMessageOnFailure() async {
+            let result = await #expect(
+                processExitsWith: .exitCode(3),
+                observing: [\.standardErrorContent]
+            ) {
+                let failure: Result<Int, TestError> = .failure(.primary)
+                _ = failure.getOrExit(exitCode: 3) { error in
+                    "could not load: \(error)\n"
+                }
+            }
+
+            let stderr = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
+            #expect(stderr.contains("could not load: primary"))
+        }
     #endif
 
     // MARK: - orExit
@@ -485,34 +488,34 @@ struct ResultFailureTests {
 
     // Exit tests need process spawning — unavailable on iOS/tvOS.
     #if os(macOS) || os(Linux)
-    @Test("orExit on failure writes prefix and error to stderr and exits with the given code")
-    func orExitExitsOnFailure() async {
-        let result = await #expect(
-            processExitsWith: .exitCode(2),
-            observing: [\.standardErrorContent]
-        ) {
-            let failure: Result<Int, TestError> = .failure(.primary)
-            failure.orExit(prefix: "fatal: ", exitCode: 2)
-        }
-
-        let stderr = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-        #expect(stderr.contains("fatal: primary"))
-    }
-
-    @Test("orExit on failure writes the custom message")
-    func orExitCustomMessageOnFailure() async {
-        let result = await #expect(
-            processExitsWith: .exitCode(4),
-            observing: [\.standardErrorContent]
-        ) {
-            let failure: Result<Int, TestError> = .failure(.primary)
-            failure.orExit(exitCode: 4) { error in
-                "command failed: \(error)\n"
+        @Test("orExit on failure writes prefix and error to stderr and exits with the given code")
+        func orExitExitsOnFailure() async {
+            let result = await #expect(
+                processExitsWith: .exitCode(2),
+                observing: [\.standardErrorContent]
+            ) {
+                let failure: Result<Int, TestError> = .failure(.primary)
+                failure.orExit(prefix: "fatal: ", exitCode: 2)
             }
+
+            let stderr = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
+            #expect(stderr.contains("fatal: primary"))
         }
 
-        let stderr = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
-        #expect(stderr.contains("command failed: primary"))
-    }
+        @Test("orExit on failure writes the custom message")
+        func orExitCustomMessageOnFailure() async {
+            let result = await #expect(
+                processExitsWith: .exitCode(4),
+                observing: [\.standardErrorContent]
+            ) {
+                let failure: Result<Int, TestError> = .failure(.primary)
+                failure.orExit(exitCode: 4) { error in
+                    "command failed: \(error)\n"
+                }
+            }
+
+            let stderr = String(decoding: result?.standardErrorContent ?? [], as: UTF8.self)
+            #expect(stderr.contains("command failed: primary"))
+        }
     #endif
 }

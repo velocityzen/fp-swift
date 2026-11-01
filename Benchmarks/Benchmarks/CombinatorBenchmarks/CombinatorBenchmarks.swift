@@ -42,7 +42,10 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             blackHole(
                 await withAll(
-                    await succeed(1), await succeed(2), await succeed(3), await succeed(4),
+                    await succeed(1),
+                    await succeed(2),
+                    await succeed(3),
+                    await succeed(4),
                     await succeed(5)
                 )
             )
@@ -53,9 +56,16 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             blackHole(
                 await withAll(
-                    await succeed(1), await succeed(2), await succeed(3), await succeed(4),
-                    await succeed(5), await succeed(6), await succeed(7), await succeed(8),
-                    await succeed(9), await succeed(10)
+                    await succeed(1),
+                    await succeed(2),
+                    await succeed(3),
+                    await succeed(4),
+                    await succeed(5),
+                    await succeed(6),
+                    await succeed(7),
+                    await succeed(8),
+                    await succeed(9),
+                    await succeed(10)
                 )
             )
         }
@@ -67,8 +77,11 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             blackHole(
                 await withAll(
-                    await succeedWide(1), await succeedWide(2), await succeedWide(3),
-                    await succeedWide(4), await succeedWide(5)
+                    await succeedWide(1),
+                    await succeedWide(2),
+                    await succeedWide(3),
+                    await succeedWide(4),
+                    await succeedWide(5)
                 )
             )
         }
@@ -78,7 +91,10 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             blackHole(
                 await withAll(
-                    await succeed(1), await fail(), await succeed(3), await succeed(4),
+                    await succeed(1),
+                    await fail(),
+                    await succeed(3),
+                    await succeed(4),
                     await succeed(5)
                 )
             )
@@ -97,9 +113,16 @@ let benchmarks: @Sendable () -> Void = {
         for _ in benchmark.scaledIterations {
             blackHole(
                 await withAny(
-                    await succeed(1), await succeed(2), await succeed(3), await succeed(4),
-                    await succeed(5), await succeed(6), await succeed(7), await succeed(8),
-                    await succeed(9), await succeed(10)
+                    await succeed(1),
+                    await succeed(2),
+                    await succeed(3),
+                    await succeed(4),
+                    await succeed(5),
+                    await succeed(6),
+                    await succeed(7),
+                    await succeed(8),
+                    await succeed(9),
+                    await succeed(10)
                 )
             )
         }

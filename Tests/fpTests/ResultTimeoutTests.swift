@@ -34,7 +34,8 @@ struct ResultTimeoutTests {
     @Test("returns the timeout error when the operation outlasts the timeout")
     func timesOutWhenOperationIsTooSlow() async {
         let result: Result<Int, TestError> = await withTimeout(
-            .milliseconds(50), failingWith: .timeout
+            .milliseconds(50),
+            failingWith: .timeout
         ) {
             try? await Task.sleep(nanoseconds: 10_000_000_000)
             return .success(1)
@@ -49,7 +50,8 @@ struct ResultTimeoutTests {
         let cancelled = AsyncCounter()
 
         let result: Result<Int, TestError> = await withTimeout(
-            .milliseconds(50), failingWith: .timeout
+            .milliseconds(50),
+            failingWith: .timeout
         ) {
             // sleeps far longer than the timeout; throws immediately on cancellation
             try? await Task.sleep(nanoseconds: 10_000_000_000)

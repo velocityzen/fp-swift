@@ -50,8 +50,8 @@ struct AsyncSequenceOrderedTests {
                 let nanos = UInt64((5 - element) * 20_000_000)
                 try? await Task.sleep(nanoseconds: nanos)
                 return element
-            })
-        {
+            }
+        ) {
             values.append(value)
         }
 
@@ -68,7 +68,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         #if os(macOS) || os(Linux)
-        let start = ContinuousClock.now
+            let start = ContinuousClock.now
         #endif
         var values: [Int] = []
         for await value in stream.mapAsyncKeepOrder(
@@ -78,12 +78,12 @@ struct AsyncSequenceOrderedTests {
                 try? await Task.sleep(for: .milliseconds(100))
                 await tracker.exit()
                 return element
-            })
-        {
+            }
+        ) {
             values.append(value)
         }
         #if os(macOS) || os(Linux)
-        let elapsed = ContinuousClock.now - start
+            let elapsed = ContinuousClock.now - start
         #endif
 
         let highWater = await tracker.highWater
@@ -95,7 +95,7 @@ struct AsyncSequenceOrderedTests {
         // bounds run on macOS/Linux only — the high-water check above is the
         // overlap proof everywhere.
         #if os(macOS) || os(Linux)
-        #expect(elapsed < .milliseconds(400))
+            #expect(elapsed < .milliseconds(400))
         #endif
     }
 
@@ -199,8 +199,8 @@ struct AsyncSequenceOrderedTests {
                 let nanos = UInt64((4 - value) * 20_000_000)
                 try? await Task.sleep(nanoseconds: nanos)
                 return value
-            })
-        {
+            }
+        ) {
             results.append(result)
         }
 
@@ -226,7 +226,7 @@ struct AsyncSequenceOrderedTests {
         let perElementSleep: UInt64 = 100_000_000  // 100ms
 
         #if os(macOS) || os(Linux)
-        let start = ContinuousClock.now
+            let start = ContinuousClock.now
         #endif
         var results: [Result<Int, TestError>] = []
         for await result in stream.mapAsyncKeepOrder(
@@ -234,19 +234,19 @@ struct AsyncSequenceOrderedTests {
             { (value: Int) -> Int in
                 try? await Task.sleep(nanoseconds: perElementSleep)
                 return value
-            })
-        {
+            }
+        ) {
             results.append(result)
         }
         #if os(macOS) || os(Linux)
-        let elapsed = ContinuousClock.now - start
+            let elapsed = ContinuousClock.now - start
         #endif
 
         #expect(results.count == 5)
         // 4 successes sequential would be ~400ms. Simulators can stall ~10s
         // warming up under CI, so wall-clock bounds run on macOS/Linux only.
         #if os(macOS) || os(Linux)
-        #expect(elapsed < .milliseconds(300))
+            #expect(elapsed < .milliseconds(300))
         #endif
     }
 
@@ -380,8 +380,8 @@ struct AsyncSequenceOrderedTests {
                 let nanos = UInt64((4 - value) * 20_000_000)
                 try? await Task.sleep(nanoseconds: nanos)
                 return .success(value)
-            })
-        {
+            }
+        ) {
             results.append(result)
         }
 
@@ -403,7 +403,7 @@ struct AsyncSequenceOrderedTests {
         let perElementSleep: UInt64 = 100_000_000  // 100ms
 
         #if os(macOS) || os(Linux)
-        let start = ContinuousClock.now
+            let start = ContinuousClock.now
         #endif
         var results: [Result<Int, TestError>] = []
         for await result in stream.flatMapAsyncKeepOrder(
@@ -411,19 +411,19 @@ struct AsyncSequenceOrderedTests {
             { (value: Int) -> Result<Int, TestError> in
                 try? await Task.sleep(nanoseconds: perElementSleep)
                 return .success(value)
-            })
-        {
+            }
+        ) {
             results.append(result)
         }
         #if os(macOS) || os(Linux)
-        let elapsed = ContinuousClock.now - start
+            let elapsed = ContinuousClock.now - start
         #endif
 
         #expect(results.count == 5)
         // 4 successes sequential would be ~400ms. Simulators can stall ~10s
         // warming up under CI, so wall-clock bounds run on macOS/Linux only.
         #if os(macOS) || os(Linux)
-        #expect(elapsed < .milliseconds(300))
+            #expect(elapsed < .milliseconds(300))
         #endif
     }
 
@@ -474,8 +474,8 @@ struct AsyncSequenceOrderedTests {
                 try? await Task.sleep(for: .milliseconds(20))
                 await tracker.exit()
                 return element * 2
-            })
-        {
+            }
+        ) {
             results.append(value)
         }
         let elapsed = ContinuousClock.now - start
@@ -509,8 +509,8 @@ struct AsyncSequenceOrderedTests {
                 try? await Task.sleep(for: .milliseconds(6 - element))
                 await tracker.exit()
                 return element
-            })
-        {
+            }
+        ) {
             results.append(value)
         }
 
@@ -536,8 +536,8 @@ struct AsyncSequenceOrderedTests {
                 // earlier elements are slower than later ones
                 try? await Task.sleep(for: .milliseconds((7 - element) * 10))
                 return element
-            })
-        {
+            }
+        ) {
             results.append(value)
         }
 
@@ -567,8 +567,8 @@ struct AsyncSequenceOrderedTests {
                         await cancelled.increment()
                     }
                     return element
-                })
-            {}
+                }
+            ) {}
         }
 
         // let all three transforms start, then walk away
@@ -614,8 +614,8 @@ struct AsyncSequenceOrderedTests {
                         await cancelled.increment()
                     }
                     return element
-                })
-            {}
+                }
+            ) {}
         }
 
         // the window admits exactly two transforms; the rest stay queued
@@ -644,7 +644,8 @@ struct AsyncSequenceOrderedTests {
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test("mapAsyncKeepOrder timing: unlimited overlaps sleeps, concurrency 1 serializes them")
     func timingParallelVsSequential() async {
-        func run(concurrency: Int) async -> Duration {
+        func run(concurrency: Int) async -> (elapsed: Duration, highWater: Int) {
+            let tracker = ConcurrencyTracker()
             let source = AsyncStream<Int> { continuation in
                 for i in 1...4 {
                     continuation.yield(i)
@@ -655,21 +656,31 @@ struct AsyncSequenceOrderedTests {
             for await _ in source.mapAsyncKeepOrder(
                 concurrency: concurrency,
                 { (element: Int) -> Int in
+                    await tracker.enter()
                     try? await Task.sleep(for: .milliseconds(50))
+                    await tracker.exit()
                     return element
-                })
-            {}
-            return ContinuousClock.now - start
+                }
+            ) {}
+            let elapsed = ContinuousClock.now - start
+            return (elapsed, await tracker.highWater)
         }
 
         let sequential = await run(concurrency: 1)
         let parallel = await run(concurrency: .max)
 
-        // four 50ms sleeps one at a time can never beat their 200ms sum
-        #expect(sequential >= .milliseconds(200))
-        // overlapped, they finish in ~50ms — well under the sum
-        #expect(parallel < .milliseconds(200))
-        #expect(parallel < sequential)
+        // one at a time, four 50ms sleeps can never beat their 200ms sum,
+        #expect(sequential.highWater == 1)
+        #expect(sequential.elapsed >= .milliseconds(200))
+        // while unlimited overlaps them.
+        #expect(parallel.highWater >= 2)
+        // Overlapped, they finish in ~50ms — well under the sum. Simulators
+        // can stall under CI, so wall-clock upper bounds run on macOS/Linux
+        // only; the high-water check above is the overlap proof everywhere.
+        #if os(macOS) || os(Linux)
+            #expect(parallel.elapsed < .milliseconds(200))
+            #expect(parallel.elapsed < sequential.elapsed)
+        #endif
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
@@ -741,8 +752,8 @@ struct AsyncSequenceOrderedTests {
                 try? await Task.sleep(for: .milliseconds(20))
                 await tracker.exit()
                 return value * 10
-            })
-        {
+            }
+        ) {
             results.append(result)
         }
 
@@ -750,7 +761,8 @@ struct AsyncSequenceOrderedTests {
         #expect(
             results == [
                 .success(10), .success(20), .success(30), .success(40), .success(50), .success(60),
-            ])
+            ]
+        )
         #expect(highWater <= 2)
     }
 
@@ -773,8 +785,8 @@ struct AsyncSequenceOrderedTests {
                 try? await Task.sleep(for: .milliseconds(20))
                 await tracker.exit()
                 return value.isMultiple(of: 2) ? .success(value * 10) : .failure(.other)
-            })
-        {
+            }
+        ) {
             results.append(result)
         }
 
@@ -783,7 +795,8 @@ struct AsyncSequenceOrderedTests {
             results == [
                 .failure(.other), .success(20), .failure(.other), .success(40), .failure(.other),
                 .success(60),
-            ])
+            ]
+        )
         #expect(highWater <= 2)
     }
 
@@ -805,7 +818,8 @@ struct AsyncSequenceOrderedTests {
             { (element: Int) -> Int in
                 await started.increment()
                 return element
-            })
+            }
+        )
         var iterator = mapped.makeAsyncIterator()
         let first = await iterator.next()
         let second = await iterator.next()
@@ -845,8 +859,8 @@ struct AsyncSequenceOrderedTests {
                         for await _ in gate {}
                     }
                     return element
-                })
-            {
+                }
+            ) {
                 values.append(value)
             }
             return values
@@ -921,7 +935,8 @@ struct AsyncSequenceOrderedTests {
                         }
                     }
                     return element
-                })
+                }
+            )
             for await value in mapped {
                 // let elements 2 and 3 start before the stream is dropped
                 for _ in 0..<200 {
@@ -970,8 +985,8 @@ struct AsyncSequenceOrderedTests {
                         await Task.yield()
                     }
                     return element
-                })
-            {
+                }
+            ) {
                 results.append(value)
                 // let workers run ahead of the consumer now and then
                 if value.isMultiple(of: 7) {
@@ -1007,8 +1022,8 @@ struct AsyncSequenceOrderedTests {
                             await Task.yield()
                         }
                         return element
-                    })
-                {
+                    }
+                ) {
                     taken.append(value)
                     if taken.count == stopAfter {
                         withUnsafeCurrentTask { $0?.cancel() }

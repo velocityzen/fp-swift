@@ -224,7 +224,13 @@ public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Senda
 
 @inlinable
 public func withAll<
-    A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, E: Error
+    A: Sendable,
+    B: Sendable,
+    C: Sendable,
+    D: Sendable,
+    F: Sendable,
+    G: Sendable,
+    E: Error
 >(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
@@ -253,7 +259,13 @@ public func withAll<
 
 @inlinable
 public func withAll<
-    A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
+    A: Sendable,
+    B: Sendable,
+    C: Sendable,
+    D: Sendable,
+    F: Sendable,
+    G: Sendable,
+    H: Sendable,
     E: Error
 >(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
@@ -285,8 +297,15 @@ public func withAll<
 
 @inlinable
 public func withAll<
-    A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
-    I: Sendable, E: Error
+    A: Sendable,
+    B: Sendable,
+    C: Sendable,
+    D: Sendable,
+    F: Sendable,
+    G: Sendable,
+    H: Sendable,
+    I: Sendable,
+    E: Error
 >(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
@@ -323,8 +342,16 @@ public func withAll<
 
 @inlinable
 public func withAll<
-    A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
-    I: Sendable, J: Sendable, E: Error
+    A: Sendable,
+    B: Sendable,
+    C: Sendable,
+    D: Sendable,
+    F: Sendable,
+    G: Sendable,
+    H: Sendable,
+    I: Sendable,
+    J: Sendable,
+    E: Error
 >(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
@@ -364,8 +391,17 @@ public func withAll<
 
 @inlinable
 public func withAll<
-    A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
-    I: Sendable, J: Sendable, K: Sendable, E: Error
+    A: Sendable,
+    B: Sendable,
+    C: Sendable,
+    D: Sendable,
+    F: Sendable,
+    G: Sendable,
+    H: Sendable,
+    I: Sendable,
+    J: Sendable,
+    K: Sendable,
+    E: Error
 >(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
