@@ -54,7 +54,9 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
             // nothing is read ahead of the consumer.
             let source = SourceIterator(makeAsyncIterator())
             return AsyncStream(unfolding: {
-                guard let element = await source.next() else { return nil }
+                guard let element = await source.next() else {
+                    return nil
+                }
                 return await transform(element)
             })
         }
@@ -261,9 +263,13 @@ final class KeepOrderCoordinator<Element: Sendable, T: Sendable>: Sendable {
 
         @inlinable
         mutating func dequeue() -> Work? {
-            guard queueHead < queue.count else { return nil }
+            guard queueHead < queue.count else {
+                return nil
+            }
+
             let work = queue[queueHead]
             queueHead += 1
+
             if queueHead == queue.count {
                 queue.removeAll(keepingCapacity: true)
                 queueHead = 0
@@ -275,12 +281,18 @@ final class KeepOrderCoordinator<Element: Sendable, T: Sendable>: Sendable {
         /// the stream has ended, or no answer when the consumer must wait.
         @inlinable
         mutating func takeNext() -> T?? {
-            if cancelled { return .some(nil) }
+            if cancelled {
+                return .some(nil)
+            }
+
             if let value = ready.removeValue(forKey: emitted) {
                 consumed()
                 return value
             }
-            if finished && emitted == admitted { return .some(nil) }
+
+            if finished && emitted == admitted {
+                return .some(nil)
+            }
             return nil
         }
 
@@ -361,8 +373,14 @@ final class KeepOrderCoordinator<Element: Sendable, T: Sendable>: Sendable {
     @inlinable
     func waitForSlot() async -> Bool {
         await wait { state, reader in
-            if state.cancelled { return false }
-            if state.admitted - state.emitted < concurrency { return true }
+            if state.cancelled {
+                return false
+            }
+
+            if state.admitted - state.emitted < concurrency {
+                return true
+            }
+
             state.reader = reader
             return nil
         }
@@ -371,17 +389,22 @@ final class KeepOrderCoordinator<Element: Sendable, T: Sendable>: Sendable {
     @inlinable
     func admit(_ element: Element) -> Admission {
         state.withLock { state in
-            if state.cancelled { return .cancelled }
+            if state.cancelled {
+                return .cancelled
+            }
+
             let work = (index: state.admitted, element: element)
             state.admitted += 1
             if let worker = state.idle.popLast() {
                 worker.resume(returning: work)
                 return .taken
             }
+
             if state.workers < concurrency {
                 state.workers += 1
                 return .start(work)
             }
+
             state.queue.append(work)
             return .taken
         }
@@ -416,7 +439,10 @@ final class KeepOrderCoordinator<Element: Sendable, T: Sendable>: Sendable {
     @inlinable
     func deposit(_ value: T, at index: Int) {
         state.withLock { state in
-            if state.cancelled { return }
+            if state.cancelled {
+                return
+            }
+
             if index == state.emitted, let consumer = state.consumer {
                 consumer.resume(returning: value)
                 state.consumer = nil
@@ -433,9 +459,18 @@ final class KeepOrderCoordinator<Element: Sendable, T: Sendable>: Sendable {
     @inlinable
     func nextWork() async -> Work? {
         await wait { state, worker in
-            if state.cancelled { return .some(nil) }
-            if let work = state.dequeue() { return work }
-            if state.finished { return .some(nil) }
+            if state.cancelled {
+                return .some(nil)
+            }
+
+            if let work = state.dequeue() {
+                return work
+            }
+
+            if state.finished {
+                return .some(nil)
+            }
+
             state.idle.append(worker)
             return nil
         }
@@ -448,7 +483,10 @@ final class KeepOrderCoordinator<Element: Sendable, T: Sendable>: Sendable {
     @inlinable
     func next() async -> T? {
         await wait { state, consumer in
-            if let next = state.takeNext() { return next }
+            if let next = state.takeNext() {
+                return next
+            }
+
             state.consumer = consumer
             return nil
         }
