@@ -85,7 +85,19 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
         _ transform: @concurrent @Sendable @escaping (Success) async -> T
     ) -> AsyncStream<Result<T, E>>
     where Element == Result<Success, E> {
-        keepOrderStream(concurrency: concurrency, passthrough: { $0.passthroughFailure() }) {
+        if concurrency == 1 {
+            // Captures `transform` itself: going through `keepOrderStream`
+            // allocates the closure that wraps it, one allocation per call.
+            let source = SharedIterator(makeAsyncIterator())
+            return AsyncStream(unfolding: {
+                guard let element = await source.next() else {
+                    return nil
+                }
+                return await element.mapAsync(transform)
+            })
+        }
+
+        return keepOrderStream(concurrency: concurrency, passthrough: { $0.passthroughFailure() }) {
             element in
             await element.mapAsync(transform)
         }
@@ -113,7 +125,19 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
         _ transform: @concurrent @Sendable @escaping (Success) async -> Result<T, E>
     ) -> AsyncStream<Result<T, E>>
     where Element == Result<Success, E> {
-        keepOrderStream(concurrency: concurrency, passthrough: { $0.passthroughFailure() }) {
+        if concurrency == 1 {
+            // Captures `transform` itself, as in the `mapAsyncKeepOrder`
+            // above.
+            let source = SharedIterator(makeAsyncIterator())
+            return AsyncStream(unfolding: {
+                guard let element = await source.next() else {
+                    return nil
+                }
+                return await element.flatMapAsync(transform)
+            })
+        }
+
+        return keepOrderStream(concurrency: concurrency, passthrough: { $0.passthroughFailure() }) {
             element in
             await element.flatMapAsync(transform)
         }
