@@ -963,7 +963,7 @@ struct AsyncSequenceOrderedTests {
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test(
         "mapAsyncKeepOrder delivers every element in order under contention",
-        .timeLimit(.minutes(1)),
+        .hangGuard,
         arguments: [2, 3, 8, Int.max]
     )
     func deliversEveryElementUnderContention(concurrency: Int) async {
@@ -1001,7 +1001,7 @@ struct AsyncSequenceOrderedTests {
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test(
         "mapAsyncKeepOrder ends right after the consumer is cancelled at any point",
-        .timeLimit(.minutes(1)),
+        .hangGuard,
         arguments: [2, 8, Int.max]
     )
     func endsWhenCancelledAtAnyPoint(concurrency: Int) async {
