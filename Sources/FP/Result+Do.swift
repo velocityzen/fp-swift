@@ -13,12 +13,17 @@
 ///     .map { user, _, name in "\(user.id): \(name)" } // Result<String, MyError>
 /// ```
 public struct ResultDo<Failure: Error> {
+    @usableFromInline
+    init() {}
+
     /// Binds the first Result value in the chain.
+    @inlinable
     public func bind<A>(_ fn: () -> Result<A, Failure>) -> Result<A, Failure> {
         fn()
     }
 
     /// Adds a pure value as the first element in the chain.
+    @inlinable
     public func `let`<A>(_ fn: () -> A) -> Result<A, Failure> {
         .success(fn())
     }
@@ -34,6 +39,7 @@ public extension Result where Failure: Error {
 public extension Result {
     /// Binds a new Result, accumulating the success value into a pair.
     @_disfavoredOverload
+    @inlinable
     func bind<B>(
         _ fn: (Success) -> Result<B, Failure>
     ) -> Result<(Success, B), Failure> {
@@ -42,6 +48,7 @@ public extension Result {
 
     /// Adds a pure computed value, accumulating into a pair.
     @_disfavoredOverload
+    @inlinable
     func `let`<B>(
         _ fn: (Success) -> B
     ) -> Result<(Success, B), Failure> {
@@ -52,12 +59,14 @@ public extension Result {
 // MARK: - bind / let (2 → 3)
 
 public extension Result {
+    @inlinable
     func bind<A, B, C>(
         _ fn: (A, B) -> Result<C, Failure>
     ) -> Result<(A, B, C), Failure> where Success == (A, B) {
         flatMap { (a, b) in fn(a, b).map { c in (a, b, c) } }
     }
 
+    @inlinable
     func `let`<A, B, C>(
         _ fn: (A, B) -> C
     ) -> Result<(A, B, C), Failure> where Success == (A, B) {
@@ -68,12 +77,14 @@ public extension Result {
 // MARK: - bind / let (3 → 4)
 
 public extension Result {
+    @inlinable
     func bind<A, B, C, D>(
         _ fn: (A, B, C) -> Result<D, Failure>
     ) -> Result<(A, B, C, D), Failure> where Success == (A, B, C) {
         flatMap { (a, b, c) in fn(a, b, c).map { d in (a, b, c, d) } }
     }
 
+    @inlinable
     func `let`<A, B, C, D>(
         _ fn: (A, B, C) -> D
     ) -> Result<(A, B, C, D), Failure> where Success == (A, B, C) {
@@ -84,12 +95,14 @@ public extension Result {
 // MARK: - bind / let (4 → 5)
 
 public extension Result {
+    @inlinable
     func bind<A, B, C, D, E>(
         _ fn: (A, B, C, D) -> Result<E, Failure>
     ) -> Result<(A, B, C, D, E), Failure> where Success == (A, B, C, D) {
         flatMap { (a, b, c, d) in fn(a, b, c, d).map { e in (a, b, c, d, e) } }
     }
 
+    @inlinable
     func `let`<A, B, C, D, E>(
         _ fn: (A, B, C, D) -> E
     ) -> Result<(A, B, C, D, E), Failure> where Success == (A, B, C, D) {
@@ -100,12 +113,14 @@ public extension Result {
 // MARK: - bind / let (5 → 6)
 
 public extension Result {
+    @inlinable
     func bind<A, B, C, D, E, F>(
         _ fn: (A, B, C, D, E) -> Result<F, Failure>
     ) -> Result<(A, B, C, D, E, F), Failure> where Success == (A, B, C, D, E) {
         flatMap { (a, b, c, d, e) in fn(a, b, c, d, e).map { f in (a, b, c, d, e, f) } }
     }
 
+    @inlinable
     func `let`<A, B, C, D, E, F>(
         _ fn: (A, B, C, D, E) -> F
     ) -> Result<(A, B, C, D, E, F), Failure> where Success == (A, B, C, D, E) {
@@ -116,12 +131,14 @@ public extension Result {
 // MARK: - bind / let (6 → 7)
 
 public extension Result {
+    @inlinable
     func bind<A, B, C, D, E, F, G>(
         _ fn: (A, B, C, D, E, F) -> Result<G, Failure>
     ) -> Result<(A, B, C, D, E, F, G), Failure> where Success == (A, B, C, D, E, F) {
         flatMap { (a, b, c, d, e, f) in fn(a, b, c, d, e, f).map { g in (a, b, c, d, e, f, g) } }
     }
 
+    @inlinable
     func `let`<A, B, C, D, E, F, G>(
         _ fn: (A, B, C, D, E, F) -> G
     ) -> Result<(A, B, C, D, E, F, G), Failure> where Success == (A, B, C, D, E, F) {
@@ -132,6 +149,7 @@ public extension Result {
 // MARK: - bind / let (7 → 8)
 
 public extension Result {
+    @inlinable
     func bind<A, B, C, D, E, F, G, H>(
         _ fn: (A, B, C, D, E, F, G) -> Result<H, Failure>
     ) -> Result<(A, B, C, D, E, F, G, H), Failure> where Success == (A, B, C, D, E, F, G) {
@@ -140,6 +158,7 @@ public extension Result {
         }
     }
 
+    @inlinable
     func `let`<A, B, C, D, E, F, G, H>(
         _ fn: (A, B, C, D, E, F, G) -> H
     ) -> Result<(A, B, C, D, E, F, G, H), Failure> where Success == (A, B, C, D, E, F, G) {
@@ -150,6 +169,7 @@ public extension Result {
 // MARK: - bind / let (8 → 9)
 
 public extension Result {
+    @inlinable
     func bind<A, B, C, D, E, F, G, H, I>(
         _ fn: (A, B, C, D, E, F, G, H) -> Result<I, Failure>
     ) -> Result<(A, B, C, D, E, F, G, H, I), Failure> where Success == (A, B, C, D, E, F, G, H) {
@@ -158,6 +178,7 @@ public extension Result {
         }
     }
 
+    @inlinable
     func `let`<A, B, C, D, E, F, G, H, I>(
         _ fn: (A, B, C, D, E, F, G, H) -> I
     ) -> Result<(A, B, C, D, E, F, G, H, I), Failure> where Success == (A, B, C, D, E, F, G, H) {
@@ -168,6 +189,7 @@ public extension Result {
 // MARK: - bind / let (9 → 10)
 
 public extension Result {
+    @inlinable
     func bind<A, B, C, D, E, F, G, H, I, J>(
         _ fn: (A, B, C, D, E, F, G, H, I) -> Result<J, Failure>
     ) -> Result<(A, B, C, D, E, F, G, H, I, J), Failure>
@@ -177,6 +199,7 @@ public extension Result {
         }
     }
 
+    @inlinable
     func `let`<A, B, C, D, E, F, G, H, I, J>(
         _ fn: (A, B, C, D, E, F, G, H, I) -> J
     ) -> Result<(A, B, C, D, E, F, G, H, I, J), Failure>

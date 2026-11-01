@@ -2,6 +2,7 @@
 
 public extension AsyncStream {
     /// Creates a stream that emits a single success value and finishes.
+    @inlinable
     static func success<Success: Sendable, Failure: Sendable>(
         _ value: Success
     ) -> AsyncStream<Result<Success, Failure>> where Element == Result<Success, Failure> {
@@ -11,6 +12,7 @@ public extension AsyncStream {
     }
 
     /// Creates a stream that emits a single failure error and finishes.
+    @inlinable
     static func failure<Success: Sendable, Failure: Sendable>(
         _ error: Failure
     ) -> AsyncStream<Result<Success, Failure>> where Element == Result<Success, Failure> {
@@ -25,6 +27,7 @@ public extension AsyncStream {
 public extension AsyncStream.Continuation {
     /// Yields a success value wrapped in Result
     @discardableResult
+    @inlinable
     func success<Success: Sendable, Failure: Sendable>(
         _ value: Success
     ) -> YieldResult where Element == Result<Success, Failure> {
@@ -33,6 +36,7 @@ public extension AsyncStream.Continuation {
 
     /// Yields a failure error wrapped in Result
     @discardableResult
+    @inlinable
     func failure<Success: Sendable, Failure: Sendable>(
         _ error: Failure
     ) -> YieldResult where Element == Result<Success, Failure> {
@@ -40,6 +44,7 @@ public extension AsyncStream.Continuation {
     }
 
     /// Yields a success value and finishes the stream
+    @inlinable
     func finishWithSuccess<Success: Sendable, Failure: Sendable>(
         _ value: Success
     ) where Element == Result<Success, Failure> {
@@ -48,6 +53,7 @@ public extension AsyncStream.Continuation {
     }
 
     /// Yields a failure error and finishes the stream
+    @inlinable
     func finishWithFailure<Success: Sendable, Failure: Sendable>(
         _ error: Failure
     ) where Element == Result<Success, Failure> {

@@ -944,4 +944,80 @@ struct AsyncSequenceOrderedTests {
         #expect(first == 1)
         #expect(observedCancelled == 2)
     }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test(
+        "mapAsyncKeepOrder delivers every element in order under contention",
+        .timeLimit(.minutes(1)),
+        arguments: [2, 3, 8, Int.max]
+    )
+    func deliversEveryElementUnderContention(concurrency: Int) async {
+        let count = 500
+        for _ in 0..<20 {
+            let source = AsyncStream<Int> { continuation in
+                for i in 0..<count {
+                    continuation.yield(i)
+                }
+                continuation.finish()
+            }
+
+            var results: [Int] = []
+            for await value in source.mapAsyncKeepOrder(
+                concurrency: concurrency,
+                { element in
+                    // finish out of order: elements yield a varying number of times
+                    for _ in 0..<(element % 4) {
+                        await Task.yield()
+                    }
+                    return element
+                })
+            {
+                results.append(value)
+                // let workers run ahead of the consumer now and then
+                if value.isMultiple(of: 7) {
+                    await Task.yield()
+                }
+            }
+
+            #expect(results == Array(0..<count))
+        }
+    }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test(
+        "mapAsyncKeepOrder ends right after the consumer is cancelled at any point",
+        .timeLimit(.minutes(1)),
+        arguments: [2, 8, Int.max]
+    )
+    func endsWhenCancelledAtAnyPoint(concurrency: Int) async {
+        for stopAfter in 1...50 {
+            let source = AsyncStream<Int> { continuation in
+                for i in 0..<100 {
+                    continuation.yield(i)
+                }
+                continuation.finish()
+            }
+
+            let consumer = Task {
+                var taken: [Int] = []
+                for await value in source.mapAsyncKeepOrder(
+                    concurrency: concurrency,
+                    { element in
+                        for _ in 0..<(element % 3) {
+                            await Task.yield()
+                        }
+                        return element
+                    })
+                {
+                    taken.append(value)
+                    if taken.count == stopAfter {
+                        withUnsafeCurrentTask { $0?.cancel() }
+                    }
+                }
+                return taken
+            }
+
+            #expect(await consumer.value == Array(0..<stopAfter))
+        }
+    }
 }

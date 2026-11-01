@@ -1,5 +1,6 @@
 public extension Result {
     /// Asynchronously transforms the success value.
+    @inlinable
     func mapAsync<T>(
         _ transform: (Success) async -> T
     ) async -> Result<T, Failure> {
@@ -13,6 +14,7 @@ public extension Result {
     }
 
     /// Asynchronously transforms the success value, catching thrown errors as failures.
+    @inlinable
     func mapAsync<T>(
         _ transform: (Success) async throws -> T
     ) async -> Result<T, Error> where Failure == Error {
@@ -31,6 +33,7 @@ public extension Result {
 
     /// Asynchronously transforms the failure error. Async counterpart of the
     /// standard library's `mapError`.
+    @inlinable
     func mapErrorAsync<E: Error>(
         _ transform: (Failure) async -> E
     ) async -> Result<Success, E> {
@@ -44,6 +47,7 @@ public extension Result {
     }
 
     /// Asynchronously transforms the success value into a new Result.
+    @inlinable
     func flatMapAsync<T>(
         _ transform: (Success) async -> Result<T, Failure>
     ) async -> Result<T, Failure> {
@@ -56,11 +60,13 @@ public extension Result {
     }
 
     /// Maps the success value to the specified constant value.
+    @inlinable
     func `as`<T>(_ value: T) -> Result<T, Failure> {
         map { _ in value }
     }
 
     /// Maps the success value to Void.
+    @inlinable
     func asUnit() -> Result<Void, Failure> {
         map { _ in () }
     }
@@ -69,6 +75,7 @@ public extension Result {
 // MARK: - Additional Convenience Methods
 public extension Result where Failure == Error {
     /// Creates a Result from an async throwing operation.
+    @inlinable
     static func fromAsync(
         _ operation: () async throws -> Success
     ) async -> Result<Success, Error> {

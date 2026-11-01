@@ -2,11 +2,13 @@
 
 public extension ResultDo {
     /// Binds the first async Result value in the chain.
+    @inlinable
     func bindAsync<A>(_ fn: () async -> Result<A, Failure>) async -> Result<A, Failure> {
         await fn()
     }
 
     /// Adds an async pure value as the first element in the chain.
+    @inlinable
     func letAsync<A>(_ fn: () async -> A) async -> Result<A, Failure> {
         .success(await fn())
     }
@@ -16,6 +18,7 @@ public extension ResultDo {
 
 public extension Result {
     @_disfavoredOverload
+    @inlinable
     func bindAsync<B>(
         _ fn: (Success) async -> Result<B, Failure>
     ) async -> Result<(Success, B), Failure> {
@@ -28,6 +31,7 @@ public extension Result {
     }
 
     @_disfavoredOverload
+    @inlinable
     func letAsync<B>(
         _ fn: (Success) async -> B
     ) async -> Result<(Success, B), Failure> {
@@ -43,6 +47,7 @@ public extension Result {
 // MARK: - bindAsync / letAsync (2 → 3)
 
 public extension Result {
+    @inlinable
     func bindAsync<A, B, C>(
         _ fn: (A, B) async -> Result<C, Failure>
     ) async -> Result<(A, B, C), Failure> where Success == (A, B) {
@@ -54,6 +59,7 @@ public extension Result {
         }
     }
 
+    @inlinable
     func letAsync<A, B, C>(
         _ fn: (A, B) async -> C
     ) async -> Result<(A, B, C), Failure> where Success == (A, B) {
@@ -69,6 +75,7 @@ public extension Result {
 // MARK: - bindAsync / letAsync (3 → 4)
 
 public extension Result {
+    @inlinable
     func bindAsync<A, B, C, D>(
         _ fn: (A, B, C) async -> Result<D, Failure>
     ) async -> Result<(A, B, C, D), Failure> where Success == (A, B, C) {
@@ -80,6 +87,7 @@ public extension Result {
         }
     }
 
+    @inlinable
     func letAsync<A, B, C, D>(
         _ fn: (A, B, C) async -> D
     ) async -> Result<(A, B, C, D), Failure> where Success == (A, B, C) {
@@ -95,6 +103,7 @@ public extension Result {
 // MARK: - bindAsync / letAsync (4 → 5)
 
 public extension Result {
+    @inlinable
     func bindAsync<A, B, C, D, E>(
         _ fn: (A, B, C, D) async -> Result<E, Failure>
     ) async -> Result<(A, B, C, D, E), Failure> where Success == (A, B, C, D) {
@@ -106,6 +115,7 @@ public extension Result {
         }
     }
 
+    @inlinable
     func letAsync<A, B, C, D, E>(
         _ fn: (A, B, C, D) async -> E
     ) async -> Result<(A, B, C, D, E), Failure> where Success == (A, B, C, D) {
@@ -121,6 +131,7 @@ public extension Result {
 // MARK: - bindAsync / letAsync (5 → 6)
 
 public extension Result {
+    @inlinable
     func bindAsync<A, B, C, D, E, F>(
         _ fn: (A, B, C, D, E) async -> Result<F, Failure>
     ) async -> Result<(A, B, C, D, E, F), Failure> where Success == (A, B, C, D, E) {
@@ -132,6 +143,7 @@ public extension Result {
         }
     }
 
+    @inlinable
     func letAsync<A, B, C, D, E, F>(
         _ fn: (A, B, C, D, E) async -> F
     ) async -> Result<(A, B, C, D, E, F), Failure> where Success == (A, B, C, D, E) {
@@ -147,6 +159,7 @@ public extension Result {
 // MARK: - bindAsync / letAsync (6 → 7)
 
 public extension Result {
+    @inlinable
     func bindAsync<A, B, C, D, E, F, G>(
         _ fn: (A, B, C, D, E, F) async -> Result<G, Failure>
     ) async -> Result<(A, B, C, D, E, F, G), Failure> where Success == (A, B, C, D, E, F) {
@@ -158,6 +171,7 @@ public extension Result {
         }
     }
 
+    @inlinable
     func letAsync<A, B, C, D, E, F, G>(
         _ fn: (A, B, C, D, E, F) async -> G
     ) async -> Result<(A, B, C, D, E, F, G), Failure> where Success == (A, B, C, D, E, F) {
@@ -173,6 +187,7 @@ public extension Result {
 // MARK: - bindAsync / letAsync (7 → 8)
 
 public extension Result {
+    @inlinable
     func bindAsync<A, B, C, D, E, F, G, H>(
         _ fn: (A, B, C, D, E, F, G) async -> Result<H, Failure>
     ) async -> Result<(A, B, C, D, E, F, G, H), Failure> where Success == (A, B, C, D, E, F, G) {
@@ -184,6 +199,7 @@ public extension Result {
         }
     }
 
+    @inlinable
     func letAsync<A, B, C, D, E, F, G, H>(
         _ fn: (A, B, C, D, E, F, G) async -> H
     ) async -> Result<(A, B, C, D, E, F, G, H), Failure> where Success == (A, B, C, D, E, F, G) {
@@ -199,6 +215,7 @@ public extension Result {
 // MARK: - bindAsync / letAsync (8 → 9)
 
 public extension Result {
+    @inlinable
     func bindAsync<A, B, C, D, E, F, G, H, I>(
         _ fn: (A, B, C, D, E, F, G, H) async -> Result<I, Failure>
     ) async -> Result<(A, B, C, D, E, F, G, H, I), Failure>
@@ -211,6 +228,7 @@ public extension Result {
         }
     }
 
+    @inlinable
     func letAsync<A, B, C, D, E, F, G, H, I>(
         _ fn: (A, B, C, D, E, F, G, H) async -> I
     ) async -> Result<(A, B, C, D, E, F, G, H, I), Failure>
@@ -227,6 +245,7 @@ public extension Result {
 // MARK: - bindAsync / letAsync (9 → 10)
 
 public extension Result {
+    @inlinable
     func bindAsync<A, B, C, D, E, F, G, H, I, J>(
         _ fn: (A, B, C, D, E, F, G, H, I) async -> Result<J, Failure>
     ) async -> Result<(A, B, C, D, E, F, G, H, I, J), Failure>
@@ -240,6 +259,7 @@ public extension Result {
         }
     }
 
+    @inlinable
     func letAsync<A, B, C, D, E, F, G, H, I, J>(
         _ fn: (A, B, C, D, E, F, G, H, I) async -> J
     ) async -> Result<(A, B, C, D, E, F, G, H, I, J), Failure>

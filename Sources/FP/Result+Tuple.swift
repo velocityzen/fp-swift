@@ -5,6 +5,7 @@
 /// Combines multiple Results into a single Result containing a tuple of all success values.
 ///
 /// Returns the first failure if any Result fails. Supports 2 to 10 arguments.
+@inlinable
 public func flatten<A, B, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>
@@ -18,6 +19,7 @@ public func flatten<A, B, E: Error>(
     }
 }
 
+@inlinable
 public func flatten<A, B, C, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
@@ -26,6 +28,7 @@ public func flatten<A, B, C, E: Error>(
     flatten(a, b).flatMap { (a, b) in c.map { c in (a, b, c) } }
 }
 
+@inlinable
 public func flatten<A, B, C, D, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
@@ -35,6 +38,7 @@ public func flatten<A, B, C, D, E: Error>(
     flatten(a, b, c).flatMap { (a, b, c) in d.map { d in (a, b, c, d) } }
 }
 
+@inlinable
 public func flatten<A, B, C, D, F, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
@@ -45,6 +49,7 @@ public func flatten<A, B, C, D, F, E: Error>(
     flatten(a, b, c, d).flatMap { (a, b, c, d) in f.map { f in (a, b, c, d, f) } }
 }
 
+@inlinable
 public func flatten<A, B, C, D, F, G, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
@@ -56,6 +61,7 @@ public func flatten<A, B, C, D, F, G, E: Error>(
     flatten(a, b, c, d, f).flatMap { (a, b, c, d, f) in g.map { g in (a, b, c, d, f, g) } }
 }
 
+@inlinable
 public func flatten<A, B, C, D, F, G, H, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
@@ -68,6 +74,7 @@ public func flatten<A, B, C, D, F, G, H, E: Error>(
     flatten(a, b, c, d, f, g).flatMap { (a, b, c, d, f, g) in h.map { h in (a, b, c, d, f, g, h) } }
 }
 
+@inlinable
 public func flatten<A, B, C, D, F, G, H, I, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
@@ -83,6 +90,7 @@ public func flatten<A, B, C, D, F, G, H, I, E: Error>(
     }
 }
 
+@inlinable
 public func flatten<A, B, C, D, F, G, H, I, J, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
@@ -99,6 +107,7 @@ public func flatten<A, B, C, D, F, G, H, I, J, E: Error>(
     }
 }
 
+@inlinable
 public func flatten<A, B, C, D, F, G, H, I, J, K, E: Error>(
     _ a: Result<A, E>,
     _ b: Result<B, E>,
@@ -125,55 +134,70 @@ public func flatten<A, B, C, D, F, G, H, I, J, K, E: Error>(
 /// Returns the first failure to arrive and cancels the operations still
 /// running; cancellation is cooperative, so this waits until they stop.
 /// Supports 2 to 10 arguments.
+@inlinable
 public func withAll<A: Sendable, B: Sendable, E: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>
 ) async -> Result<(A, B), E> {
-    await collectAll([
-        { await a().map { $0 } },
-        { await b().map { $0 } },
-    ]).map { values in
-        // `collectAll` keeps argument order, so each cast matches its type.
-        (values[0] as! A, values[1] as! B)
+    let gate = Gate<E?>(parties: 2)
+    async let ra = gate.success(of: await a())
+    async let rb = gate.success(of: await b())
+    if let failure = await gate.wait() {
+        // Leaving the scope cancels the operations still running
+        // and waits for them to stop.
+        return .failure(failure)
     }
+    // The gate opened without a failure, so every operation succeeded.
+    return .success((await ra!, await rb!))
 }
 
 // MARK: Arity 3
 
+@inlinable
 public func withAll<A: Sendable, B: Sendable, C: Sendable, E: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
     _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<C, E>
 ) async -> Result<(A, B, C), E> {
-    await collectAll([
-        { await a().map { $0 } },
-        { await b().map { $0 } },
-        { await c().map { $0 } },
-    ]).map { values in
-        (values[0] as! A, values[1] as! B, values[2] as! C)
+    let gate = Gate<E?>(parties: 3)
+    async let ra = gate.success(of: await a())
+    async let rb = gate.success(of: await b())
+    async let rc = gate.success(of: await c())
+    if let failure = await gate.wait() {
+        // Leaving the scope cancels the operations still running
+        // and waits for them to stop.
+        return .failure(failure)
     }
+    // The gate opened without a failure, so every operation succeeded.
+    return .success((await ra!, await rb!, await rc!))
 }
 
 // MARK: Arity 4
 
+@inlinable
 public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, E: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
     _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<C, E>,
     _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<D, E>
 ) async -> Result<(A, B, C, D), E> {
-    await collectAll([
-        { await a().map { $0 } },
-        { await b().map { $0 } },
-        { await c().map { $0 } },
-        { await d().map { $0 } },
-    ]).map { values in
-        (values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D)
+    let gate = Gate<E?>(parties: 4)
+    async let ra = gate.success(of: await a())
+    async let rb = gate.success(of: await b())
+    async let rc = gate.success(of: await c())
+    async let rd = gate.success(of: await d())
+    if let failure = await gate.wait() {
+        // Leaving the scope cancels the operations still running
+        // and waits for them to stop.
+        return .failure(failure)
     }
+    // The gate opened without a failure, so every operation succeeded.
+    return .success((await ra!, await rb!, await rc!, await rd!))
 }
 
 // MARK: Arity 5
 
+@inlinable
 public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, E: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<B, E>,
@@ -181,19 +205,24 @@ public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Senda
     _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<D, E>,
     _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<F, E>
 ) async -> Result<(A, B, C, D, F), E> {
-    await collectAll([
-        { await a().map { $0 } },
-        { await b().map { $0 } },
-        { await c().map { $0 } },
-        { await d().map { $0 } },
-        { await f().map { $0 } },
-    ]).map { values in
-        (values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D, values[4] as! F)
+    let gate = Gate<E?>(parties: 5)
+    async let ra = gate.success(of: await a())
+    async let rb = gate.success(of: await b())
+    async let rc = gate.success(of: await c())
+    async let rd = gate.success(of: await d())
+    async let rf = gate.success(of: await f())
+    if let failure = await gate.wait() {
+        // Leaving the scope cancels the operations still running
+        // and waits for them to stop.
+        return .failure(failure)
     }
+    // The gate opened without a failure, so every operation succeeded.
+    return .success((await ra!, await rb!, await rc!, await rd!, await rf!))
 }
 
 // MARK: Arity 6
 
+@inlinable
 public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, E: Error
 >(
@@ -204,23 +233,25 @@ public func withAll<
     _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<F, E>,
     _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<G, E>
 ) async -> Result<(A, B, C, D, F, G), E> {
-    await collectAll([
-        { await a().map { $0 } },
-        { await b().map { $0 } },
-        { await c().map { $0 } },
-        { await d().map { $0 } },
-        { await f().map { $0 } },
-        { await g().map { $0 } },
-    ]).map { values in
-        (
-            values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D, values[4] as! F,
-            values[5] as! G
-        )
+    let gate = Gate<E?>(parties: 6)
+    async let ra = gate.success(of: await a())
+    async let rb = gate.success(of: await b())
+    async let rc = gate.success(of: await c())
+    async let rd = gate.success(of: await d())
+    async let rf = gate.success(of: await f())
+    async let rg = gate.success(of: await g())
+    if let failure = await gate.wait() {
+        // Leaving the scope cancels the operations still running
+        // and waits for them to stop.
+        return .failure(failure)
     }
+    // The gate opened without a failure, so every operation succeeded.
+    return .success((await ra!, await rb!, await rc!, await rd!, await rf!, await rg!))
 }
 
 // MARK: Arity 7
 
+@inlinable
 public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
     E: Error
@@ -233,24 +264,26 @@ public func withAll<
     _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<G, E>,
     _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<H, E>
 ) async -> Result<(A, B, C, D, F, G, H), E> {
-    await collectAll([
-        { await a().map { $0 } },
-        { await b().map { $0 } },
-        { await c().map { $0 } },
-        { await d().map { $0 } },
-        { await f().map { $0 } },
-        { await g().map { $0 } },
-        { await h().map { $0 } },
-    ]).map { values in
-        (
-            values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D, values[4] as! F,
-            values[5] as! G, values[6] as! H
-        )
+    let gate = Gate<E?>(parties: 7)
+    async let ra = gate.success(of: await a())
+    async let rb = gate.success(of: await b())
+    async let rc = gate.success(of: await c())
+    async let rd = gate.success(of: await d())
+    async let rf = gate.success(of: await f())
+    async let rg = gate.success(of: await g())
+    async let rh = gate.success(of: await h())
+    if let failure = await gate.wait() {
+        // Leaving the scope cancels the operations still running
+        // and waits for them to stop.
+        return .failure(failure)
     }
+    // The gate opened without a failure, so every operation succeeded.
+    return .success((await ra!, await rb!, await rc!, await rd!, await rf!, await rg!, await rh!))
 }
 
 // MARK: Arity 8
 
+@inlinable
 public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
     I: Sendable, E: Error
@@ -264,25 +297,31 @@ public func withAll<
     _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<H, E>,
     _ i: @concurrent @Sendable @autoclosure @escaping () async -> Result<I, E>
 ) async -> Result<(A, B, C, D, F, G, H, I), E> {
-    await collectAll([
-        { await a().map { $0 } },
-        { await b().map { $0 } },
-        { await c().map { $0 } },
-        { await d().map { $0 } },
-        { await f().map { $0 } },
-        { await g().map { $0 } },
-        { await h().map { $0 } },
-        { await i().map { $0 } },
-    ]).map { values in
-        (
-            values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D, values[4] as! F,
-            values[5] as! G, values[6] as! H, values[7] as! I
-        )
+    let gate = Gate<E?>(parties: 8)
+    async let ra = gate.success(of: await a())
+    async let rb = gate.success(of: await b())
+    async let rc = gate.success(of: await c())
+    async let rd = gate.success(of: await d())
+    async let rf = gate.success(of: await f())
+    async let rg = gate.success(of: await g())
+    async let rh = gate.success(of: await h())
+    async let ri = gate.success(of: await i())
+    if let failure = await gate.wait() {
+        // Leaving the scope cancels the operations still running
+        // and waits for them to stop.
+        return .failure(failure)
     }
+    // The gate opened without a failure, so every operation succeeded.
+    return .success(
+        (
+            await ra!, await rb!, await rc!, await rd!, await rf!, await rg!, await rh!, await ri!
+        )
+    )
 }
 
 // MARK: Arity 9
 
+@inlinable
 public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
     I: Sendable, J: Sendable, E: Error
@@ -297,26 +336,33 @@ public func withAll<
     _ i: @concurrent @Sendable @autoclosure @escaping () async -> Result<I, E>,
     _ j: @concurrent @Sendable @autoclosure @escaping () async -> Result<J, E>
 ) async -> Result<(A, B, C, D, F, G, H, I, J), E> {
-    await collectAll([
-        { await a().map { $0 } },
-        { await b().map { $0 } },
-        { await c().map { $0 } },
-        { await d().map { $0 } },
-        { await f().map { $0 } },
-        { await g().map { $0 } },
-        { await h().map { $0 } },
-        { await i().map { $0 } },
-        { await j().map { $0 } },
-    ]).map { values in
-        (
-            values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D, values[4] as! F,
-            values[5] as! G, values[6] as! H, values[7] as! I, values[8] as! J
-        )
+    let gate = Gate<E?>(parties: 9)
+    async let ra = gate.success(of: await a())
+    async let rb = gate.success(of: await b())
+    async let rc = gate.success(of: await c())
+    async let rd = gate.success(of: await d())
+    async let rf = gate.success(of: await f())
+    async let rg = gate.success(of: await g())
+    async let rh = gate.success(of: await h())
+    async let ri = gate.success(of: await i())
+    async let rj = gate.success(of: await j())
+    if let failure = await gate.wait() {
+        // Leaving the scope cancels the operations still running
+        // and waits for them to stop.
+        return .failure(failure)
     }
+    // The gate opened without a failure, so every operation succeeded.
+    return .success(
+        (
+            await ra!, await rb!, await rc!, await rd!, await rf!, await rg!, await rh!, await ri!,
+            await rj!
+        )
+    )
 }
 
 // MARK: Arity 10
 
+@inlinable
 public func withAll<
     A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Sendable, G: Sendable, H: Sendable,
     I: Sendable, J: Sendable, K: Sendable, E: Error
@@ -332,46 +378,27 @@ public func withAll<
     _ j: @concurrent @Sendable @autoclosure @escaping () async -> Result<J, E>,
     _ k: @concurrent @Sendable @autoclosure @escaping () async -> Result<K, E>
 ) async -> Result<(A, B, C, D, F, G, H, I, J, K), E> {
-    await collectAll([
-        { await a().map { $0 } },
-        { await b().map { $0 } },
-        { await c().map { $0 } },
-        { await d().map { $0 } },
-        { await f().map { $0 } },
-        { await g().map { $0 } },
-        { await h().map { $0 } },
-        { await i().map { $0 } },
-        { await j().map { $0 } },
-        { await k().map { $0 } },
-    ]).map { values in
+    let gate = Gate<E?>(parties: 10)
+    async let ra = gate.success(of: await a())
+    async let rb = gate.success(of: await b())
+    async let rc = gate.success(of: await c())
+    async let rd = gate.success(of: await d())
+    async let rf = gate.success(of: await f())
+    async let rg = gate.success(of: await g())
+    async let rh = gate.success(of: await h())
+    async let ri = gate.success(of: await i())
+    async let rj = gate.success(of: await j())
+    async let rk = gate.success(of: await k())
+    if let failure = await gate.wait() {
+        // Leaving the scope cancels the operations still running
+        // and waits for them to stop.
+        return .failure(failure)
+    }
+    // The gate opened without a failure, so every operation succeeded.
+    return .success(
         (
-            values[0] as! A, values[1] as! B, values[2] as! C, values[3] as! D, values[4] as! F,
-            values[5] as! G, values[6] as! H, values[7] as! I, values[8] as! J, values[9] as! K
+            await ra!, await rb!, await rc!, await rd!, await rf!, await rg!, await rh!, await ri!,
+            await rj!, await rk!
         )
-    }
-}
-
-/// Runs `operations` in parallel and collects their successes in argument
-/// order. The first failure to arrive cancels the operations still running
-/// and is returned once they have stopped.
-private func collectAll<E: Error>(
-    _ operations: [@concurrent @Sendable () async -> Result<any Sendable, E>]
-) async -> Result<[any Sendable], E> {
-    await withTaskGroup(of: (index: Int, result: Result<any Sendable, E>).self) { group in
-        for (index, operation) in operations.enumerated() {
-            group.addTask { (index, await operation()) }
-        }
-
-        var values = [(any Sendable)?](repeating: nil, count: operations.count)
-        for await completed in group {
-            switch completed.result {
-                case .success(let value):
-                    values[completed.index] = value
-                case .failure(let error):
-                    group.cancelAll()
-                    return .failure(error)
-            }
-        }
-        return .success(values.compactMap { $0 })
-    }
+    )
 }

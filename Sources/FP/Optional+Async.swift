@@ -1,6 +1,7 @@
 // MARK: - Optional Async Extensions
 public extension Optional {
     /// Asynchronously transforms the wrapped value, returning nil if the optional is empty.
+    @inlinable
     func mapAsync<T>(
         _ transform: (Wrapped) async -> T
     ) async -> T? {
@@ -13,6 +14,7 @@ public extension Optional {
     }
 
     /// Asynchronously transforms the wrapped value to another optional value and flattens the result.
+    @inlinable
     func flatMapAsync<T>(
         _ transform: (Wrapped) async -> T?
     ) async -> T? {
@@ -33,6 +35,7 @@ public extension Optional {
     /// ```swift
     /// let name = cachedName.orElse(fetchName())
     /// ```
+    @inlinable
     func orElse(_ alternative: @autoclosure () -> Wrapped?) -> Wrapped? {
         switch self {
             case .some:
@@ -43,6 +46,7 @@ public extension Optional {
     }
 
     /// Asynchronous variant of ``orElse(_:)``.
+    @inlinable
     func orElseAsync(
         _ alternative: @autoclosure @escaping () async -> Wrapped?
     ) async -> Wrapped? {
@@ -61,6 +65,7 @@ public extension Optional {
     /// ```swift
     /// let count = parsed.getOrElse(0)
     /// ```
+    @inlinable
     func getOrElse(_ defaultValue: @autoclosure () -> Wrapped) -> Wrapped {
         switch self {
             case .some(let value):
@@ -71,6 +76,7 @@ public extension Optional {
     }
 
     /// Asynchronous variant of ``getOrElse(_:)``.
+    @inlinable
     func getOrElseAsync(
         _ defaultValue: @autoclosure @escaping () async -> Wrapped
     ) async -> Wrapped {
@@ -89,12 +95,14 @@ public extension Optional {
     /// ```swift
     /// loadUser(id: 1).finally { spinner.stop() }
     /// ```
+    @inlinable
     func finally(_ action: () -> Void) -> Wrapped? {
         action()
         return self
     }
 
     /// Asynchronous variant of ``finally(_:)``.
+    @inlinable
     func finallyAsync(_ action: () async -> Void) async -> Wrapped? {
         await action()
         return self

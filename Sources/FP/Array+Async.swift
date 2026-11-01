@@ -4,6 +4,7 @@ public extension Array {
     /// Transforms run sequentially — each element awaits the previous one.
     /// For parallel execution with ordered results, see
     /// `traverseAsync(concurrency:_:)`.
+    @inlinable
     func mapAsync<T>(_ transform: (Element) async -> T) async -> [T] {
         var results: [T] = []
         results.reserveCapacity(count)
@@ -16,6 +17,7 @@ public extension Array {
     /// Asynchronously transforms each element to a sequence and flattens the result.
     ///
     /// Transforms run sequentially — each element awaits the previous one.
+    @inlinable
     func flatMapAsync<S: Sequence>(
         _ transform: (Element) async -> S
     ) async -> [S.Element] {
@@ -29,6 +31,7 @@ public extension Array {
     /// Asynchronously transforms each element to a Result-wrapped sequence and flattens the result.
     ///
     /// Transforms run sequentially; elements after a failure never run.
+    @inlinable
     func flatMapAsync<S: Sequence, Failure: Error>(
         _ transform: (Element) async -> Result<S, Failure>
     ) async -> Result<[S.Element], Failure> {
@@ -47,6 +50,7 @@ public extension Array {
     /// Asynchronously maps each element to an optional value and filters out nil results.
     ///
     /// Transforms run sequentially — each element awaits the previous one.
+    @inlinable
     func compactMapAsync<T>(_ transform: (Element) async -> T?) async -> [T] {
         var results: [T] = []
         for element in self {
@@ -60,6 +64,7 @@ public extension Array {
     /// Asynchronously maps each element to a Result containing an optional value and filters out nil results.
     ///
     /// Transforms run sequentially; elements after a failure never run.
+    @inlinable
     func compactMapAsync<T, Failure: Error>(
         _ transform: (Element) async -> Result<T?, Failure>
     ) async -> Result<[T], Failure> {

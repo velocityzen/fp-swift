@@ -326,4 +326,71 @@ struct AsyncSequenceResultTests {
         #expect(results[2] == .success(2))
         #expect(results[3] == .failure(.other))
     }
+
+    // MARK: - Result sequences
+
+    struct StreamError: Error {}
+
+    @Test("Result sequences throw the base sequence's error after its elements")
+    func sequencesPassBaseErrorThrough() async {
+        func stream() -> AsyncThrowingStream<Result<Int, TestError>, Error> {
+            AsyncThrowingStream { continuation in
+                continuation.yield(.success(1))
+                continuation.yield(.failure(.failed))
+                continuation.finish(throwing: StreamError())
+            }
+        }
+
+        let mapped = await collect(stream().map { $0 * 2 })
+        let mappedAsync = await collect(stream().mapAsync { $0 * 2 })
+        let successes = await collect(stream().successes())
+
+        #expect(mapped.elements == [.success(2), .failure(.failed)])
+        #expect(mapped.error is StreamError)
+        #expect(mappedAsync.elements == [.success(2), .failure(.failed)])
+        #expect(mappedAsync.error is StreamError)
+        #expect(successes.elements == [1])
+        #expect(successes.error is StreamError)
+    }
+
+    @Test("Result sequences are Sendable when their base is")
+    func sequencesAreSendable() {
+        let stream = AsyncStream<Result<Int, TestError>> { $0.finish() }
+
+        requireSendable(stream.map { $0 * 2 })
+        requireSendable(stream.mapAsync { $0 * 2 })
+        requireSendable(stream.successes())
+    }
+
+    @Test("Result sequence iterators work without an isolation argument")
+    func iteratorsNextWithoutIsolation() async {
+        let stream = AsyncStream<Result<Int, TestError>> { continuation in
+            continuation.yield(.failure(.failed))
+            continuation.yield(.success(1))
+            continuation.finish()
+        }
+
+        var iterator = stream.mapAsync { $0 * 2 }.successes().makeAsyncIterator()
+
+        #expect(await iterator.next() == 2)
+        #expect(await iterator.next() == nil)
+    }
 }
+
+/// Every element of `sequence`, and the error it ended with, if any.
+private func collect<S: AsyncSequence>(
+    _ sequence: S
+) async -> (elements: [S.Element], error: (any Error)?) {
+    var elements: [S.Element] = []
+    do {
+        for try await element in sequence {
+            elements.append(element)
+        }
+        return (elements, nil)
+    } catch {
+        return (elements, error)
+    }
+}
+
+/// Compiles only when `value` is `Sendable`.
+private func requireSendable(_ value: some Sendable) {}

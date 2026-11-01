@@ -15,6 +15,7 @@
  */
 public extension Result {
     /// Returns `true` if the result is a success, `false` if it's a failure.
+    @inlinable
     var isSuccess: Bool {
         switch self {
             case .success:
@@ -25,6 +26,7 @@ public extension Result {
     }
 
     /// Returns `true` if the result is a failure, `false` if it's a success.
+    @inlinable
     var isFailure: Bool {
         !isSuccess
     }

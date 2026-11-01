@@ -7,6 +7,7 @@ public extension Array {
     /// let xs: [Int?] = [1, nil, 2, nil, 3]
     /// xs.compact()  // [1, 2, 3]
     /// ```
+    @inlinable
     func compact<T>() -> [T] where Element == T? {
         var values: [T] = []
         values.reserveCapacity(count)
@@ -31,6 +32,7 @@ public extension Array {
     /// let ys: [Int?] = [1, nil, 3]
     /// ys.sequence()  // nil
     /// ```
+    @inlinable
     func sequence<T>() -> [T]? where Element == T? {
         var values: [T] = []
         values.reserveCapacity(count)

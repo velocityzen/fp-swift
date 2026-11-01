@@ -1,3 +1,4 @@
+import Synchronization
 import Testing
 
 @testable import FP
@@ -11,6 +12,16 @@ private final class Log {
     func record(_ entry: String) {
         MainActor.assertIsolated()
         entries.append(entry)
+    }
+}
+
+/// A `Log` that `@Sendable` closures can capture.
+private final class SendableLog: Sendable {
+    let entries = Mutex<[String]>([])
+
+    func record(_ entry: String) {
+        MainActor.assertIsolated()
+        entries.withLock { $0.append(entry) }
     }
 }
 
@@ -253,5 +264,62 @@ struct AsyncIsolationTests {
 
         #expect(result == 2)
         #expect(log.entries == ["pipe"])
+    }
+
+    // MARK: - AsyncSequence
+
+    @Test("AsyncSequence Result operators run on the iterating actor")
+    func asyncSequenceResult() async {
+        let log = SendableLog()
+        let stream = AsyncStream<Result<Int, TestError>> { continuation in
+            continuation.yield(.success(1))
+            continuation.yield(.failure(.boom))
+            continuation.finish()
+        }
+
+        let sequence =
+            stream
+            .map { (value: Int) in
+                log.record("map")
+                return value
+            }
+            .mapError { error in
+                log.record("mapError")
+                return error
+            }
+            .flatMap { value in
+                log.record("flatMap")
+                return .success(value)
+            }
+            .tap { _ in log.record("tap") }
+            .tapError { _ in log.record("tapError") }
+            .mapAsync { value in
+                log.record("mapAsync")
+                return value
+            }
+            .mapErrorAsync { error in
+                log.record("mapErrorAsync")
+                return error
+            }
+            .flatMapAsync { value in
+                log.record("flatMapAsync")
+                return .success(value)
+            }
+            .tapAsync { _ in log.record("tapAsync") }
+            .tapErrorAsync { _ in log.record("tapErrorAsync") }
+            .successes()
+
+        var values: [Int] = []
+        for await value in sequence {
+            values.append(value)
+        }
+
+        #expect(values == [1])
+        #expect(
+            log.entries.withLock { $0 } == [
+                "map", "flatMap", "tap", "mapAsync", "flatMapAsync", "tapAsync",
+                "mapError", "tapError", "mapErrorAsync", "tapErrorAsync",
+            ]
+        )
     }
 }

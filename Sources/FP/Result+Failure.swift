@@ -10,6 +10,7 @@ public extension Result {
     /// ```swift
     /// fetchUser(id: 1).alt { fetchUserFromCache(id: 1) }
     /// ```
+    @inlinable
     func alt(_ alternative: () -> Result<Success, Failure>) -> Result<Success, Failure> {
         switch self {
             case .success:
@@ -20,6 +21,7 @@ public extension Result {
     }
 
     /// Asynchronous variant of ``alt(_:)``.
+    @inlinable
     func altAsync(
         _ alternative: () async -> Result<Success, Failure>
     ) async -> Result<Success, Failure> {
@@ -42,6 +44,7 @@ public extension Result {
     ///     error is Timeout ? fetchUser(id: 1) : .failure(AppError.wrap(error))
     /// }
     /// ```
+    @inlinable
     func orElse<NewFailure>(
         _ onFailure: (Failure) -> Result<Success, NewFailure>
     ) -> Result<Success, NewFailure> {
@@ -54,6 +57,7 @@ public extension Result {
     }
 
     /// Asynchronous variant of ``orElse(_:)``.
+    @inlinable
     func orElseAsync<NewFailure>(
         _ onFailure: (Failure) async -> Result<Success, NewFailure>
     ) async -> Result<Success, NewFailure> {
@@ -73,6 +77,7 @@ public extension Result {
     /// ```swift
     /// let count = parse(input).getOrElse { _ in 0 }
     /// ```
+    @inlinable
     func getOrElse(_ onFailure: (Failure) -> Success) -> Success {
         switch self {
             case .success(let value):
@@ -88,6 +93,7 @@ public extension Result {
     /// ```swift
     /// let count = parse(input).getOrElse(0)
     /// ```
+    @inlinable
     func getOrElse(_ defaultValue: @autoclosure () -> Success) -> Success {
         switch self {
             case .success(let value):
@@ -98,6 +104,7 @@ public extension Result {
     }
 
     /// Asynchronous variant of ``getOrElse(_:)-((Failure)->Success)``.
+    @inlinable
     func getOrElseAsync(
         _ onFailure: (Failure) async -> Success
     ) async -> Success {
@@ -115,6 +122,7 @@ public extension Result {
     /// ```swift
     /// let user = await fetchUser(id: 1).getOrElseAsync(await loadGuestUser())
     /// ```
+    @inlinable
     func getOrElseAsync(
         _ defaultValue: @autoclosure @escaping () async -> Success
     ) async -> Success {

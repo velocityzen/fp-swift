@@ -37,30 +37,52 @@
 /// completion before this function returns, even after a winner is chosen.
 ///
 /// Supports 2 to 10 operations; for more, use the array overload.
+@inlinable
 public func withAny<Success: Sendable, Failure: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await withAny([a, b])
+    let gate = Gate<Result<Success, Failure>>(parties: 2)
+    async let _ = gate.race(await a())
+    async let _ = gate.race(await b())
+    // Leaving the scope cancels the operations still running and waits
+    // for them to stop.
+    return await gate.wait()
 }
 
+@inlinable
 public func withAny<Success: Sendable, Failure: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await withAny([a, b, c])
+    let gate = Gate<Result<Success, Failure>>(parties: 3)
+    async let _ = gate.race(await a())
+    async let _ = gate.race(await b())
+    async let _ = gate.race(await c())
+    // Leaving the scope cancels the operations still running and waits
+    // for them to stop.
+    return await gate.wait()
 }
 
+@inlinable
 public func withAny<Success: Sendable, Failure: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ c: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await withAny([a, b, c, d])
+    let gate = Gate<Result<Success, Failure>>(parties: 4)
+    async let _ = gate.race(await a())
+    async let _ = gate.race(await b())
+    async let _ = gate.race(await c())
+    async let _ = gate.race(await d())
+    // Leaving the scope cancels the operations still running and waits
+    // for them to stop.
+    return await gate.wait()
 }
 
+@inlinable
 public func withAny<Success: Sendable, Failure: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
@@ -68,9 +90,18 @@ public func withAny<Success: Sendable, Failure: Error>(
     _ d: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await withAny([a, b, c, d, f])
+    let gate = Gate<Result<Success, Failure>>(parties: 5)
+    async let _ = gate.race(await a())
+    async let _ = gate.race(await b())
+    async let _ = gate.race(await c())
+    async let _ = gate.race(await d())
+    async let _ = gate.race(await f())
+    // Leaving the scope cancels the operations still running and waits
+    // for them to stop.
+    return await gate.wait()
 }
 
+@inlinable
 public func withAny<Success: Sendable, Failure: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
@@ -79,9 +110,19 @@ public func withAny<Success: Sendable, Failure: Error>(
     _ f: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await withAny([a, b, c, d, f, g])
+    let gate = Gate<Result<Success, Failure>>(parties: 6)
+    async let _ = gate.race(await a())
+    async let _ = gate.race(await b())
+    async let _ = gate.race(await c())
+    async let _ = gate.race(await d())
+    async let _ = gate.race(await f())
+    async let _ = gate.race(await g())
+    // Leaving the scope cancels the operations still running and waits
+    // for them to stop.
+    return await gate.wait()
 }
 
+@inlinable
 public func withAny<Success: Sendable, Failure: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
@@ -91,9 +132,20 @@ public func withAny<Success: Sendable, Failure: Error>(
     _ g: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await withAny([a, b, c, d, f, g, h])
+    let gate = Gate<Result<Success, Failure>>(parties: 7)
+    async let _ = gate.race(await a())
+    async let _ = gate.race(await b())
+    async let _ = gate.race(await c())
+    async let _ = gate.race(await d())
+    async let _ = gate.race(await f())
+    async let _ = gate.race(await g())
+    async let _ = gate.race(await h())
+    // Leaving the scope cancels the operations still running and waits
+    // for them to stop.
+    return await gate.wait()
 }
 
+@inlinable
 public func withAny<Success: Sendable, Failure: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
@@ -104,9 +156,21 @@ public func withAny<Success: Sendable, Failure: Error>(
     _ h: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ i: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await withAny([a, b, c, d, f, g, h, i])
+    let gate = Gate<Result<Success, Failure>>(parties: 8)
+    async let _ = gate.race(await a())
+    async let _ = gate.race(await b())
+    async let _ = gate.race(await c())
+    async let _ = gate.race(await d())
+    async let _ = gate.race(await f())
+    async let _ = gate.race(await g())
+    async let _ = gate.race(await h())
+    async let _ = gate.race(await i())
+    // Leaving the scope cancels the operations still running and waits
+    // for them to stop.
+    return await gate.wait()
 }
 
+@inlinable
 public func withAny<Success: Sendable, Failure: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
@@ -118,9 +182,22 @@ public func withAny<Success: Sendable, Failure: Error>(
     _ i: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ j: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await withAny([a, b, c, d, f, g, h, i, j])
+    let gate = Gate<Result<Success, Failure>>(parties: 9)
+    async let _ = gate.race(await a())
+    async let _ = gate.race(await b())
+    async let _ = gate.race(await c())
+    async let _ = gate.race(await d())
+    async let _ = gate.race(await f())
+    async let _ = gate.race(await g())
+    async let _ = gate.race(await h())
+    async let _ = gate.race(await i())
+    async let _ = gate.race(await j())
+    // Leaving the scope cancels the operations still running and waits
+    // for them to stop.
+    return await gate.wait()
 }
 
+@inlinable
 public func withAny<Success: Sendable, Failure: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ b: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
@@ -133,7 +210,20 @@ public func withAny<Success: Sendable, Failure: Error>(
     _ j: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
     _ k: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await withAny([a, b, c, d, f, g, h, i, j, k])
+    let gate = Gate<Result<Success, Failure>>(parties: 10)
+    async let _ = gate.race(await a())
+    async let _ = gate.race(await b())
+    async let _ = gate.race(await c())
+    async let _ = gate.race(await d())
+    async let _ = gate.race(await f())
+    async let _ = gate.race(await g())
+    async let _ = gate.race(await h())
+    async let _ = gate.race(await i())
+    async let _ = gate.race(await j())
+    async let _ = gate.race(await k())
+    // Leaving the scope cancels the operations still running and waits
+    // for them to stop.
+    return await gate.wait()
 }
 
 // MARK: - Race a dynamic array of operations
@@ -157,6 +247,8 @@ public func withAny<Success: Sendable, Failure: Error>(
 /// - Returns: The first successful `Result`, or — if none succeed — the last
 ///   failure to complete.
 /// - Precondition: `operations` is non-empty.
+// Not `@inlinable`: specialized in the caller, this costs a retain and a
+// release more per operation and runs no faster.
 public func withAny<Success: Sendable, Failure: Error>(
     _ operations: [@concurrent @Sendable () async -> Result<Success, Failure>]
 ) async -> Result<Success, Failure> {

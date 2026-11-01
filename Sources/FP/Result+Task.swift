@@ -1,5 +1,6 @@
 public extension Result where Failure == Error, Success: Sendable {
     /// Creates a Result from a Task that returns a value and may throw
+    @inlinable
     static func fromTask(
         _ task: Task<Success, Error>
     ) async -> Result<Success, Error> {
@@ -12,6 +13,7 @@ public extension Result where Failure == Error, Success: Sendable {
     }
 
     /// Creates a Result from a closure that returns a Task
+    @inlinable
     static func fromTask(
         _ task: () -> Task<Success, Error>
     ) async -> Result<Success, Error> {
@@ -26,6 +28,7 @@ public extension Result where Failure == Error, Success: Sendable {
 
 public extension Result where Failure == Error {
     /// Creates a Result from a Task that returns a Result
+    @inlinable
     static func fromTask<S: Sendable>(
         _ task: Task<Result<S, Error>, Never>
     ) async -> Result<S, Error> {
@@ -33,6 +36,7 @@ public extension Result where Failure == Error {
     }
 
     /// Creates a Result from a closure that returns a Task with Result
+    @inlinable
     static func fromTask<S: Sendable>(
         _ task: () -> Task<Result<S, Error>, Never>
     ) async -> Result<S, Error> {
@@ -42,6 +46,7 @@ public extension Result where Failure == Error {
 
 public extension Result where Failure == Never, Success: Sendable {
     /// Creates a Result from a non-throwing Task
+    @inlinable
     static func fromTask(
         _ task: Task<Success, Never>
     ) async -> Result<Success, Never> {
@@ -50,6 +55,7 @@ public extension Result where Failure == Never, Success: Sendable {
     }
 
     /// Creates a Result from a closure that returns a non-throwing Task
+    @inlinable
     static func fromTask(
         _ task: () -> Task<Success, Never>
     ) async -> Result<Success, Never> {

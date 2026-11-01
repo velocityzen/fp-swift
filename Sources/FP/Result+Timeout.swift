@@ -28,25 +28,17 @@
 ///   - operation: The async work to run.
 /// - Returns: The operation's `Result`, or `.failure(timeoutError)` on timeout.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
+@inlinable
 public func withTimeout<Success: Sendable, Failure: Error>(
     _ duration: Duration,
     failingWith timeoutError: Failure,
     _ operation: @concurrent @Sendable @escaping () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await withTaskGroup(of: Result<Success, Failure>.self) { group in
-        group.addTask { await operation() }
-        group.addTask {
-            try? await Task.sleep(for: duration)
-            return .failure(timeoutError)
-        }
-
-        // Two tasks were added, so the first draw always exists. Whichever
-        // finishes first wins — the operation (success or failure) or the
-        // timer — and the loser is cancelled.
-        guard let result = await group.next() else {
-            return .failure(timeoutError)
-        }
-        group.cancelAll()
-        return result
-    }
+    // Whichever finishes first opens the gate — the operation (success or
+    // failure) or the timer. Leaving the scope then cancels the loser and
+    // waits for it to stop.
+    let gate = Gate<Result<Success, Failure>>()
+    async let _ = gate.open(with: await operation())
+    async let _ = gate.open(after: duration, with: .failure(timeoutError))
+    return await gate.wait()
 }

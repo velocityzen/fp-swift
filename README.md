@@ -978,36 +978,38 @@ func compactMapAsync<T, Failure: Error>(
 
 ## AsyncSequence Extensions API
 
-Extensions for any `AsyncSequence` where `Element == Result<Success, Failure>`:
+Extensions for any `AsyncSequence` where `Element == Result<Success, Failure>`.
+
+They return `ResultMapSequence`, `ResultMapAsyncSequence` and `ResultCompactMapSequence`, FP's inlinable replacements for the standard library's `AsyncMapSequence` and `AsyncCompactMapSequence`: a transform compiles into the loop that iterates the sequence instead of costing a call into the runtime per element. Each one is `Sendable` when its base sequence is and throws only what its base sequence throws. Closures run on the actor that iterates the sequence.
 
 ### Filter
 ```swift
-func successes() -> AsyncCompactMapSequence  // unwraps success values
-func failures() -> AsyncCompactMapSequence   // unwraps failure errors
+func successes() -> ResultCompactMapSequence<Self, Success>  // unwraps success values
+func failures() -> ResultCompactMapSequence<Self, Failure>   // unwraps failure errors
 ```
 
 ### Map & FlatMap
 ```swift
 // Sync
-func map<T>(_ transform: (Success) -> T) -> AsyncMapSequence<Self, Result<T, Failure>>
-func mapError<E>(_ transform: (Failure) -> E) -> AsyncMapSequence<Self, Result<Success, E>>
-func flatMap<T>(_ transform: (Success) -> Result<T, Failure>) -> AsyncMapSequence<Self, Result<T, Failure>>
+func map<T>(_ transform: (Success) -> T) -> ResultMapSequence<Self, Result<T, Failure>>
+func mapError<E>(_ transform: (Failure) -> E) -> ResultMapSequence<Self, Result<Success, E>>
+func flatMap<T>(_ transform: (Success) -> Result<T, Failure>) -> ResultMapSequence<Self, Result<T, Failure>>
 
 // Async
-func mapAsync<T>(_ transform: (Success) async -> T) -> AsyncMapSequence<Self, Result<T, Failure>>
-func mapErrorAsync<E>(_ transform: (Failure) async -> E) -> AsyncMapSequence<Self, Result<Success, E>>
-func flatMapAsync<T>(_ transform: (Success) async -> Result<T, Failure>) -> AsyncMapSequence<Self, Result<T, Failure>>
+func mapAsync<T>(_ transform: (Success) async -> T) -> ResultMapAsyncSequence<Self, Result<T, Failure>>
+func mapErrorAsync<E>(_ transform: (Failure) async -> E) -> ResultMapAsyncSequence<Self, Result<Success, E>>
+func flatMapAsync<T>(_ transform: (Success) async -> Result<T, Failure>) -> ResultMapAsyncSequence<Self, Result<T, Failure>>
 ```
 
 ### Tap
 ```swift
 // Sync
-func tap(_ action: (Success) -> Void) -> AsyncMapSequence<Self, Result<Success, Failure>>
-func tapError(_ action: (Failure) -> Void) -> AsyncMapSequence<Self, Result<Success, Failure>>
+func tap(_ action: (Success) -> Void) -> ResultMapSequence<Self, Result<Success, Failure>>
+func tapError(_ action: (Failure) -> Void) -> ResultMapSequence<Self, Result<Success, Failure>>
 
 // Async
-func tapAsync(_ action: (Success) async -> Void) -> AsyncMapSequence<Self, Result<Success, Failure>>
-func tapErrorAsync(_ action: (Failure) async -> Void) -> AsyncMapSequence<Self, Result<Success, Failure>>
+func tapAsync(_ action: (Success) async -> Void) -> ResultMapAsyncSequence<Self, Result<Success, Failure>>
+func tapErrorAsync(_ action: (Failure) async -> Void) -> ResultMapAsyncSequence<Self, Result<Success, Failure>>
 ```
 
 ### Ordered Concurrent Mapping
@@ -1091,6 +1093,14 @@ func getOrElseAsync(_ defaultValue: @autoclosure @escaping () async -> Wrapped) 
 // Runs regardless of .some/.none, returns self unchanged
 func finally(_ action: () -> Void) -> Wrapped?
 func finallyAsync(_ action: () async -> Void) async -> Wrapped?
+```
+
+## Benchmarks
+
+Allocation, ARC and timing benchmarks for the traversals, ordered streams and parallel combinators live in their own package under [`Benchmarks/`](Benchmarks/README.md):
+
+```bash
+cd Benchmarks && swift package benchmark
 ```
 
 ## License
