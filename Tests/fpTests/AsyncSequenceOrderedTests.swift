@@ -67,9 +67,6 @@ struct AsyncSequenceOrderedTests {
             continuation.finish()
         }
 
-        #if os(macOS) || os(Linux)
-            let start = ContinuousClock.now
-        #endif
         var values: [Int] = []
         for await value in stream.mapAsyncKeepOrder(
             concurrency: .max,
@@ -82,21 +79,14 @@ struct AsyncSequenceOrderedTests {
         ) {
             values.append(value)
         }
-        #if os(macOS) || os(Linux)
-            let elapsed = ContinuousClock.now - start
-        #endif
 
         let highWater = await tracker.highWater
         #expect(values == [1, 2, 3, 4])
-        // overlap observed directly,
+        // Overlap is observed directly. These tests prove concurrency by the
+        // high-water mark, never by a wall-clock upper bound: tests run in
+        // parallel, so a busy machine can delay any of them by hundreds of
+        // milliseconds.
         #expect(highWater >= 2)
-        // and confirmed by wall-clock: sequential would take at least 400ms.
-        // Simulators can stall ~10s warming up under CI, so wall-clock upper
-        // bounds run on macOS/Linux only — the high-water check above is the
-        // overlap proof everywhere.
-        #if os(macOS) || os(Linux)
-            #expect(elapsed < .milliseconds(400))
-        #endif
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
@@ -223,31 +213,23 @@ struct AsyncSequenceOrderedTests {
             continuation.finish()
         }
 
-        let perElementSleep: UInt64 = 100_000_000  // 100ms
-
-        #if os(macOS) || os(Linux)
-            let start = ContinuousClock.now
-        #endif
+        let tracker = ConcurrencyTracker()
         var results: [Result<Int, TestError>] = []
         for await result in stream.mapAsyncKeepOrder(
             concurrency: .max,
             { (value: Int) -> Int in
-                try? await Task.sleep(nanoseconds: perElementSleep)
+                await tracker.enter()
+                try? await Task.sleep(for: .milliseconds(100))
+                await tracker.exit()
                 return value
             }
         ) {
             results.append(result)
         }
-        #if os(macOS) || os(Linux)
-            let elapsed = ContinuousClock.now - start
-        #endif
 
         #expect(results.count == 5)
-        // 4 successes sequential would be ~400ms. Simulators can stall ~10s
-        // warming up under CI, so wall-clock bounds run on macOS/Linux only.
-        #if os(macOS) || os(Linux)
-            #expect(elapsed < .milliseconds(300))
-        #endif
+        // the success transforms overlap (see transformsRunConcurrently)
+        #expect(await tracker.highWater >= 2)
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
@@ -400,31 +382,23 @@ struct AsyncSequenceOrderedTests {
             continuation.finish()
         }
 
-        let perElementSleep: UInt64 = 100_000_000  // 100ms
-
-        #if os(macOS) || os(Linux)
-            let start = ContinuousClock.now
-        #endif
+        let tracker = ConcurrencyTracker()
         var results: [Result<Int, TestError>] = []
         for await result in stream.flatMapAsyncKeepOrder(
             concurrency: .max,
             { (value: Int) -> Result<Int, TestError> in
-                try? await Task.sleep(nanoseconds: perElementSleep)
+                await tracker.enter()
+                try? await Task.sleep(for: .milliseconds(100))
+                await tracker.exit()
                 return .success(value)
             }
         ) {
             results.append(result)
         }
-        #if os(macOS) || os(Linux)
-            let elapsed = ContinuousClock.now - start
-        #endif
 
         #expect(results.count == 5)
-        // 4 successes sequential would be ~400ms. Simulators can stall ~10s
-        // warming up under CI, so wall-clock bounds run on macOS/Linux only.
-        #if os(macOS) || os(Linux)
-            #expect(elapsed < .milliseconds(300))
-        #endif
+        // the success transforms overlap (see transformsRunConcurrently)
+        #expect(await tracker.highWater >= 2)
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
@@ -672,15 +646,9 @@ struct AsyncSequenceOrderedTests {
         // one at a time, four 50ms sleeps can never beat their 200ms sum,
         #expect(sequential.highWater == 1)
         #expect(sequential.elapsed >= .milliseconds(200))
-        // while unlimited overlaps them.
+        // while unlimited overlaps them (see transformsRunConcurrently for why
+        // there is no wall-clock upper bound on the parallel run).
         #expect(parallel.highWater >= 2)
-        // Overlapped, they finish in ~50ms — well under the sum. Simulators
-        // can stall under CI, so wall-clock upper bounds run on macOS/Linux
-        // only; the high-water check above is the overlap proof everywhere.
-        #if os(macOS) || os(Linux)
-            #expect(parallel.elapsed < .milliseconds(200))
-            #expect(parallel.elapsed < sequential.elapsed)
-        #endif
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
