@@ -315,7 +315,7 @@ let orders = await orderIds.traverseAsync(concurrency: 4) { id in
 }
 ```
 
-Both `traverseAsync(concurrency:)` and `mapAsyncKeepOrder` run transforms in parallel with ordered output. Use `traverseAsync` for an all-or-nothing pass over a finite array — one `Result` at the end, the lowest-index failure wins, a failure cancels the rest. Use `mapAsyncKeepOrder` when you want each result as soon as order allows, have an endless source, or want failures kept in position in the stream.
+Both `traverseAsync(concurrency:)` and `mapAsyncKeepOrder` run transforms in parallel with ordered output. Use `traverseAsync` for an all-or-nothing pass over a finite array — one `Result` at the end, the lowest-index failure wins, a failure cancels the rest. Use `mapAsyncKeepOrder` when you want each result as soon as order allows, have an endless source, or want failures kept in position in the stream — or `mapAsyncUnordered` when order does not matter, so each result is emitted the moment its transform finishes.
 
 ### Separating Result Arrays
 
@@ -423,6 +423,32 @@ for await result in events.flatMapAsyncKeepOrder({ event in
     handle(result)
 }
 ```
+
+### Unordered Concurrent Mapping
+
+When results need not keep source order, `mapAsyncUnordered` emits each one as soon as its transform finishes, so a slow element holds back nothing but itself. Same concurrency model as the ordered operators — sequential by default, at most `concurrency` elements being transformed or waiting to be consumed, and in-flight transforms cancelled cooperatively if the consumer stops early:
+
+```swift
+for await thumbnail in photos.mapAsyncUnordered(concurrency: 8, { photo in
+    await renderer.thumbnail(for: photo)
+}) {
+    gallery.insert(thumbnail)
+}
+```
+
+`compactMapAsyncUnordered` drops the elements its transform returns `nil` for, and takes an optional `passthrough` for elements that need no async work — an element it maps to a value is emitted as that value without running the transform or waiting for a worker:
+
+```swift
+for await user in ids.compactMapAsyncUnordered(
+    concurrency: 8,
+    passthrough: { id in cache[id] },
+    { id in await api.user(id) }  // nil when the user is gone
+) {
+    show(user)
+}
+```
+
+The `Result` overloads, `mapAsyncUnordered` and `flatMapAsyncUnordered`, transform only successes; failures pass straight through as soon as they are read.
 
 ### AsyncStream Result Factories
 

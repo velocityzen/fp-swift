@@ -11,7 +11,7 @@ import Synchronization
 ///
 /// The waiter is resumed while the lock is held and takes the lock again
 /// once it is resumed, so ThreadSanitizer sees the resume ordered before
-/// whatever the waiter does next (see `KeepOrderCoordinator`).
+/// whatever the waiter does next (see `ConcurrentMapCoordinator`).
 @usableFromInline
 final class Gate<Value: Sendable>: Sendable {
     @usableFromInline

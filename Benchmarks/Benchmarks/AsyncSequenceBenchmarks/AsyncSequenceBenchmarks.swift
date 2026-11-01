@@ -2,7 +2,7 @@ import Benchmark
 import BenchmarkSupport
 import FP
 
-// `mapAsyncKeepOrder` and the Result operators on async sequences. The
+// The concurrent maps and the Result operators on async sequences. The
 // source never suspends or allocates, so the numbers are the operator's own;
 // "(baseline)" entries are the floor to compare with.
 
@@ -94,6 +94,112 @@ let benchmarks: @Sendable () -> Void = {
             for _ in benchmark.scaledIterations {
                 var taken = 0
                 for await value in source.mapAsyncKeepOrder(concurrency: 8, { $0 &* 2 }) {
+                    blackHole(value)
+                    taken += 1
+                    if taken == 8 { break }
+                }
+            }
+        }
+
+        // MARK: mapAsyncUnordered
+
+        // The same job done by hand: a child task per element, at most 8
+        // in flight, results in the order they finish.
+        Benchmark(
+            "withTaskGroup 8 at a time (baseline)",
+            configuration: .fp(tags, scaling: streamScaling)
+        ) { benchmark in
+            for _ in benchmark.scaledIterations {
+                let count = await withTaskGroup(of: Int.self) { group in
+                    var inFlight = 0
+                    var count = 0
+                    for await value in source {
+                        if inFlight == 8, let result = await group.next() {
+                            blackHole(result)
+                            count += 1
+                            inFlight -= 1
+                        }
+                        group.addTask { value &* 2 }
+                        inFlight += 1
+                    }
+                    for await result in group {
+                        blackHole(result)
+                        count += 1
+                    }
+                    return count
+                }
+                blackHole(count)
+            }
+        }
+
+        for concurrency in [1, 8, 64] {
+            let tags = ["n": "\(n)", "concurrency": "\(concurrency)"]
+
+            Benchmark(
+                "mapAsyncUnordered",
+                configuration: .fp(tags, scaling: streamScaling)
+            ) { benchmark in
+                for _ in benchmark.scaledIterations {
+                    blackHole(
+                        await drain(source.mapAsyncUnordered(concurrency: concurrency) { $0 &* 2 })
+                    )
+                }
+            }
+        }
+
+        for concurrency in [1, 8] {
+            let tags = ["n": "\(n)", "concurrency": "\(concurrency)"]
+
+            // Every other element is dropped.
+            Benchmark(
+                "compactMapAsyncUnordered",
+                configuration: .fp(tags, scaling: streamScaling)
+            ) { benchmark in
+                for _ in benchmark.scaledIterations {
+                    blackHole(
+                        await drain(
+                            source.compactMapAsyncUnordered(concurrency: concurrency) {
+                                $0 & 1 == 0 ? $0 : nil
+                            }
+                        )
+                    )
+                }
+            }
+
+            Benchmark(
+                "mapAsyncUnordered Result",
+                configuration: .fp(tags, scaling: streamScaling)
+            ) { benchmark in
+                for _ in benchmark.scaledIterations {
+                    blackHole(
+                        await drain(results.mapAsyncUnordered(concurrency: concurrency) { $0 &* 2 })
+                    )
+                }
+            }
+
+            Benchmark(
+                "flatMapAsyncUnordered Result",
+                configuration: .fp(tags, scaling: streamScaling)
+            ) { benchmark in
+                for _ in benchmark.scaledIterations {
+                    blackHole(
+                        await drain(
+                            results.flatMapAsyncUnordered(concurrency: concurrency) {
+                                IntResult.success($0 &* 2)
+                            }
+                        )
+                    )
+                }
+            }
+        }
+
+        Benchmark(
+            "mapAsyncUnordered taking 8",
+            configuration: .fp(["n": "\(n)", "concurrency": "8"], scaling: streamScaling)
+        ) { benchmark in
+            for _ in benchmark.scaledIterations {
+                var taken = 0
+                for await value in source.mapAsyncUnordered(concurrency: 8, { $0 &* 2 }) {
                     blackHole(value)
                     taken += 1
                     if taken == 8 { break }

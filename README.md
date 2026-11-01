@@ -22,6 +22,7 @@ A lightweight functional programming toolkit for Swift, providing composable uti
   - [Array Extensions](#array-extensions)
   - [AsyncSequence Result Processing](#asyncsequence-result-processing)
   - [Ordered Concurrent Mapping](#ordered-concurrent-mapping)
+  - [Unordered Concurrent Mapping](#unordered-concurrent-mapping)
   - [AsyncStream Extensions](#asyncstream-extensions)
   - [Optional Extensions](#optional-extensions)
 - [API Reference](#result-extensions-api)
@@ -482,7 +483,7 @@ let result = await userIds.traverseAsync(concurrency: 4) { id in
 }
 ```
 
-Both `traverseAsync(concurrency:)` and `mapAsyncKeepOrder` run transforms in parallel with ordered output. Use `traverseAsync` for an all-or-nothing pass over a finite array — one `Result` at the end, the lowest-index failure wins, a failure cancels the rest. Use `mapAsyncKeepOrder` when you want each result as soon as order allows, have an endless source, or want failures kept in position in the stream.
+Both `traverseAsync(concurrency:)` and `mapAsyncKeepOrder` run transforms in parallel with ordered output. Use `traverseAsync` for an all-or-nothing pass over a finite array — one `Result` at the end, the lowest-index failure wins, a failure cancels the rest. Use `mapAsyncKeepOrder` when you want each result as soon as order allows, have an endless source, or want failures kept in position in the stream — or `mapAsyncUnordered` when order does not matter, so each result is emitted the moment its transform finishes.
 
 #### Async Mapping
 
@@ -568,6 +569,32 @@ for await result in events.mapAsyncKeepOrder({ event in
     handle(result)  // Result<EnrichedEvent, MyError>
 }
 ```
+
+### Unordered Concurrent Mapping
+
+When results need not keep source order, `mapAsyncUnordered` emits each one as soon as its transform finishes, so a slow element holds back nothing but itself. Same concurrency model as the ordered operators — sequential by default, at most `concurrency` elements being transformed or waiting to be consumed, and in-flight transforms cancelled cooperatively if the consumer stops early:
+
+```swift
+for await thumbnail in photos.mapAsyncUnordered(concurrency: 8, { photo in
+    await renderer.thumbnail(for: photo)
+}) {
+    gallery.insert(thumbnail)
+}
+```
+
+`compactMapAsyncUnordered` drops the elements its transform returns `nil` for, and takes an optional `passthrough` for elements that need no async work — an element it maps to a value is emitted as that value without running the transform or waiting for a worker:
+
+```swift
+for await user in ids.compactMapAsyncUnordered(
+    concurrency: 8,
+    passthrough: { id in cache[id] },
+    { id in await api.user(id) }  // nil when the user is gone
+) {
+    show(user)
+}
+```
+
+The `Result` overloads, `mapAsyncUnordered` and `flatMapAsyncUnordered`, transform only successes; failures pass straight through as soon as they are read.
 
 ### AsyncStream Extensions
 
@@ -1039,6 +1066,41 @@ func flatMapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
 where Self: Sendable, Failure == Never, Element == Result<Success, E>
 ```
 
+### Unordered Concurrent Mapping
+
+Same concurrency model as the ordered operators; results emit in the order their transforms finish. Each iteration of the returned `UnorderedMapSequence` reads the source afresh.
+
+```swift
+// General form
+func mapAsyncUnordered<T: Sendable>(
+    concurrency: Int = 1,
+    _ transform: @Sendable @escaping (Element) async -> T
+) -> UnorderedMapSequence<Self, T>
+where Self: Sendable, Failure == Never, Element: Sendable
+
+// Drops nil results; passthrough maps an element straight to its result
+func compactMapAsyncUnordered<T: Sendable>(
+    concurrency: Int = 1,
+    passthrough: (@Sendable (Element) -> T?)? = nil,
+    _ transform: @Sendable @escaping (Element) async -> T?
+) -> UnorderedMapSequence<Self, T>
+where Self: Sendable, Failure == Never, Element: Sendable
+
+// Result overload — transforms successes, passes failures through
+func mapAsyncUnordered<Success: Sendable, E: Error, T: Sendable>(
+    concurrency: Int = 1,
+    _ transform: @Sendable @escaping (Success) async -> T
+) -> UnorderedMapSequence<Self, Result<T, E>>
+where Self: Sendable, Failure == Never, Element == Result<Success, E>
+
+// Fallible transform — transform failures replace the success they came from
+func flatMapAsyncUnordered<Success: Sendable, E: Error, T: Sendable>(
+    concurrency: Int = 1,
+    _ transform: @Sendable @escaping (Success) async -> Result<T, E>
+) -> UnorderedMapSequence<Self, Result<T, E>>
+where Self: Sendable, Failure == Never, Element == Result<Success, E>
+```
+
 ## AsyncStream Extensions API
 
 ### Static Factories
@@ -1097,7 +1159,7 @@ func finallyAsync(_ action: () async -> Void) async -> Wrapped?
 
 ## Benchmarks
 
-Allocation, ARC and timing benchmarks for the traversals, ordered streams and parallel combinators live in their own package under [`Benchmarks/`](Benchmarks/README.md):
+Allocation, ARC and timing benchmarks for the traversals, concurrent maps and parallel combinators live in their own package under [`Benchmarks/`](Benchmarks/README.md):
 
 ```bash
 cd Benchmarks && swift package benchmark
