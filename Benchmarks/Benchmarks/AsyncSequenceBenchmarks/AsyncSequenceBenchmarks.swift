@@ -45,7 +45,7 @@ let benchmarks: @Sendable () -> Void = {
 
             Benchmark(
                 "mapAsyncKeepOrder",
-                configuration: .fp(tags, scaling: streamScaling)
+                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
             ) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
@@ -60,7 +60,7 @@ let benchmarks: @Sendable () -> Void = {
 
             Benchmark(
                 "mapAsyncKeepOrder Result",
-                configuration: .fp(tags, scaling: streamScaling)
+                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
             ) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
@@ -71,7 +71,7 @@ let benchmarks: @Sendable () -> Void = {
 
             Benchmark(
                 "flatMapAsyncKeepOrder Result",
-                configuration: .fp(tags, scaling: streamScaling)
+                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
             ) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
@@ -89,7 +89,11 @@ let benchmarks: @Sendable () -> Void = {
         // pipeline down while transforms are still in flight.
         Benchmark(
             "mapAsyncKeepOrder taking 8",
-            configuration: .fp(["n": "\(n)", "concurrency": "8"], scaling: streamScaling)
+            configuration: .fp(
+                ["n": "\(n)", "concurrency": "8"],
+                scaling: streamScaling,
+                workerPool: true
+            )
         ) { benchmark in
             for _ in benchmark.scaledIterations {
                 var taken = 0
@@ -137,7 +141,7 @@ let benchmarks: @Sendable () -> Void = {
 
             Benchmark(
                 "mapAsyncUnordered",
-                configuration: .fp(tags, scaling: streamScaling)
+                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
             ) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
@@ -153,7 +157,7 @@ let benchmarks: @Sendable () -> Void = {
             // Every other element is dropped.
             Benchmark(
                 "compactMapAsyncUnordered",
-                configuration: .fp(tags, scaling: streamScaling)
+                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
             ) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
@@ -168,7 +172,7 @@ let benchmarks: @Sendable () -> Void = {
 
             Benchmark(
                 "mapAsyncUnordered Result",
-                configuration: .fp(tags, scaling: streamScaling)
+                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
             ) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
@@ -179,7 +183,7 @@ let benchmarks: @Sendable () -> Void = {
 
             Benchmark(
                 "flatMapAsyncUnordered Result",
-                configuration: .fp(tags, scaling: streamScaling)
+                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
             ) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
@@ -195,7 +199,11 @@ let benchmarks: @Sendable () -> Void = {
 
         Benchmark(
             "mapAsyncUnordered taking 8",
-            configuration: .fp(["n": "\(n)", "concurrency": "8"], scaling: streamScaling)
+            configuration: .fp(
+                ["n": "\(n)", "concurrency": "8"],
+                scaling: streamScaling,
+                workerPool: true
+            )
         ) { benchmark in
             for _ in benchmark.scaledIterations {
                 var taken = 0

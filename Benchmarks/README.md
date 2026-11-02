@@ -56,9 +56,9 @@ swift package benchmark baseline compare main
 
 Baselines are saved in `.benchmarkBaselines/`, which is not committed: they are only comparable on the machine that recorded them.
 
-Malloc, object-allocation and ARC counts are stable from run to run, so they are the numbers to watch first. Times move with the machine's load; close other work before comparing them.
+Malloc, object-allocation and ARC counts are stable from run to run, so they are the numbers to watch first. The exception is the concurrent maps above `concurrency: 1`: their pool starts workers as it needs them, so their counts move with how many workers a call starts. Times move with the machine's load; close other work before comparing them.
 
-`baseline check` fails only when one of those four counts gets worse; times and the other metrics are reported by `compare` but never fail a check. The tolerance is `checkedTolerance` in [BenchmarkSupport.swift](Sources/BenchmarkSupport/BenchmarkSupport.swift).
+`baseline check` fails only when one of those four counts gets worse; times and the other metrics are reported by `compare` but never fail a check. The tolerance is `checkedTolerance` in [BenchmarkSupport.swift](Sources/BenchmarkSupport/BenchmarkSupport.swift), and `workerPoolTolerance` for the concurrent maps above `concurrency: 1`.
 
 ```bash
 swift package benchmark baseline check main
@@ -66,7 +66,7 @@ swift package benchmark baseline check main
 
 ## Continuous integration
 
-The [Benchmarks workflow](../.github/workflows/benchmarks.yml) benchmarks every push to `main` against the commit it was pushed on top of, and every pull request against its base branch. The job summary lists every metric's change, and the job fails when an allocation or ARC count regresses.
+The [Benchmarks workflow](../.github/workflows/benchmarks.yml) benchmarks every push to `main` against the commit it was pushed on top of, and every pull request against its base branch. The job summary lists every metric's change, and the job fails when an allocation or ARC count regresses; the job log shows every count that crossed its threshold. A check takes its thresholds from the baseline it compares with, so a change to the thresholds applies from the commit after it.
 
 ## Finding where allocations come from
 

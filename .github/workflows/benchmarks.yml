@@ -93,8 +93,14 @@ jobs:
         working-directory: Benchmarks
         run: |
           echo "## Allocation and ARC count changes" >> "$GITHUB_STEP_SUMMARY"
-          if swift package benchmark baseline check base head --format markdown --no-progress \
-              >> "$GITHUB_STEP_SUMMARY" 2> "$RUNNER_TEMP/check.err"; then
+          status=0
+          swift package benchmark baseline check base head --format markdown --no-progress \
+              > "$RUNNER_TEMP/check.md" 2> "$RUNNER_TEMP/check.err" || status=$?
+          cat "$RUNNER_TEMP/check.md" >> "$GITHUB_STEP_SUMMARY"
+          # The counts that crossed a threshold go to the log too, so a
+          # failure reads without opening the summary.
+          cat "$RUNNER_TEMP/check.md"
+          if [ "$status" -eq 0 ]; then
             exit 0
           fi
           cat "$RUNNER_TEMP/check.err" >&2

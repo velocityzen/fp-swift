@@ -31,12 +31,22 @@ public let checkedMetrics: [BenchmarkMetric] = [
 /// one allocation more per element or per operation is at least 6%.
 let checkedTolerance = 5.0
 
-var fpThresholds: [BenchmarkMetric: BenchmarkThresholds] {
-    Dictionary(
+/// The tolerance, in percent, of a concurrent map above `concurrency: 1`.
+/// Its pool starts a worker, a task and its closure, for an element only
+/// when no worker is idle, so how many of up to `concurrency` workers a call
+/// starts depends on how the reader and the workers interleave, and every
+/// checked count moves with it. Two runs of the same code differ by up to
+/// 11% in allocations at `concurrency: 64`; one allocation or retain more per
+/// worker or per element is still well over 15%.
+let workerPoolTolerance = 15.0
+
+func fpThresholds(workerPool: Bool) -> [BenchmarkMetric: BenchmarkThresholds] {
+    let tolerance = workerPool ? workerPoolTolerance : checkedTolerance
+    return Dictionary(
         uniqueKeysWithValues: fpMetrics.map { metric in
             let thresholds =
                 checkedMetrics.contains(metric)
-                ? BenchmarkThresholds(relative: [.p50: checkedTolerance])
+                ? BenchmarkThresholds(relative: [.p50: tolerance])
                 : BenchmarkThresholds()
             return (metric, thresholds)
         }
@@ -51,9 +61,14 @@ public extension Benchmark.Configuration {
     /// `.kilo` for calls in the micro- or nanosecond range, so timer and
     /// sampling overhead stays out of the numbers, and `.one` for calls that
     /// already take a millisecond or so.
+    ///
+    /// Pass `workerPool: true` for a concurrent map above `concurrency: 1`,
+    /// whose counts depend on how many workers its pool starts
+    /// (see `workerPoolTolerance`).
     static func fp(
         _ tags: [String: String] = [:],
-        scaling: BenchmarkScalingFactor = .kilo
+        scaling: BenchmarkScalingFactor = .kilo,
+        workerPool: Bool = false
     ) -> Self {
         .init(
             metrics: fpMetrics,
@@ -62,7 +77,7 @@ public extension Benchmark.Configuration {
             scalingFactor: scaling,
             maxDuration: .seconds(1),
             maxIterations: 10_000,
-            thresholds: fpThresholds
+            thresholds: fpThresholds(workerPool: workerPool)
         )
     }
 }
