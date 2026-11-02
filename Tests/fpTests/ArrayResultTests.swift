@@ -464,7 +464,10 @@ struct ArrayResultTests {
         #expect(result == .failure(.invalid))
     }
 
-    @Test("parallel traverseAsync stops starting transforms and cancels in flight on failure")
+    @Test(
+        "parallel traverseAsync stops starting transforms and cancels in flight on failure",
+        .hangGuard
+    )
     func parallelTraverseCancelsOnFailure() async {
         let started = AsyncCounter()
         let cancelled = AsyncCounter()
@@ -475,11 +478,8 @@ struct ArrayResultTests {
             if n == 0 {
                 return .failure(.invalid)
             }
-            // sleeps far longer than the test; throws immediately on cancellation
-            try? await Task.sleep(nanoseconds: 10_000_000_000)
-            if Task.isCancelled {
-                await cancelled.increment()
-            }
+            await waitForCancellation()
+            await cancelled.increment()
             return .success(n)
         }
 

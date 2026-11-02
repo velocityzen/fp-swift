@@ -31,13 +31,13 @@ struct ResultTimeoutTests {
     }
 
     @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
-    @Test("returns the timeout error when the operation outlasts the timeout")
+    @Test("returns the timeout error when the operation outlasts the timeout", .hangGuard)
     func timesOutWhenOperationIsTooSlow() async {
         let result: Result<Int, TestError> = await withTimeout(
             .milliseconds(50),
             failingWith: .timeout
         ) {
-            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            await waitForCancellation()
             return .success(1)
         }
 
@@ -45,7 +45,7 @@ struct ResultTimeoutTests {
     }
 
     @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
-    @Test("cancels the operation when the timeout fires")
+    @Test("cancels the operation when the timeout fires", .hangGuard)
     func cancelsOperationOnTimeout() async {
         let cancelled = AsyncCounter()
 
@@ -53,11 +53,8 @@ struct ResultTimeoutTests {
             .milliseconds(50),
             failingWith: .timeout
         ) {
-            // sleeps far longer than the timeout; throws immediately on cancellation
-            try? await Task.sleep(nanoseconds: 10_000_000_000)
-            if Task.isCancelled {
-                await cancelled.increment()
-            }
+            await waitForCancellation()
+            await cancelled.increment()
             return .success(1)
         }
 

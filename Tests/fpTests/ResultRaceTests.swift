@@ -137,17 +137,14 @@ struct ResultRaceTests {
         #expect(highWater >= 2)
     }
 
-    @Test("array form: cancels the losing operations once a winner succeeds")
+    @Test("array form: cancels the losing operations once a winner succeeds", .hangGuard)
     func arrayCancelsLosersOnWin() async {
         let cancelled = AsyncCounter()
         let ops: [@Sendable () async -> Result<Int, TestError>] = [
             { .success(1) },  // immediate winner
             {
-                // sleeps far longer than the test; throws immediately on cancellation
-                try? await Task.sleep(nanoseconds: 10_000_000_000)
-                if Task.isCancelled {
-                    await cancelled.increment()
-                }
+                await waitForCancellation()
+                await cancelled.increment()
                 return .success(2)
             },
         ]

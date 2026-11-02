@@ -9,6 +9,19 @@ extension Trait where Self == TimeLimitTrait {
     static var hangGuard: Self { .timeLimit(.minutes(10)) }
 }
 
+/// Suspends until the current task is cancelled, for an operation that only
+/// a cancellation may end.
+///
+/// A long sleep is not enough: simulators under CI can stall for longer than
+/// the sleep, which then finishes before the cancellation arrives. A test
+/// that waits on this hangs if the cancellation never comes, so give it
+/// `hangGuard`.
+func waitForCancellation() async {
+    while !Task.isCancelled {
+        try? await Task.sleep(for: .seconds(10))
+    }
+}
+
 /// Helper actor for async tests that tracks call counts
 actor AsyncCounter {
     private(set) var count = 0

@@ -519,7 +519,10 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder cancels in-flight transforms when the consumer stops early")
+    @Test(
+        "mapAsyncKeepOrder cancels in-flight transforms when the consumer stops early",
+        .hangGuard
+    )
     func cancelsInFlightOnEarlyTermination() async {
         let started = AsyncCounter()
         let cancelled = AsyncCounter()
@@ -535,11 +538,8 @@ struct AsyncSequenceOrderedTests {
                 concurrency: .max,
                 { (element: Int) -> Int in
                     await started.increment()
-                    // sleeps far longer than the test; throws immediately on cancellation
-                    try? await Task.sleep(for: .seconds(10))
-                    if Task.isCancelled {
-                        await cancelled.increment()
-                    }
+                    await waitForCancellation()
+                    await cancelled.increment()
                     return element
                 }
             ) {}
@@ -567,7 +567,10 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder with a cap stops reading the source when the consumer stops early")
+    @Test(
+        "mapAsyncKeepOrder with a cap stops reading the source when the consumer stops early",
+        .hangGuard
+    )
     func cancellationWithCapStopsReadingSource() async {
         let started = AsyncCounter()
         let cancelled = AsyncCounter()
@@ -583,10 +586,8 @@ struct AsyncSequenceOrderedTests {
                 concurrency: 2,
                 { (element: Int) -> Int in
                     await started.increment()
-                    try? await Task.sleep(for: .seconds(10))
-                    if Task.isCancelled {
-                        await cancelled.increment()
-                    }
+                    await waitForCancellation()
+                    await cancelled.increment()
                     return element
                 }
             ) {}
@@ -878,7 +879,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder cancels in-flight transforms when the stream is dropped")
+    @Test("mapAsyncKeepOrder cancels in-flight transforms when the stream is dropped", .hangGuard)
     func droppingTheStreamCancelsInFlight() async {
         let started = AsyncCounter()
         let cancelled = AsyncCounter()
@@ -897,10 +898,8 @@ struct AsyncSequenceOrderedTests {
                 { (element: Int) -> Int in
                     await started.increment()
                     if element > 1 {
-                        try? await Task.sleep(for: .seconds(10))
-                        if Task.isCancelled {
-                            await cancelled.increment()
-                        }
+                        await waitForCancellation()
+                        await cancelled.increment()
                     }
                     return element
                 }

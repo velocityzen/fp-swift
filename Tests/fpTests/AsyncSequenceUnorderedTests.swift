@@ -497,7 +497,10 @@ struct AsyncSequenceUnorderedTests {
     // MARK: - cancellation
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncUnordered cancels in-flight transforms when the consumer is cancelled")
+    @Test(
+        "mapAsyncUnordered cancels in-flight transforms when the consumer is cancelled",
+        .hangGuard
+    )
     func cancelsInFlightOnCancellation() async {
         let started = AsyncCounter()
         let cancelled = AsyncCounter()
@@ -511,11 +514,8 @@ struct AsyncSequenceUnorderedTests {
                 concurrency: 2,
                 { (element: Int) -> Int in
                     await started.increment()
-                    // sleeps far longer than the test; throws immediately on cancellation
-                    try? await Task.sleep(for: .seconds(10))
-                    if Task.isCancelled {
-                        await cancelled.increment()
-                    }
+                    await waitForCancellation()
+                    await cancelled.increment()
                     return element
                 }
             ) {}
@@ -544,7 +544,7 @@ struct AsyncSequenceUnorderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncUnordered cancels in-flight transforms when the iterator is dropped")
+    @Test("mapAsyncUnordered cancels in-flight transforms when the iterator is dropped", .hangGuard)
     func droppingTheIteratorCancelsInFlight() async {
         let started = AsyncCounter()
         let cancelled = AsyncCounter()
@@ -561,10 +561,8 @@ struct AsyncSequenceUnorderedTests {
                 { (element: Int) -> Int in
                     await started.increment()
                     if element > 1 {
-                        try? await Task.sleep(for: .seconds(10))
-                        if Task.isCancelled {
-                            await cancelled.increment()
-                        }
+                        await waitForCancellation()
+                        await cancelled.increment()
                     }
                     return element
                 }
