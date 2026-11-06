@@ -19,6 +19,7 @@ A lightweight functional programming toolkit for Swift, providing composable uti
   - [Combining Results](#combining-results)
   - [Racing Results](#racing-results)
   - [Timeouts](#timeouts)
+  - [Retrying (FPRetry)](#retrying-fpretry)
   - [Array Extensions](#array-extensions)
   - [AsyncSequence Result Processing](#asyncsequence-result-processing)
   - [Ordered Concurrent Mapping](#ordered-concurrent-mapping)
@@ -29,6 +30,7 @@ A lightweight functional programming toolkit for Swift, providing composable uti
   - [Result Extensions API](#result-extensions-api)
   - [Combining Functions API](#combining-functions-api)
   - [Racing and Timeout Functions API](#racing-and-timeout-functions-api)
+  - [Retry API](#retry-api)
   - [Array Extensions API](#array-extensions-api)
   - [AsyncSequence Extensions API](#asyncsequence-extensions-api)
   - [AsyncStream Extensions API](#asyncstream-extensions-api)
@@ -51,11 +53,24 @@ dependencies: [
 ]
 ```
 
-Then import it:
+Then add the products a target uses to its dependencies and import them:
+
+```swift
+.target(
+    name: "MyApp",
+    dependencies: [
+        .product(name: "FP", package: "fp-swift"),
+        .product(name: "FPRetry", package: "fp-swift"),  // only if it retries
+    ]
+)
+```
 
 ```swift
 import FP
+import FPRetry
 ```
+
+`FPRetry` is a separate product with no dependency on `FP`, so a target that only retries does not pull in the rest.
 
 ## Features
 
@@ -453,6 +468,189 @@ func loadProfile(id: Int) async -> Result<Profile, AppError> {
 ```
 
 It's a race between the operation and a timer — whichever finishes first wins — so this isn't `withAny` (which waits for the first *success*); a fast failure here returns immediately. Cancellation is cooperative: when the timeout fires, the operation stops promptly only if it observes `Task.isCancelled`.
+
+### Retrying (FPRetry)
+
+`import FPRetry` for retries modeled on [retry-ts](https://github.com/gcanti/retry-ts). A `RetryPolicy` is a function from a `RetryStatus` (retries so far, the total delay so far, the previous delay) to the delay before the next retry, or `nil` to give up. Policies are plain `Sendable` values: define one once and reuse it with every operation that retries.
+
+```swift
+import FPRetry
+
+// Random delays up to 200ms, 400ms, 800ms, … capped at 2s, at most 5 retries.
+let apiPolicy = RetryPolicy.exponentialBackoff(.milliseconds(200))
+    .and(.limitRetries(5))
+    .capDelay(.seconds(2))
+    .jitter()
+
+let user = await withRetry(apiPolicy) { await fetchUser(id) }
+// Result<User, APIError>: the first success, or the latest failure
+```
+
+`withRetry` only takes async operations that return a `Result`. A success is never retried; a failure is retried while the policy keeps returning a delay.
+
+#### Choosing which failures to retry
+
+Not every failure is worth another attempt. A timeout or a 503 may pass on the next try; a 404 or a rejected password fails the same way every time, so retrying it only adds delay. Pass `while:` a function `(Failure) -> Bool` that returns `true` for the failures to retry. `withRetry` returns a failure it rejects at once, without asking the policy. Leave `while:` out and every failure is retried.
+
+The rule usually belongs to the error type, so every call site agrees on what is retryable. `isTransient` below is a property you write on your own error, not part of FPRetry:
+
+```swift
+enum APIError: Error, Equatable {
+    case timeout
+    case rateLimited
+    case server(status: Int)
+    case unauthorized
+    case notFound
+
+    /// Failures that may succeed if tried again.
+    var isTransient: Bool {
+        switch self {
+            case .timeout, .rateLimited: true
+            case .server(let status): status >= 500
+            case .unauthorized, .notFound: false
+        }
+    }
+}
+
+// Retries timeouts, rate limits and 5xx; returns .unauthorized or .notFound at once.
+let user = await withRetry(apiPolicy, while: \.isTransient) { await fetchUser(id) }
+```
+
+`\.isTransient` is a key path used as a function: wherever Swift expects a function `(APIError) -> Bool`, the key path `\APIError.isTransient` works too (SE-0249). These two calls are the same:
+
+```swift
+await withRetry(apiPolicy, while: \.isTransient) { await fetchUser(id) }
+await withRetry(apiPolicy, while: { error in error.isTransient }) { await fetchUser(id) }
+```
+
+A one-off rule fits in a closure: `while: { $0 != .unauthorized }`.
+
+#### Knowing which attempt is running
+
+The action can take the current `RetryStatus` — for logging, or to change the request on a retry:
+
+```swift
+let user = await withRetry(apiPolicy, while: \.isTransient) { status in
+    logger.debug("attempt \(status.iteration + 1)")
+    return await fetchUser(id)
+}
+```
+
+#### Composing policies
+
+Policies combine with `and`, which retries only while **both** policies do and waits the **longer** of their delays. It is associative, with `constantDelay(.zero)` as its identity, so policies form a monoid, the same as retry-ts's `Monoid`. Modifiers reshape a policy:
+
+| Policy | Delays | Gives up |
+| --- | --- | --- |
+| `.limitRetries(n)` | `.zero` | after `n` retries |
+| `.constantDelay(d)` | `d` every time | never |
+| `.exponentialBackoff(d)` | `d`, `2d`, `4d`, … | never |
+| `p.and(q)` | the longer of `p`'s and `q`'s | when either gives up |
+| `p.capDelay(max)` | `p`'s, at most `max` | when `p` does |
+| `p.limitRetriesByDelay(max)` | `p`'s | when `p`'s next delay is over `max` |
+| `p.limitRetriesByCumulativeDelay(max)` | `p`'s | when the total wait would pass `max` |
+| `p.jitter(range)` | `p`'s times a random factor in `range` | when `p` does |
+| `RetryPolicy { status in … }` | your own | when it returns `nil` |
+
+#### Adding jitter
+
+When many clients fail at the same moment — a server restarts, the network blips — the same policy has them all retry at the same moments too. Each retry arrives as one burst, and the bursts can keep the server down. Jitter spreads the retries out by multiplying every delay by a random factor. Add it to any policy that more than one client runs:
+
+```swift
+// Without jitter, every client waits exactly 200ms, 400ms, 800ms, ….
+// With it, each waits a random delay up to those.
+let apiPolicy = RetryPolicy.exponentialBackoff(.milliseconds(200))
+    .and(.limitRetries(5))
+    .capDelay(.seconds(2))
+    .jitter()
+```
+
+The range is of factors, not durations:
+
+| Call | Factors | Each delay is |
+| --- | --- | --- |
+| `.jitter()` | `0...1` | *full jitter*: anywhere from none to the policy's own. It spreads retries out the most. |
+| `.jitter(0.5...1)` | `0.5...1` | *equal jitter*: at least half the policy's delay, so a retry never comes too soon |
+| `.jitter(0.8...1.2)` | `0.8...1.2` | within 20% either side of the policy's delay |
+
+Add jitter **last**, after `capDelay`: the cap then bounds the delay jitter draws from, so `.capDelay(.seconds(2)).jitter()` waits 2s at most. A factor above 1 can take a delay past a cap that comes before it. Jitter never changes how often a policy retries, and the status records the delay actually waited, so `cumulativeDelay` and `limitRetriesByCumulativeDelay` see the jittered delays.
+
+The factors come from the system's random number generator. For delays a test can predict, pass a seeded generator of your own (the standard library has none; SplitMix64 is a few lines):
+
+```swift
+let policy = apiPolicy.jitter(using: SeededGenerator(seed: 42))
+```
+
+The policy owns that generator, so each use of it draws the next numbers; build the policy again with the same seed to repeat a sequence.
+
+#### Writing your own policy
+
+A policy is just a function from `RetryStatus` to `Duration?`: return a delay to retry after it, or `nil` to give up. Wrap that function in `RetryPolicy { status in … }` and it composes with the built-ins like any other policy.
+
+A one-off policy can be written inline. This one retries the first failure at once, and waits a second before every retry after it — forever, so give it a limit:
+
+```swift
+let quickThenSlow = RetryPolicy { status in
+    status.iteration == 0 ? .zero : .seconds(1)
+}
+
+let user = await withRetry(quickThenSlow.and(.limitRetries(3))) { await fetchUser(id) }
+// Delays: 0s, 1s, 1s, then gives up
+```
+
+A policy you reuse belongs in an extension of `RetryPolicy`. A `static func` that returns a policy works with leading-dot syntax, exactly like `.exponentialBackoff`, so it chains with the built-in modifiers:
+
+```swift
+extension RetryPolicy {
+    /// Waits `step` before the first retry, `2 × step` before the second, and so on.
+    static func linearBackoff(_ step: Duration) -> RetryPolicy {
+        RetryPolicy { status in step * (status.iteration + 1) }
+    }
+}
+
+let apiPolicy = RetryPolicy.linearBackoff(.milliseconds(500))
+    .and(.limitRetries(4))
+    .capDelay(.milliseconds(1500))
+// Delays: 0.5s, 1s, 1.5s, 1.5s, then gives up
+```
+
+A modifier — a policy that reshapes another — is an instance method that asks `self` for its delay and changes the answer. Calling a policy as a function, `self(status)`, returns its delay. This one is the opposite of `capDelay`: it never lets a retry come sooner than `minimum`:
+
+```swift
+extension RetryPolicy {
+    /// Waits at least `minimum` before every retry.
+    func minimumDelay(_ minimum: Duration) -> RetryPolicy {
+        RetryPolicy { status in
+            self(status).map { delay in max(delay, minimum) }
+        }
+    }
+}
+
+let user = await withRetry(.limitRetries(3).minimumDelay(.milliseconds(100))) {
+    await fetchUser(id)
+}
+// Delays: 100ms, 100ms, 100ms, then gives up
+```
+
+`Optional.map` passes `nil` through untouched, so the policy a modifier wraps still decides when to give up. Check a policy you write with `dryRun()`, below.
+
+#### Checking a schedule
+
+Check a policy's schedule without running anything with `dryRun()`, a lazy sequence of the statuses the policy goes through, ending with the one where it gives up:
+
+```swift
+RetryPolicy.exponentialBackoff(.seconds(1))
+    .and(.limitRetries(3))
+    .dryRun()
+    .map(\.previousDelay)
+// [1s, 2s, 4s, nil]
+```
+
+#### Clocks, cancellation and isolation
+
+The delays are waited on a `ContinuousClock` by default; pass any `Clock<Duration>` as `clock:` — a test clock that records and skips its sleeps, say. A `.zero` delay retries without touching the clock. Cancellation stops retrying: a cancelled wait, or a cancelled task about to retry at once, returns the latest failure. Delays are clamped to `.zero...RetryPolicy.maximumDelay` (about 292 million years), so a backoff that keeps doubling saturates instead of overflowing.
+
+The action runs on the caller's actor, so a `@MainActor` caller can touch its own state from it.
 
 ### Array Extensions
 
@@ -937,6 +1135,57 @@ func withTimeout<Success: Sendable, Failure: Error>(
     _ duration: Duration,
     failingWith timeoutError: Failure,
     _ operation: @Sendable @escaping () async -> Result<Success, Failure>
+) async -> Result<Success, Failure>
+```
+
+## Retry API
+
+Everything here comes from `import FPRetry`.
+
+```swift
+struct RetryStatus: Sendable, Hashable {
+    let iteration: Int              // retries so far: 0 on the first attempt
+    let cumulativeDelay: Duration   // every delay waited so far
+    let previousDelay: Duration?    // nil on the first attempt, and once a policy gives up
+    static var initial: RetryStatus
+    func applying(_ policy: RetryPolicy) -> RetryStatus  // the status after asking the policy
+}
+
+struct RetryPolicy: Sendable {
+    init(_ delay: @escaping @Sendable (RetryStatus) -> Duration?)
+    func callAsFunction(_ status: RetryStatus) -> Duration?
+    static var maximumDelay: Duration
+
+    static func limitRetries(_ count: Int) -> RetryPolicy
+    static func constantDelay(_ delay: Duration) -> RetryPolicy
+    static func exponentialBackoff(_ base: Duration) -> RetryPolicy
+
+    func and(_ other: RetryPolicy) -> RetryPolicy  // both must retry; the longer delay wins
+    func capDelay(_ maximum: Duration) -> RetryPolicy
+    func limitRetriesByDelay(_ maximum: Duration) -> RetryPolicy
+    func limitRetriesByCumulativeDelay(_ maximum: Duration) -> RetryPolicy
+    func jitter(_ range: ClosedRange<Double> = 0...1) -> RetryPolicy
+    func jitter<G: RandomNumberGenerator & Sendable>(
+        _ range: ClosedRange<Double> = 0...1,
+        using generator: G
+    ) -> RetryPolicy
+
+    func dryRun() -> some Sequence<RetryStatus>
+}
+
+func withRetry<Success, Failure: Error, C: Clock<Duration>>(
+    _ policy: RetryPolicy,
+    while shouldRetry: (Failure) -> Bool = { _ in true },
+    clock: C = ContinuousClock(),
+    _ action: (RetryStatus) async -> Result<Success, Failure>
+) async -> Result<Success, Failure>
+
+// The same, for an action that does not need the status.
+func withRetry<Success, Failure: Error, C: Clock<Duration>>(
+    _ policy: RetryPolicy,
+    while shouldRetry: (Failure) -> Bool = { _ in true },
+    clock: C = ContinuousClock(),
+    _ action: () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure>
 ```
 

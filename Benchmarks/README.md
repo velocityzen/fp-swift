@@ -11,6 +11,7 @@ Every benchmark records wall clock and CPU time, instructions, malloc count and 
 | `ArrayBenchmarks` | `traverse`, sequential and concurrent `traverseAsync`, `mapAsync`, `compactMapAsync`, `flatMapAsync`, `separate`, `successes`, `failures` |
 | `AsyncSequenceBenchmarks` | `mapAsyncKeepOrder`, `mapAsyncUnordered`, `compactMapAsyncUnordered` and their `Result` variants at several concurrency levels, early termination, and the `Result` operators on async sequences |
 | `CombinatorBenchmarks` | `withAll`, `withAny`, `withTimeout` |
+| `RetryBenchmarks` | `withRetry` with a first-attempt success, with every attempt failing, and with a composed policy, all with `.zero` delays |
 
 Most benchmarks run at `n: 16` and `n: 1024` elements, to separate the fixed cost of a call from its cost per element, and the concurrent ones at several `concurrency` levels. Transforms are trivial (`$0 &* 2`), so the numbers are the operator's own overhead rather than the work it runs.
 

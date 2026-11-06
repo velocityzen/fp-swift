@@ -31,14 +31,21 @@ let package = Package(
 )
 
 // Each suite is its own executable under Benchmarks/, which is where the
-// benchmark plugin discovers them.
-for suite in ["ArrayBenchmarks", "AsyncSequenceBenchmarks", "CombinatorBenchmarks"] {
+// benchmark plugin discovers them, and depends on the product it measures.
+let suites = [
+    ("ArrayBenchmarks", "FP"),
+    ("AsyncSequenceBenchmarks", "FP"),
+    ("CombinatorBenchmarks", "FP"),
+    ("RetryBenchmarks", "FPRetry"),
+]
+
+for (suite, product) in suites {
     package.targets.append(
         .executableTarget(
             name: suite,
             dependencies: [
                 "BenchmarkSupport",
-                .product(name: "FP", package: "fp-swift"),
+                .product(name: product, package: "fp-swift"),
                 .product(name: "Benchmark", package: "benchmark"),
             ],
             path: "Benchmarks/\(suite)",
