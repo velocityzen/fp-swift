@@ -60,7 +60,7 @@ Then add the products a target uses to its dependencies and import them:
     name: "MyApp",
     dependencies: [
         .product(name: "FP", package: "fp-swift"),
-        .product(name: "FPRetry", package: "fp-swift"),  // only if it retries
+        .product(name: "FPRetry", package: "fp-swift"),  // only if you need retries
     ]
 )
 ```
@@ -70,7 +70,7 @@ import FP
 import FPRetry
 ```
 
-`FPRetry` is a separate product with no dependency on `FP`, so a target that only retries does not pull in the rest.
+`FPRetry` does not depend on `FP`. A target that only needs retries can use `FPRetry` alone.
 
 ## Features
 
@@ -471,28 +471,31 @@ It's a race between the operation and a timer — whichever finishes first wins 
 
 ### Retrying (FPRetry)
 
-`import FPRetry` for retries modeled on [retry-ts](https://github.com/gcanti/retry-ts). A `RetryPolicy` is a function from a `RetryStatus` (retries so far, the total delay so far, the previous delay) to the delay before the next retry, or `nil` to give up. Policies are plain `Sendable` values: define one once and reuse it with every operation that retries.
+`FPRetry` retries async operations that return a `Result`. It is based on [retry-ts](https://github.com/gcanti/retry-ts).
+
+A `RetryPolicy` decides two things after each failure: whether to retry, and how long to wait first. Create a policy once and use it in many places.
 
 ```swift
 import FPRetry
 
-// Random delays up to 200ms, 400ms, 800ms, … capped at 2s, at most 5 retries.
+// Wait up to 200ms, 400ms, 800ms, and so on, but never more than 2s.
+// Retry at most 5 times. Each wait is random (jitter).
 let apiPolicy = RetryPolicy.exponentialBackoff(.milliseconds(200))
     .and(.limitRetries(5))
     .capDelay(.seconds(2))
     .jitter()
 
 let user = await withRetry(apiPolicy) { await fetchUser(id) }
-// Result<User, APIError>: the first success, or the latest failure
+// Result<User, APIError>
 ```
 
-`withRetry` only takes async operations that return a `Result`. A success is never retried; a failure is retried while the policy keeps returning a delay.
+`withRetry` returns the first success. If every attempt fails, it returns the last failure. It never retries a success.
 
-#### Choosing which failures to retry
+#### Retry only some failures
 
-Not every failure is worth another attempt. A timeout or a 503 may pass on the next try; a 404 or a rejected password fails the same way every time, so retrying it only adds delay. Pass `while:` a function `(Failure) -> Bool` that returns `true` for the failures to retry. `withRetry` returns a failure it rejects at once, without asking the policy. Leave `while:` out and every failure is retried.
+Some failures can pass on the next try, for example a timeout. Others fail again every time, for example "not found". Use `while:` to choose which failures to retry: return `true` to retry. Without `while:`, every failure is retried.
 
-The rule usually belongs to the error type, so every call site agrees on what is retryable. `isTransient` below is a property you write on your own error, not part of FPRetry:
+You usually put this rule on your error type. `isTransient` is not part of FPRetry. You write it:
 
 ```swift
 enum APIError: Error, Equatable {
@@ -502,7 +505,7 @@ enum APIError: Error, Equatable {
     case unauthorized
     case notFound
 
-    /// Failures that may succeed if tried again.
+    /// True when the request can succeed if we try again.
     var isTransient: Bool {
         switch self {
             case .timeout, .rateLimited: true
@@ -512,113 +515,113 @@ enum APIError: Error, Equatable {
     }
 }
 
-// Retries timeouts, rate limits and 5xx; returns .unauthorized or .notFound at once.
 let user = await withRetry(apiPolicy, while: \.isTransient) { await fetchUser(id) }
 ```
 
-`\.isTransient` is a key path used as a function: wherever Swift expects a function `(APIError) -> Bool`, the key path `\APIError.isTransient` works too (SE-0249). These two calls are the same:
+`\.isTransient` is a key path. Swift can use a key path as a function (SE-0249). These two lines do the same thing:
 
 ```swift
 await withRetry(apiPolicy, while: \.isTransient) { await fetchUser(id) }
 await withRetry(apiPolicy, while: { error in error.isTransient }) { await fetchUser(id) }
 ```
 
-A one-off rule fits in a closure: `while: { $0 != .unauthorized }`.
+You can also write the rule in place: `while: { $0 != .unauthorized }`.
 
-#### Knowing which attempt is running
+#### Use the retry status
 
-The action can take the current `RetryStatus` — for logging, or to change the request on a retry:
+The action can take a `RetryStatus`. It tells you which attempt is running:
 
 ```swift
-let user = await withRetry(apiPolicy, while: \.isTransient) { status in
+let user = await withRetry(apiPolicy) { status in
     logger.debug("attempt \(status.iteration + 1)")
     return await fetchUser(id)
 }
 ```
 
-#### Composing policies
+`RetryStatus` has three values:
 
-Policies combine with `and`, which retries only while **both** policies do and waits the **longer** of their delays. It is associative, with `constantDelay(.zero)` as its identity, so policies form a monoid, the same as retry-ts's `Monoid`. Modifiers reshape a policy:
+- `iteration`: the number of retries so far. It is `0` on the first attempt.
+- `cumulativeDelay`: the total time waited so far.
+- `previousDelay`: the last wait. It is `nil` on the first attempt.
 
-| Policy | Delays | Gives up |
+#### Built-in policies
+
+| Policy | Wait before each retry | Stops |
 | --- | --- | --- |
-| `.limitRetries(n)` | `.zero` | after `n` retries |
-| `.constantDelay(d)` | `d` every time | never |
+| `.limitRetries(n)` | no wait | after `n` retries |
+| `.constantDelay(d)` | `d` | never |
 | `.exponentialBackoff(d)` | `d`, `2d`, `4d`, … | never |
-| `p.and(q)` | the longer of `p`'s and `q`'s | when either gives up |
-| `p.capDelay(max)` | `p`'s, at most `max` | when `p` does |
-| `p.limitRetriesByDelay(max)` | `p`'s | when `p`'s next delay is over `max` |
-| `p.limitRetriesByCumulativeDelay(max)` | `p`'s | when the total wait would pass `max` |
-| `p.jitter(range)` | `p`'s times a random factor in `range` | when `p` does |
-| `RetryPolicy { status in … }` | your own | when it returns `nil` |
+| `p.and(q)` | the longer wait of `p` and `q` | when `p` or `q` stops |
+| `p.capDelay(max)` | the wait of `p`, at most `max` | when `p` stops |
+| `p.limitRetriesByDelay(max)` | the wait of `p` | when the next wait is longer than `max` |
+| `p.limitRetriesByCumulativeDelay(max)` | the wait of `p` | when the total wait would be longer than `max` |
+| `p.jitter(range)` | the wait of `p`, times a random number from `range` | when `p` stops |
 
-#### Adding jitter
+`constantDelay` and `exponentialBackoff` never stop by themselves. Combine them with a limit, for example `.and(.limitRetries(5))`.
 
-When many clients fail at the same moment — a server restarts, the network blips — the same policy has them all retry at the same moments too. Each retry arrives as one burst, and the bursts can keep the server down. Jitter spreads the retries out by multiplying every delay by a random factor. Add it to any policy that more than one client runs:
+`and` is associative, and `.constantDelay(.zero)` is its identity. So policies form a monoid, and you can combine them in any order of grouping.
+
+#### Jitter
+
+Many clients often fail at the same time, for example when a server restarts. With the same policy, they also retry at the same time, and this can overload the server again. Jitter makes each wait random, so the retries spread out. Use jitter when many clients use the same policy.
+
+The range contains multipliers, not durations:
+
+| Call | Wait |
+| --- | --- |
+| `.jitter()` | from 0 to the full wait. The same as `.jitter(0...1)`. |
+| `.jitter(0.5...1)` | from half the wait to the full wait |
+| `.jitter(0.8...1.2)` | the wait, plus or minus 20% |
+
+Put `jitter` last, after `capDelay`. Then a wait is never longer than the cap.
+
+Tests often need the same random numbers every time. For this, pass your own seeded generator. The standard library does not have one, but SplitMix64 is only a few lines:
 
 ```swift
-// Without jitter, every client waits exactly 200ms, 400ms, 800ms, ….
-// With it, each waits a random delay up to those.
-let apiPolicy = RetryPolicy.exponentialBackoff(.milliseconds(200))
+let testPolicy = RetryPolicy.exponentialBackoff(.milliseconds(200))
     .and(.limitRetries(5))
-    .capDelay(.seconds(2))
-    .jitter()
+    .jitter(using: SeededGenerator(seed: 42))
 ```
 
-The range is of factors, not durations:
+The policy keeps the generator, and each use takes the next random numbers. To get the same numbers again, create the policy again with the same seed.
 
-| Call | Factors | Each delay is |
-| --- | --- | --- |
-| `.jitter()` | `0...1` | *full jitter*: anywhere from none to the policy's own. It spreads retries out the most. |
-| `.jitter(0.5...1)` | `0.5...1` | *equal jitter*: at least half the policy's delay, so a retry never comes too soon |
-| `.jitter(0.8...1.2)` | `0.8...1.2` | within 20% either side of the policy's delay |
+#### Write your own policy
 
-Add jitter **last**, after `capDelay`: the cap then bounds the delay jitter draws from, so `.capDelay(.seconds(2)).jitter()` waits 2s at most. A factor above 1 can take a delay past a cap that comes before it. Jitter never changes how often a policy retries, and the status records the delay actually waited, so `cumulativeDelay` and `limitRetriesByCumulativeDelay` see the jittered delays.
+A policy is a function. It takes a `RetryStatus` and returns a `Duration?`. Return a duration to wait and retry. Return `nil` to stop. Wrap the function in `RetryPolicy { status in … }`, and it works with all the built-in policies.
 
-The factors come from the system's random number generator. For delays a test can predict, pass a seeded generator of your own (the standard library has none; SplitMix64 is a few lines):
+A policy for one place:
 
 ```swift
-let policy = apiPolicy.jitter(using: SeededGenerator(seed: 42))
-```
-
-The policy owns that generator, so each use of it draws the next numbers; build the policy again with the same seed to repeat a sequence.
-
-#### Writing your own policy
-
-A policy is just a function from `RetryStatus` to `Duration?`: return a delay to retry after it, or `nil` to give up. Wrap that function in `RetryPolicy { status in … }` and it composes with the built-ins like any other policy.
-
-A one-off policy can be written inline. This one retries the first failure at once, and waits a second before every retry after it — forever, so give it a limit:
-
-```swift
+// Retry the first time at once. Then wait 1 second before each retry.
 let quickThenSlow = RetryPolicy { status in
     status.iteration == 0 ? .zero : .seconds(1)
 }
 
 let user = await withRetry(quickThenSlow.and(.limitRetries(3))) { await fetchUser(id) }
-// Delays: 0s, 1s, 1s, then gives up
+// Waits: 0s, 1s, 1s, then stops
 ```
 
-A policy you reuse belongs in an extension of `RetryPolicy`. A `static func` that returns a policy works with leading-dot syntax, exactly like `.exponentialBackoff`, so it chains with the built-in modifiers:
+A policy to reuse: add a `static func` in an extension. Then you can write it with a leading dot, like the built-in policies:
 
 ```swift
 extension RetryPolicy {
-    /// Waits `step` before the first retry, `2 × step` before the second, and so on.
+    /// Waits `step`, then `2 × step`, then `3 × step`, and so on.
     static func linearBackoff(_ step: Duration) -> RetryPolicy {
         RetryPolicy { status in step * (status.iteration + 1) }
     }
 }
 
-let apiPolicy = RetryPolicy.linearBackoff(.milliseconds(500))
+let linearPolicy = RetryPolicy.linearBackoff(.milliseconds(500))
     .and(.limitRetries(4))
     .capDelay(.milliseconds(1500))
-// Delays: 0.5s, 1s, 1.5s, 1.5s, then gives up
+// Waits: 0.5s, 1s, 1.5s, 1.5s, then stops
 ```
 
-A modifier — a policy that reshapes another — is an instance method that asks `self` for its delay and changes the answer. Calling a policy as a function, `self(status)`, returns its delay. This one is the opposite of `capDelay`: it never lets a retry come sooner than `minimum`:
+A modifier changes another policy. Write it as an instance method. Call `self(status)` to get the wait of the original policy, then change it. This modifier is the opposite of `capDelay`. It sets a minimum wait:
 
 ```swift
 extension RetryPolicy {
-    /// Waits at least `minimum` before every retry.
+    /// Waits at least `minimum` before each retry.
     func minimumDelay(_ minimum: Duration) -> RetryPolicy {
         RetryPolicy { status in
             self(status).map { delay in max(delay, minimum) }
@@ -629,14 +632,14 @@ extension RetryPolicy {
 let user = await withRetry(.limitRetries(3).minimumDelay(.milliseconds(100))) {
     await fetchUser(id)
 }
-// Delays: 100ms, 100ms, 100ms, then gives up
+// Waits: 100ms, 100ms, 100ms, then stops
 ```
 
-`Optional.map` passes `nil` through untouched, so the policy a modifier wraps still decides when to give up. Check a policy you write with `dryRun()`, below.
+When the original policy stops, `self(status)` returns `nil`. `Optional.map` keeps the `nil`, so the modifier stops too.
 
-#### Checking a schedule
+#### Check a policy
 
-Check a policy's schedule without running anything with `dryRun()`, a lazy sequence of the statuses the policy goes through, ending with the one where it gives up:
+`dryRun()` shows the steps of a policy. It does not run anything and does not wait:
 
 ```swift
 RetryPolicy.exponentialBackoff(.seconds(1))
@@ -646,11 +649,15 @@ RetryPolicy.exponentialBackoff(.seconds(1))
 // [1s, 2s, 4s, nil]
 ```
 
-#### Clocks, cancellation and isolation
+`dryRun()` is lazy. If a policy never stops, take only the first steps: `.dryRun().prefix(10)`.
 
-The delays are waited on a `ContinuousClock` by default; pass any `Clock<Duration>` as `clock:` — a test clock that records and skips its sleeps, say. A `.zero` delay retries without touching the clock. Cancellation stops retrying: a cancelled wait, or a cancelled task about to retry at once, returns the latest failure. Delays are clamped to `.zero...RetryPolicy.maximumDelay` (about 292 million years), so a backoff that keeps doubling saturates instead of overflowing.
+#### Clock, cancellation, and actors
 
-The action runs on the caller's actor, so a `@MainActor` caller can touch its own state from it.
+- `withRetry` waits on a `ContinuousClock`. To use another clock, pass `clock:`. For example, a test clock that does not really wait.
+- A wait of zero does not use the clock.
+- If the task is cancelled, `withRetry` stops and returns the last failure.
+- A wait is never less than zero and never more than `RetryPolicy.maximumDelay` (about 292 million years). So a long backoff never overflows.
+- The action runs on the caller's actor. Code on `@MainActor` can use its own state in the action.
 
 ### Array Extensions
 
@@ -1145,10 +1152,10 @@ Everything here comes from `import FPRetry`.
 ```swift
 struct RetryStatus: Sendable, Hashable {
     let iteration: Int              // retries so far: 0 on the first attempt
-    let cumulativeDelay: Duration   // every delay waited so far
-    let previousDelay: Duration?    // nil on the first attempt, and once a policy gives up
+    let cumulativeDelay: Duration   // total time waited so far
+    let previousDelay: Duration?    // the last wait, nil on the first attempt
     static var initial: RetryStatus
-    func applying(_ policy: RetryPolicy) -> RetryStatus  // the status after asking the policy
+    func applying(_ policy: RetryPolicy) -> RetryStatus  // the next status after asking the policy
 }
 
 struct RetryPolicy: Sendable {
@@ -1160,7 +1167,7 @@ struct RetryPolicy: Sendable {
     static func constantDelay(_ delay: Duration) -> RetryPolicy
     static func exponentialBackoff(_ base: Duration) -> RetryPolicy
 
-    func and(_ other: RetryPolicy) -> RetryPolicy  // both must retry; the longer delay wins
+    func and(_ other: RetryPolicy) -> RetryPolicy  // retries while both retry, waits the longer delay
     func capDelay(_ maximum: Duration) -> RetryPolicy
     func limitRetriesByDelay(_ maximum: Duration) -> RetryPolicy
     func limitRetriesByCumulativeDelay(_ maximum: Duration) -> RetryPolicy

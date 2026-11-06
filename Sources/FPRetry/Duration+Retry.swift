@@ -1,51 +1,49 @@
-// Saturating arithmetic for retry delays. A delay or a sum of delays never
-// leaves `.zero...RetryPolicy.maximumDelay`, so long backoffs and long
-// cumulative waits saturate instead of trapping on overflow, and every delay
-// can be slept: a clock traps when its deadline does not fit in `Int64`
-// seconds.
+// Safe math for retry waits. A wait, or a sum of waits, always stays
+// between zero and `RetryPolicy.maximumDelay`. Without this, a long backoff
+// could overflow, and a clock crashes when its deadline does not fit in
+// `Int64` seconds.
 //
-// `Duration`'s comparisons, `+` and `.zero` are calls into the standard
-// library rather than inlined arithmetic, so these helpers make as few of
-// them as they can.
+// `Duration` comparisons, `+` and `.zero` are calls into the standard
+// library, not inlined math, so these helpers use as few as they can.
 
 extension Duration {
-    /// The delay clamped to `.zero...RetryPolicy.maximumDelay`.
+    /// The wait, kept between zero and `RetryPolicy.maximumDelay`.
     @inlinable
     var clampedToRetryDelay: Duration {
         min(max(self, .zero), RetryPolicy.maximumDelay)
     }
 
-    /// The sum of two delays, both already within
-    /// `.zero...RetryPolicy.maximumDelay`, saturating at the maximum.
+    /// The sum of two waits, at most `RetryPolicy.maximumDelay`. Both waits
+    /// must already be between zero and the maximum.
     ///
-    /// Their sum is at most twice the maximum, so it cannot overflow.
+    /// The sum is at most twice the maximum, so it cannot overflow.
     @inlinable
     func addingRetryDelay(_ delay: Duration) -> Duration {
         min(self + delay, RetryPolicy.maximumDelay)
     }
 
-    /// The delay times `factor`, saturating at `RetryPolicy.maximumDelay`;
-    /// `.zero` for a factor or a delay that is not positive.
+    /// The wait times `factor`, at most `RetryPolicy.maximumDelay`. Zero
+    /// when the factor or the wait is zero or less.
     @inlinable
     func scaledForRetry(by factor: Double) -> Duration {
         let base = clampedToRetryDelay
         guard factor > 0, base > .zero else { return .zero }
-        // Past this factor the product is longer than the maximum, and far
-        // enough past it, too long for a `Duration`.
+        // Above this factor, the result is longer than the maximum. Far
+        // above it, the result does not fit in a `Duration`.
         guard factor < RetryPolicy.maximumDelay / base else {
             return RetryPolicy.maximumDelay
         }
         return base * factor
     }
 
-    /// The delay times `2^exponent`, saturating at
-    /// `RetryPolicy.maximumDelay`; `.zero` for a delay that is not positive.
+    /// The wait times `2^exponent`, at most `RetryPolicy.maximumDelay`. Zero
+    /// when the wait is zero or less.
     @inlinable
     func doubled(times exponent: Int) -> Duration {
         let base = clampedToRetryDelay
         guard base > .zero else { return .zero }
-        // 2^62 is the largest power of two an `Int` holds; past it any
-        // positive delay saturates anyway.
+        // 2^62 is the largest power of two in an `Int`. Above it, any
+        // positive wait reaches the maximum anyway.
         guard exponent < Int.bitWidth - 2 else { return RetryPolicy.maximumDelay }
         let factor = 1 << max(exponent, 0)
         return base > RetryPolicy.maximumDelay / factor

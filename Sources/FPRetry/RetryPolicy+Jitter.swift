@@ -3,43 +3,34 @@ import Synchronization
 // MARK: - Jitter
 
 public extension RetryPolicy {
-    /// Multiplies every delay by a random factor drawn from `range`,
-    /// retrying exactly as often as before.
+    /// Multiplies each wait by a random number from `range`. Retries as
+    /// often as before.
     ///
-    /// When many clients fail at the same moment — a server restarts, a
-    /// network blips — the same policy has them all retry at the same moments
-    /// too, and the bursts can keep the server down. Jitter spreads their
-    /// retries out. Add it to any policy that more than one client runs.
+    /// Many clients often fail at the same time, for example when a server
+    /// restarts. With the same policy, they also retry at the same time, and
+    /// this can overload the server again. Jitter makes each wait random, so
+    /// the retries spread out.
     ///
     /// ```swift
     /// let apiPolicy = RetryPolicy.exponentialBackoff(.milliseconds(200))
     ///     .and(.limitRetries(5))
     ///     .capDelay(.seconds(2))
     ///     .jitter()
-    /// // Random delays up to 200ms, 400ms, 800ms, 1.6s, 2s, then gives up
+    /// // Random waits up to 200ms, 400ms, 800ms, 1.6s, 2s, then stops
     /// ```
     ///
-    /// The range is of factors, not durations:
-    /// - `0...1`, the default, is *full jitter*: anywhere from no delay up to
-    ///   the policy's own. It spreads retries out the most.
-    /// - `0.5...1` is *equal jitter*: at least half the policy's delay, so a
-    ///   retry never comes too soon.
-    /// - `0.8...1.2` is ±20% around the policy's delay.
+    /// The range contains multipliers, not durations:
+    /// - `0...1` (the default): from 0 to the full wait.
+    /// - `0.5...1`: from half the wait to the full wait.
+    /// - `0.8...1.2`: the wait, plus or minus 20%.
     ///
-    /// Add jitter last, after ``capDelay(_:)``: the cap then bounds the delay
-    /// jitter draws from, so full jitter waits up to the cap at most. A
-    /// factor above `1` can take a delay past an earlier cap.
+    /// Put jitter last, after ``capDelay(_:)``. Then a wait is never longer
+    /// than the cap.
     ///
-    /// The status records the delay actually waited, so
-    /// ``RetryStatus/cumulativeDelay`` and
-    /// ``limitRetriesByCumulativeDelay(_:)`` see the jittered delays. A
-    /// non-positive factor retries at once, and a delay saturates at
-    /// ``maximumDelay``.
+    /// The status records the real, random wait. A multiplier of zero or less
+    /// means no wait.
     ///
-    /// The random factors come from the system's random number generator;
-    /// ``jitter(_:using:)`` takes a seeded one, for delays a test can predict.
-    ///
-    /// - Parameter range: The factors to draw from. Its width must be finite.
+    /// - Parameter range: The multipliers. The range must be finite.
     @inlinable
     func jitter(_ range: ClosedRange<Double> = 0...1) -> RetryPolicy {
         precondition(
@@ -51,11 +42,11 @@ public extension RetryPolicy {
         }
     }
 
-    /// Multiplies every delay by a random factor drawn from `range` with
-    /// `generator`, retrying exactly as often as before.
+    /// Multiplies each wait by a random number from `range`, made by
+    /// `generator`. Retries as often as before.
     ///
-    /// The same as ``jitter(_:)``, with the factors drawn from `generator` —
-    /// a seeded one makes the delays reproducible:
+    /// Use it in tests: with a seeded generator, the waits are the same on
+    /// every run.
     ///
     /// ```swift
     /// let policy = RetryPolicy.exponentialBackoff(.seconds(1))
@@ -63,18 +54,16 @@ public extension RetryPolicy {
     ///     .jitter(using: SeededGenerator(seed: 42))
     /// ```
     ///
-    /// `SeededGenerator` stands for a seeded `RandomNumberGenerator` of your
-    /// own, such as SplitMix64: the standard library has none.
+    /// `SeededGenerator` is your own type. The standard library has no
+    /// seeded generator, but SplitMix64 is only a few lines.
     ///
-    /// The policy owns the generator, so every use of it — each `withRetry`
-    /// call and each ``dryRun()`` — draws the next numbers from it. To repeat
-    /// a sequence of delays, build the policy again with the same seed.
-    /// Draws are serialized by a lock, so the policy can be shared between
-    /// tasks.
+    /// The policy keeps the generator, and each use takes the next random
+    /// numbers. To get the same numbers again, create the policy again with
+    /// the same seed. Many tasks can use the policy at the same time.
     ///
     /// - Parameters:
-    ///   - range: The factors to draw from. Its width must be finite.
-    ///   - generator: The random number generator to draw the factors with.
+    ///   - range: The multipliers. The range must be finite.
+    ///   - generator: The random number generator.
     @inlinable
     func jitter<Generator: RandomNumberGenerator & Sendable>(
         _ range: ClosedRange<Double> = 0...1,
@@ -91,8 +80,8 @@ public extension RetryPolicy {
     }
 }
 
-/// A random number generator that a `@Sendable` policy can draw from on any
-/// task: a lock serializes the draws.
+/// A random number generator that many tasks can use at the same time.
+/// A lock lets only one task use it at a time.
 @usableFromInline
 final class SharedRandomNumberGenerator<Generator: RandomNumberGenerator & Sendable>: Sendable {
     @usableFromInline
