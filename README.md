@@ -7,7 +7,7 @@
 
 _This is not a full fledged package for functional programming in Swift. This will have to wait until Higher Kinded Types are part of the language. However this will make it easier to write functional code using built-in Swift Result and Optional types._
 
-A lightweight functional programming toolkit for Swift, providing composable utilities for working with `Result`, `Optional`, and `Array` types in both synchronous and asynchronous contexts. 
+A lightweight functional programming toolkit for Swift, providing composable utilities for working with `Result`, `Optional`, and `Array` types in both synchronous and asynchronous contexts.
 
 ## Contents
 
@@ -49,7 +49,7 @@ Add the package to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/velocityzen/fp-swift.git", from: "3.0.0")
+    .package(url: "https://github.com/velocityzen/fp-swift.git", from: "4.3.0")
 ]
 ```
 
@@ -85,7 +85,7 @@ let result = 5 |> double |> toString  // "10"
 // Pipe into second argument
 let result = value |>> (function, firstArg)
 
-// Pipe into third argument  
+// Pipe into third argument
 let result = value |>>> (function, firstArg, secondArg)
 
 // Flow operator: create function from another function
@@ -235,6 +235,7 @@ await result
 ```
 
 Tap variants:
+
 - `.tap()` - Sync side effect on success
 - `.tapAsync()` - Async side effect on success
 - `.tapError()` - Sync side effect on failure
@@ -421,7 +422,7 @@ func loadDashboard(userId: Int) async -> Result<Dashboard, AppError> {
         await fetchRecommendations(for: userId)
     )
     // Result<(User, [Notification], [Recommendation]), AppError>
-    
+
     return result.map { user, notifications, recommendations in
         Dashboard(user: user, notifications: notifications, recommendations: recommendations)
     }
@@ -457,7 +458,7 @@ Cancellation of the losers is cooperative: a long racer that never checks `Task.
 
 ### Timeouts
 
-Run an async operation with a deadline. If it finishes within `duration`, its `Result` is returned; otherwise the operation is cancelled and `.failure(timeoutError)` is returned. A failure that arrives before the timeout is *not* swallowed — it's returned as-is.
+Run an async operation with a deadline. If it finishes within `duration`, its `Result` is returned; otherwise the operation is cancelled and `.failure(timeoutError)` is returned. A failure that arrives before the timeout is _not_ swallowed — it's returned as-is.
 
 ```swift
 func loadProfile(id: Int) async -> Result<Profile, AppError> {
@@ -467,7 +468,7 @@ func loadProfile(id: Int) async -> Result<Profile, AppError> {
 }
 ```
 
-It's a race between the operation and a timer — whichever finishes first wins — so this isn't `withAny` (which waits for the first *success*); a fast failure here returns immediately. Cancellation is cooperative: when the timeout fires, the operation stops promptly only if it observes `Task.isCancelled`.
+It's a race between the operation and a timer — whichever finishes first wins — so this isn't `withAny` (which waits for the first _success_); a fast failure here returns immediately. Cancellation is cooperative: when the timeout fires, the operation stops promptly only if it observes `Task.isCancelled`.
 
 ### Retrying (FPRetry)
 
@@ -546,16 +547,16 @@ let user = await withRetry(apiPolicy) { status in
 
 #### Built-in policies
 
-| Policy | Wait before each retry | Stops |
-| --- | --- | --- |
-| `.limitRetries(n)` | no wait | after `n` retries |
-| `.constantDelay(d)` | `d` | never |
-| `.exponentialBackoff(d)` | `d`, `2d`, `4d`, … | never |
-| `p.and(q)` | the longer wait of `p` and `q` | when `p` or `q` stops |
-| `p.capDelay(max)` | the wait of `p`, at most `max` | when `p` stops |
-| `p.limitRetriesByDelay(max)` | the wait of `p` | when the next wait is longer than `max` |
-| `p.limitRetriesByCumulativeDelay(max)` | the wait of `p` | when the total wait would be longer than `max` |
-| `p.jitter(range)` | the wait of `p`, times a random number from `range` | when `p` stops |
+| Policy                                 | Wait before each retry                              | Stops                                          |
+| -------------------------------------- | --------------------------------------------------- | ---------------------------------------------- |
+| `.limitRetries(n)`                     | no wait                                             | after `n` retries                              |
+| `.constantDelay(d)`                    | `d`                                                 | never                                          |
+| `.exponentialBackoff(d)`               | `d`, `2d`, `4d`, …                                  | never                                          |
+| `p.and(q)`                             | the longer wait of `p` and `q`                      | when `p` or `q` stops                          |
+| `p.capDelay(max)`                      | the wait of `p`, at most `max`                      | when `p` stops                                 |
+| `p.limitRetriesByDelay(max)`           | the wait of `p`                                     | when the next wait is longer than `max`        |
+| `p.limitRetriesByCumulativeDelay(max)` | the wait of `p`                                     | when the total wait would be longer than `max` |
+| `p.jitter(range)`                      | the wait of `p`, times a random number from `range` | when `p` stops                                 |
 
 `constantDelay` and `exponentialBackoff` never stop by themselves. Combine them with a limit, for example `.and(.limitRetries(5))`.
 
@@ -567,11 +568,11 @@ Many clients often fail at the same time, for example when a server restarts. Wi
 
 The range contains multipliers, not durations:
 
-| Call | Wait |
-| --- | --- |
-| `.jitter()` | from 0 to the full wait. The same as `.jitter(0...1)`. |
-| `.jitter(0.5...1)` | from half the wait to the full wait |
-| `.jitter(0.8...1.2)` | the wait, plus or minus 20% |
+| Call                 | Wait                                                   |
+| -------------------- | ------------------------------------------------------ |
+| `.jitter()`          | from 0 to the full wait. The same as `.jitter(0...1)`. |
+| `.jitter(0.5...1)`   | from half the wait to the full wait                    |
+| `.jitter(0.8...1.2)` | the wait, plus or minus 20%                            |
 
 Put `jitter` last, after `capDelay`. Then a wait is never longer than the cap.
 
@@ -900,6 +901,7 @@ let result = ResultDo<MyError>()
 ```
 
 **API:**
+
 ```swift
 // Start the chain
 ResultDo<Failure>()
@@ -939,6 +941,7 @@ let result = await ResultDo<MyError>()
 ```
 
 ### Map & FlatMap
+
 ```swift
 // Non-throwing
 func mapAsync<T>(_ transform: (Success) async -> T) async -> Result<T, Failure>
@@ -954,6 +957,7 @@ func asUnit() -> Result<Void, Failure>
 ```
 
 ### Alt
+
 ```swift
 // Lazily provides an alternative on failure
 func alt(_ alternative: () -> Result<Success, Failure>) -> Result<Success, Failure>
@@ -961,6 +965,7 @@ func altAsync(_ alternative: () async -> Result<Success, Failure>) async -> Resu
 ```
 
 ### GetOrElse
+
 ```swift
 // Unwrap or fall back
 func getOrElse(_ onFailure: (Failure) -> Success) -> Success
@@ -970,6 +975,7 @@ func getOrElseAsync(_ defaultValue: @autoclosure @escaping () async -> Success) 
 ```
 
 ### GetOrExit / OrExit
+
 ```swift
 // Unwrap or print to stderr and call Foundation.exit
 func getOrExit(prefix: String = "Error: ", exitCode: Int32 = 1) -> Success
@@ -995,12 +1001,14 @@ All match variants are marked `@discardableResult`, so you can use them both for
 ```
 
 ### From Async
+
 ```swift
 // Throwing (requires Failure == Error)
 static func fromAsync(_ operation: () async throws -> Success) async -> Result<Success, Error>
 ```
 
 ### From Task
+
 ```swift
 // Throwing Task (requires Failure == Error)
 static func fromTask(_ task: Task<Success, Error>) async -> Result<Success, Error>
@@ -1016,6 +1024,7 @@ static func fromTask<S>(_ task: () -> Task<Result<S, Error>, Never>) async -> Re
 ```
 
 ### From Optional
+
 ```swift
 static func fromOptional(_ optional: Success?, error: Failure) -> Result<Success, Failure>
 static func fromOptional(_ optional: Success?, onError: () -> Failure) -> Result<Success, Failure>
@@ -1024,6 +1033,7 @@ static func fromOptional(onError: () -> Failure) -> (Success?) -> Result<Success
 ```
 
 ### Is Success / Is Failure
+
 ```swift
 var isSuccess: Bool  // true for success, false for failure
 var isFailure: Bool  // true for failure, false for success
@@ -1088,6 +1098,7 @@ func tapErrorAsync<T>(_ action: (Failure) async throws -> T) async -> Result<Suc
 ```
 
 ### Finally
+
 ```swift
 // Runs regardless of success or failure, returns self unchanged
 func finally(_ action: () -> Void) -> Result<Success, Failure>
@@ -1099,6 +1110,7 @@ func finallyAsync(_ action: () async -> Void) async -> Result<Success, Failure>
 Combine multiple Results into a single Result containing a tuple of all success values. If any Result fails, returns the first failure.
 
 ### Sync (flatten)
+
 ```swift
 // Supports 2-10 arguments
 func flatten<A, B, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>) -> Result<(A, B), E>
@@ -1107,6 +1119,7 @@ func flatten<A, B, C, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>, _ c: Resul
 ```
 
 ### Async (withAll, Parallel Execution)
+
 ```swift
 // Supports 2-10 arguments, runs all operations in parallel
 func withAll<A: Sendable, B: Sendable, E: Error>(
@@ -1199,6 +1212,7 @@ func withRetry<Success, Failure: Error, C: Clock<Duration>>(
 ## Array Extensions API
 
 ### Traverse
+
 ```swift
 func traverse<Success>(_ transform: (Element) -> Success) -> Result<[Success], Never>
 func traverse<Success, Failure>(_ transform: (Element) -> Result<Success, Failure>) -> Result<[Success], Failure>
@@ -1220,6 +1234,7 @@ func traverseAsync<Success: Sendable, Failure: Error>(
 ```
 
 ### Separate / Successes / Failures
+
 ```swift
 // Split an array of Results into both sides
 func separate<Success, Failure>() -> (successes: [Success], failures: [Failure])
@@ -1231,6 +1246,7 @@ func failures<Success, Failure>() -> [Failure] where Element == Result<Success, 
 ```
 
 ### Compact / Sequence
+
 ```swift
 // Drop nil elements
 func compact<T>() -> [T] where Element == T?
@@ -1240,6 +1256,7 @@ func sequence<T>() -> [T]? where Element == T?
 ```
 
 ### Async Mapping
+
 ```swift
 // mapAsync — for Result-returning transforms, use traverseAsync
 func mapAsync<T>(_ transform: (Element) async -> T) async -> [T]
@@ -1266,12 +1283,14 @@ Extensions for any `AsyncSequence` where `Element == Result<Success, Failure>`.
 They return `ResultMapSequence`, `ResultMapAsyncSequence` and `ResultCompactMapSequence`, FP's inlinable replacements for the standard library's `AsyncMapSequence` and `AsyncCompactMapSequence`: a transform compiles into the loop that iterates the sequence instead of costing a call into the runtime per element. Each one is `Sendable` when its base sequence is and throws only what its base sequence throws. Closures run on the actor that iterates the sequence.
 
 ### Filter
+
 ```swift
 func successes() -> ResultCompactMapSequence<Self, Success>  // unwraps success values
 func failures() -> ResultCompactMapSequence<Self, Failure>   // unwraps failure errors
 ```
 
 ### Map & FlatMap
+
 ```swift
 // Sync
 func map<T>(_ transform: (Success) -> T) -> ResultMapSequence<Self, Result<T, Failure>>
@@ -1285,6 +1304,7 @@ func flatMapAsync<T>(_ transform: (Success) async -> Result<T, Failure>) -> Resu
 ```
 
 ### Tap
+
 ```swift
 // Sync
 func tap(_ action: (Success) -> Void) -> ResultMapSequence<Self, Result<Success, Failure>>
@@ -1360,6 +1380,7 @@ where Self: Sendable, Failure == Never, Element == Result<Success, E>
 ## AsyncStream Extensions API
 
 ### Static Factories
+
 Create single-element Result streams:
 
 ```swift
@@ -1384,18 +1405,21 @@ func finishWithFailure<Success, Failure>(_ error: Failure)
 ## Optional Extensions API
 
 ### Match
+
 ```swift
 @discardableResult func match<T>(_ onSome: (Wrapped) -> T, _ onNone: @autoclosure () -> T) -> T
 @discardableResult func matchAsync<T>(_ onSome: (Wrapped) async -> T, _ onNone: @autoclosure () -> T) async -> T
 ```
 
 ### Async Mapping
+
 ```swift
 func mapAsync<T>(_ transform: (Wrapped) async -> T) async -> T?
 func flatMapAsync<T>(_ transform: (Wrapped) async -> T?) async -> T?
 ```
 
 ### OrElse / GetOrElse
+
 ```swift
 // First .some wins; the alternative is only evaluated when nil
 func orElse(_ alternative: @autoclosure () -> Wrapped?) -> Wrapped?
@@ -1407,6 +1431,7 @@ func getOrElseAsync(_ defaultValue: @autoclosure @escaping () async -> Wrapped) 
 ```
 
 ### Finally
+
 ```swift
 // Runs regardless of .some/.none, returns self unchanged
 func finally(_ action: () -> Void) -> Wrapped?
