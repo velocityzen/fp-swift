@@ -1,10 +1,10 @@
-/// Pipe operators bind looser than arithmetic, ranges, casts, and `??`, but
-/// tighter than comparisons, logical operators, and assignment — the same
-/// placement as Elixir's `|>` and F#'s pipe family. The full expression on
-/// the left flows into the function on the right:
+/// The precedence of the pipe operators.
+///
+/// Pipes have lower precedence than arithmetic, ranges, casts, and `??`, and higher precedence
+/// than comparisons, logical operators, and assignment:
 ///
 /// ```swift
-/// 1 + 2 |> double          // double(3) — not 1 + double(2)
+/// 1 + 2 |> double          // double(3), not 1 + double(2)
 /// x |> transform == 6      // (x |> transform) == 6
 /// flag && x |> isValid     // flag && (x |> isValid)
 /// a ?? b |> process        // (a ?? b) |> process
@@ -17,13 +17,13 @@ precedencegroup PipePrecedence {
 
 infix operator |> : PipePrecedence
 
-/// Pipes a value into a function: `value |> transform`.
+/// Passes `lhs` to `rhs`: `value |> transform` is `transform(value)`.
 @inlinable
 public func |> <A, Z>(lhs: A, rhs: (A) -> Z) -> Z {
     return rhs(lhs)
 }
 
-/// Asynchronously pipes a value into an async function: `value |> asyncTransform`.
+/// Passes `lhs` to the async function `rhs`.
 @inlinable
 public func |> <A, Z>(lhs: A, rhs: (A) async -> Z) async -> Z {
     await rhs(lhs)
@@ -31,13 +31,13 @@ public func |> <A, Z>(lhs: A, rhs: (A) async -> Z) async -> Z {
 
 infix operator |>> : PipePrecedence
 
-/// Pipes a value as the second argument: `value |>> (function, firstArg)`.
+/// Passes `lhs` as the second argument: `value |>> (fn, a)` is `fn(a, value)`.
 @inlinable
 public func |>> <A, B, Z>(lhs: B, rhs: ((A, B) -> Z, A)) -> Z {
     return rhs.0(rhs.1, lhs)
 }
 
-/// Asynchronously pipes a value as the second argument: `value |>> (asyncFunction, firstArg)`.
+/// Passes `lhs` as the second argument of an async function.
 @inlinable
 public func |>> <A, B, Z>(lhs: B, rhs: ((A, B) async -> Z, A)) async -> Z {
     await rhs.0(rhs.1, lhs)
@@ -45,13 +45,13 @@ public func |>> <A, B, Z>(lhs: B, rhs: ((A, B) async -> Z, A)) async -> Z {
 
 infix operator |>>> : PipePrecedence
 
-/// Pipes a value as the third argument: `value |>>> (function, firstArg, secondArg)`.
+/// Passes `lhs` as the third argument: `value |>>> (fn, a, b)` is `fn(a, b, value)`.
 @inlinable
 public func |>>> <A, B, C, Z>(lhs: C, rhs: (((A, B, C) -> Z), A, B)) -> Z {
     return rhs.0(rhs.1, rhs.2, lhs)
 }
 
-/// Asynchronously pipes a value as the third argument: `value |>>> (asyncFunction, firstArg, secondArg)`.
+/// Passes `lhs` as the third argument of an async function.
 @inlinable
 public func |>>> <A, B, C, Z>(lhs: C, rhs: (((A, B, C) async -> Z), A, B)) async -> Z {
     await rhs.0(rhs.1, rhs.2, lhs)
@@ -59,13 +59,13 @@ public func |>>> <A, B, C, Z>(lhs: C, rhs: (((A, B, C) async -> Z), A, B)) async
 
 prefix operator |>
 
-/// Flow operator: wraps a function for use in point-free composition.
+/// Wraps a function in a closure, for function composition.
 @inlinable
 public prefix func |> <A, Z>(_ rhs: @escaping (A) -> Z) -> (A) -> Z {
     return { a in rhs(a) }
 }
 
-/// Async flow operator: wraps an async function for use in point-free composition.
+/// Wraps an async function in a closure, for function composition.
 @inlinable
 public prefix func |> <A, Z>(_ rhs: @escaping (A) async -> Z) -> (A) async -> Z {
     return { a in await rhs(a) }

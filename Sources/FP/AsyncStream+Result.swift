@@ -1,7 +1,7 @@
 // MARK: - AsyncStream Static Factories for Result
 
 public extension AsyncStream {
-    /// Creates a stream that emits a single success value and finishes.
+    /// Creates a stream that gives one success value and then finishes.
     @inlinable
     static func success<Success: Sendable, Failure: Sendable>(
         _ value: Success
@@ -11,7 +11,7 @@ public extension AsyncStream {
         }
     }
 
-    /// Creates a stream that emits a single failure error and finishes.
+    /// Creates a stream that gives one failure and then finishes.
     @inlinable
     static func failure<Success: Sendable, Failure: Sendable>(
         _ error: Failure
@@ -25,7 +25,7 @@ public extension AsyncStream {
 // MARK: - AsyncStream.Continuation Extensions for Result
 
 public extension AsyncStream.Continuation {
-    /// Yields a success value wrapped in Result
+    /// Sends `.success(value)` to the stream.
     @discardableResult
     @inlinable
     func success<Success: Sendable, Failure: Sendable>(
@@ -34,7 +34,7 @@ public extension AsyncStream.Continuation {
         yield(.success(value))
     }
 
-    /// Yields a failure error wrapped in Result
+    /// Sends `.failure(error)` to the stream.
     @discardableResult
     @inlinable
     func failure<Success: Sendable, Failure: Sendable>(
@@ -43,7 +43,7 @@ public extension AsyncStream.Continuation {
         yield(.failure(error))
     }
 
-    /// Yields a success value and finishes the stream
+    /// Sends `.success(value)` to the stream, and finishes it.
     @inlinable
     func finishWithSuccess<Success: Sendable, Failure: Sendable>(
         _ value: Success
@@ -52,7 +52,7 @@ public extension AsyncStream.Continuation {
         finish()
     }
 
-    /// Yields a failure error and finishes the stream
+    /// Sends `.failure(error)` to the stream, and finishes it.
     @inlinable
     func finishWithFailure<Success: Sendable, Failure: Sendable>(
         _ error: Failure

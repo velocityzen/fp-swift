@@ -2,41 +2,26 @@
 
 // MARK: Arity 2…10 (autoclosure)
 
-/// Runs several async `Result`-producing operations concurrently and returns
-/// the first one to finish **with a success**, cancelling the rest.
+// Arities 3 to 10 repeat arity 2, so only arity 2 has comments.
+
+/// Runs several async operations at the same time and returns the first success.
 ///
-/// This is the important correction to a plain "whoever finishes first wins"
-/// race: an operation that completes first with a `.failure` does *not* win.
-/// Failures are passed over while the remaining operations keep running, so a
-/// fast failure never beats a slower success. The first `.success` to arrive is
-/// returned immediately and the still-running operations are cancelled.
+/// A failure does not win: the other operations keep running, so a fast failure never beats a
+/// slower success. When the first success arrives, the other operations are cancelled. If all
+/// operations fail, the result is the last failure to arrive.
 ///
-/// If *every* operation fails, the last failure to complete is returned — at
-/// least two operations always run, so a failure is always available.
-///
-/// Operations are taken as autoclosures, so each call is deferred and raced
-/// rather than evaluated up front — the same ergonomics as `withAll`:
+/// Each argument is an autoclosure, so the calls start inside `withAny`, not before it. A
+/// cancelled operation stops early only if it checks for cancellation, and this function
+/// returns only after all operations stop.
 ///
 /// ```swift
-/// // Hit several mirrors, take whichever responds successfully first.
 /// let payload = await withAny(
 ///     await fetch(from: primaryMirror),
-///     await fetch(from: backupMirror),
-///     await fetch(from: archiveMirror)
+///     await fetch(from: backupMirror)
 /// )
-/// // Result<Payload, NetworkError> — the first mirror to succeed, or the last
-/// // failure if all of them failed.
 /// ```
 ///
-/// To race a dynamic number of operations, build an array of closures and use
-/// the `withAny([...])` array overload instead.
-///
-/// Cancellation of the losers is cooperative: an in-flight operation stops
-/// promptly only if it checks `Task.isCancelled` (or awaits a
-/// cancellation-aware API). A long, non-cooperative operation runs to
-/// completion before this function returns, even after a winner is chosen.
-///
-/// Supports 2 to 10 operations; for more, use the array overload.
+/// Takes 2 to 10 operations. For more, or for a number known only at run time, pass an array.
 @inlinable
 public func withAny<Success: Sendable, Failure: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
@@ -45,8 +30,7 @@ public func withAny<Success: Sendable, Failure: Error>(
     let gate = Gate<Result<Success, Failure>>(parties: 2)
     async let _ = gate.race(await a())
     async let _ = gate.race(await b())
-    // Leaving the scope cancels the operations still running and waits
-    // for them to stop.
+    // Leaving the scope cancels the running operations and waits for them to stop.
     return await gate.wait()
 }
 
@@ -60,8 +44,6 @@ public func withAny<Success: Sendable, Failure: Error>(
     async let _ = gate.race(await a())
     async let _ = gate.race(await b())
     async let _ = gate.race(await c())
-    // Leaving the scope cancels the operations still running and waits
-    // for them to stop.
     return await gate.wait()
 }
 
@@ -77,8 +59,6 @@ public func withAny<Success: Sendable, Failure: Error>(
     async let _ = gate.race(await b())
     async let _ = gate.race(await c())
     async let _ = gate.race(await d())
-    // Leaving the scope cancels the operations still running and waits
-    // for them to stop.
     return await gate.wait()
 }
 
@@ -96,8 +76,6 @@ public func withAny<Success: Sendable, Failure: Error>(
     async let _ = gate.race(await c())
     async let _ = gate.race(await d())
     async let _ = gate.race(await f())
-    // Leaving the scope cancels the operations still running and waits
-    // for them to stop.
     return await gate.wait()
 }
 
@@ -117,8 +95,6 @@ public func withAny<Success: Sendable, Failure: Error>(
     async let _ = gate.race(await d())
     async let _ = gate.race(await f())
     async let _ = gate.race(await g())
-    // Leaving the scope cancels the operations still running and waits
-    // for them to stop.
     return await gate.wait()
 }
 
@@ -140,8 +116,6 @@ public func withAny<Success: Sendable, Failure: Error>(
     async let _ = gate.race(await f())
     async let _ = gate.race(await g())
     async let _ = gate.race(await h())
-    // Leaving the scope cancels the operations still running and waits
-    // for them to stop.
     return await gate.wait()
 }
 
@@ -165,8 +139,6 @@ public func withAny<Success: Sendable, Failure: Error>(
     async let _ = gate.race(await g())
     async let _ = gate.race(await h())
     async let _ = gate.race(await i())
-    // Leaving the scope cancels the operations still running and waits
-    // for them to stop.
     return await gate.wait()
 }
 
@@ -192,8 +164,6 @@ public func withAny<Success: Sendable, Failure: Error>(
     async let _ = gate.race(await h())
     async let _ = gate.race(await i())
     async let _ = gate.race(await j())
-    // Leaving the scope cancels the operations still running and waits
-    // for them to stop.
     return await gate.wait()
 }
 
@@ -221,34 +191,23 @@ public func withAny<Success: Sendable, Failure: Error>(
     async let _ = gate.race(await i())
     async let _ = gate.race(await j())
     async let _ = gate.race(await k())
-    // Leaving the scope cancels the operations still running and waits
-    // for them to stop.
     return await gate.wait()
 }
 
 // MARK: - Race a dynamic array of operations
 
-/// Runs every operation in `operations` concurrently and returns the first to
-/// finish **with a success**, cancelling the rest. This is the array form of
-/// the variadic `withAny` — use it to race a number of operations not known
-/// until runtime (e.g. one per endpoint loaded from config).
+/// Runs all `operations` at the same time and returns the first success.
 ///
-/// Failures are passed over while the rest keep running; the first `.success`
-/// wins and cancels the others. If every operation fails, the last failure to
-/// complete is returned. Cancellation of the losers is cooperative.
+/// Use it when the number of operations is known only at run time. `operations` must not be
+/// empty. Otherwise it works like the `withAny` that takes 2 to 10 operations.
 ///
 /// ```swift
-/// let attempts: [@concurrent @Sendable () async -> Result<Payload, NetworkError>] =
+/// let attempts: [@concurrent @Sendable () async -> Result<Payload, AppError>] =
 ///     mirrors.map { mirror in { await fetch(from: mirror) } }
 /// let payload = await withAny(attempts)
 /// ```
-///
-/// - Parameter operations: The operations to race. Must not be empty.
-/// - Returns: The first successful `Result`, or — if none succeed — the last
-///   failure to complete.
-/// - Precondition: `operations` is non-empty.
-// Not `@inlinable`: specialized in the caller, this costs a retain and a
-// release more per operation and runs no faster.
+// Not `@inlinable`: specialized in the caller, it costs one more retain and release per
+// operation and is not faster.
 public func withAny<Success: Sendable, Failure: Error>(
     _ operations: [@concurrent @Sendable () async -> Result<Success, Failure>]
 ) async -> Result<Success, Failure> {
@@ -270,10 +229,8 @@ public func withAny<Success: Sendable, Failure: Error>(
             }
         }
 
-        // Unreachable: the precondition guarantees at least one operation, and
-        // each one completes with a success (returned above) or a failure
-        // (captured here). Re-running the first keeps the result type inhabited
-        // without a force-unwrap.
+        // Unreachable: there is at least one operation, and each one gives a success (returned
+        // above) or a failure (kept here). Running the first one again avoids a force-unwrap.
         guard let lastFailure else {
             return await operations[0]()
         }

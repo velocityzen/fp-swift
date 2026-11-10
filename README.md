@@ -5,472 +5,390 @@
 [![Documentation](https://img.shields.io/badge/documentation-DocC-purple)](https://swiftpackageindex.com/velocityzen/fp-swift/documentation/fp)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-_This is not a full fledged package for functional programming in Swift. This will have to wait until Higher Kinded Types are part of the language. However this will make it easier to write functional code using built-in Swift Result and Optional types._
-
-A lightweight functional programming toolkit for Swift, providing composable utilities for working with `Result`, `Optional`, and `Array` types in both synchronous and asynchronous contexts.
+fp-swift adds functional helpers to Swift's own `Result`, `Optional` and `Array` types, for sync and async code. Chain steps that can fail, recover from errors, run work in parallel, and retry. Swift has no higher-kinded types yet, so this is a set of helpers, not a full functional programming library.
 
 ## Contents
 
-- [Requirements](#requirements)
 - [Installation](#installation)
-- [Features](#features)
-  - [Pipe Operators](#pipe-operators)
-  - [Result Extensions](#result-extensions)
-  - [Combining Results](#combining-results)
-  - [Racing Results](#racing-results)
-  - [Timeouts](#timeouts)
-  - [Retrying (FPRetry)](#retrying-fpretry)
-  - [Array Extensions](#array-extensions)
-  - [AsyncSequence Result Processing](#asyncsequence-result-processing)
-  - [Ordered Concurrent Mapping](#ordered-concurrent-mapping)
-  - [Unordered Concurrent Mapping](#unordered-concurrent-mapping)
-  - [AsyncStream Extensions](#asyncstream-extensions)
-  - [Optional Extensions](#optional-extensions)
-- [API Reference](#result-extensions-api)
-  - [Result Extensions API](#result-extensions-api)
-  - [Combining Functions API](#combining-functions-api)
-  - [Racing and Timeout Functions API](#racing-and-timeout-functions-api)
-  - [Retry API](#retry-api)
-  - [Array Extensions API](#array-extensions-api)
-  - [AsyncSequence Extensions API](#asyncsequence-extensions-api)
-  - [AsyncStream Extensions API](#asyncstream-extensions-api)
-  - [Optional Extensions API](#optional-extensions-api)
-
-## Requirements
-
-- Swift 6.3+
-- macOS 26+ / iOS 26+ / tvOS 26+ / watchOS 26+ / visionOS 26+ / Linux
-
-Every platform is exercised in CI: macOS 26, Ubuntu Linux, and the iOS, tvOS, watchOS, and visionOS simulators.
+- [Quick start](#quick-start)
+- [Pipe operators](#pipe-operators)
+- [Working with results](#working-with-results)
+- [Recovering from failures](#recovering-from-failures)
+- [Optionals](#optionals)
+- [Do notation](#do-notation)
+- [Async results](#async-results)
+- [Arrays](#arrays)
+- [Combining results](#combining-results)
+- [Racing and timeouts](#racing-and-timeouts)
+- [Async sequences of results](#async-sequences-of-results)
+- [Concurrent mapping](#concurrent-mapping)
+  - [Keeping the source order](#keeping-the-source-order)
+  - [In the order they finish](#in-the-order-they-finish)
+- [Retrying](#retrying)
+  - [Retry only some failures](#retry-only-some-failures)
+  - [Use the retry status](#use-the-retry-status)
+  - [Built-in policies](#built-in-policies)
+  - [Jitter](#jitter)
+  - [Write your own policy](#write-your-own-policy)
+  - [Check a policy](#check-a-policy)
+  - [Clock, cancellation and actors](#clock-cancellation-and-actors)
+- [API reference](#api-reference)
+- [Benchmarks](#benchmarks)
+- [License](#license)
 
 ## Installation
 
-Add the package to your `Package.swift`:
+Requirements:
+
+- Swift 6.3 or later
+- macOS, iOS, tvOS, watchOS or visionOS 26 or later, or Linux
+
+Add the package to `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/velocityzen/fp-swift.git", from: "4.3.0")
-]
+    .package(
+        url: "https://github.com/velocityzen/fp-swift.git",
+        from: "4.3.0"
+    ),
+],
 ```
 
-Then add the products a target uses to its dependencies and import them:
+Then add the products your target uses:
 
 ```swift
 .target(
     name: "MyApp",
     dependencies: [
         .product(name: "FP", package: "fp-swift"),
-        .product(name: "FPRetry", package: "fp-swift"),  // only if you need retries
+        // Only if you need retries:
+        .product(name: "FPRetry", package: "fp-swift"),
     ]
-)
+),
 ```
+
+`FPRetry` does not depend on `FP`, so a target that only retries can use it alone.
+
+## Quick start
 
 ```swift
 import FP
-import FPRetry
-```
 
-`FPRetry` does not depend on `FP`. A target that only needs retries can use `FPRetry` alone.
-
-## Features
-
-### Pipe Operators
-
-Forward pipe operators for function composition:
-
-```swift
-// Basic pipe: pass value to function
-let result = 5 |> double |> toString  // "10"
-
-// Pipe into second argument
-let result = value |>> (function, firstArg)
-
-// Pipe into third argument
-let result = value |>>> (function, firstArg, secondArg)
-
-// Flow operator: create function from another function
-let transform = |> double  // (Int) -> Int
-```
-
-Pipe operators bind looser than arithmetic, ranges, casts, and `??`, but tighter than comparisons, logical operators, and assignment — the same placement as Elixir's `|>` and F#'s pipe family. The full expression on the left flows into the function on the right:
-
-```swift
-1 + 2 |> double          // double(3) = 6 — not 1 + double(2)
-x |> transform == 6      // (x |> transform) == 6
-flag && x |> isValid     // flag && (x |> isValid)
-a ?? b |> process        // (a ?? b) |> process
-```
-
-All pipe operators (including the prefix flow operator) have async overloads. Sync and async functions can be freely mixed in a chain — the chain becomes `async` as soon as any step is async:
-
-```swift
-// Mixed sync/async chain — only one `await` needed at the front
-let summary = await userId
-    |> normalizeId         // sync (Int) -> Int
-    |> fetchUser           // async (Int) async -> User
-    |> renderSummary       // sync (User) -> String
-
-// Two- and three-arg variants
-let profile = await userId |>> (fetchProfile, session)
-let html    = await body  |>>> (renderPage, title, theme)
-
-// Async point-free
-let load: (Int) async -> User = |> fetchUserAsync
-```
-
-Adding the async overloads does not affect existing sync usage: in a sync context (no `await`) only the sync overload can match, and in an async context Swift still prefers the sync overload when the closure is sync.
-
-### Result Extensions
-
-#### Do Notation for Composing Results
-
-```swift
-func createOrder(userId: Int, itemId: Int) -> Result<Order, AppError> {
-    ResultDo<AppError>()
-        .bind { fetchUser(id: userId) }
-        .bind { user in fetchItem(id: itemId) }
-        .let { user, item in item.price * user.discountRate }
-        .bind { user, item, price in
-            validateOrder(user: user, item: item, price: price)
-        }
-        .map { user, item, price, validation in
-            Order(user: user, item: item, price: price)
-        }
+enum AppError: Error {
+    case notANumber(String)
 }
 
-// Async variant with mixed sync/async steps
-func createOrderAsync(userId: Int, itemId: Int) async -> Result<Order, AppError> {
-    await ResultDo<AppError>()
-        .bindAsync { await fetchUser(id: userId) }
-        .bindAsync { user in await fetchItem(id: itemId) }
-        .let { user, item in item.price * user.discountRate }
-        .bindAsync { user, item, price in
-            await validateOrder(user: user, item: item, price: price)
-        }
-        .map { user, item, price, validation in
-            Order(user: user, item: item, price: price)
-        }
-}
-```
-
-#### Chaining Async Operations
-
-```swift
-func processUser(id: Int) async -> Result<ProcessedUser, Error> {
-    await Result.fromAsync { try await api.fetchUser(id: id) }
-        .tapAsync { user in await analytics.track(.userFetched(user)) }
-        .mapAsync { user in await enrichUserData(user) }
-        .flatMapAsync { user in await validateUser(user) }
-        .tapError { error in logger.error("Failed: \(error)") }
-}
-```
-
-#### Async Map Operations
-
-```swift
-let result: Result<Int, Error> = .success(42)
-
-// Transform success value asynchronously
-let mapped = await result.mapAsync { value in
-    await fetchData(for: value)
+func parse(_ text: String) -> Result<Int, AppError> {
+    .fromOptional(Int(text), error: .notANumber(text))
 }
 
-// FlatMap for chaining Result-returning async operations
-let chained = await result.flatMapAsync { value in
-    await validateAndTransform(value)  // Returns Result<T, Error>
-}
-
-// Create Result from async throwing operation
-let result = await Result.fromAsync {
-    try await networkCall()
-}
-
-// Create Result from Task
-let task = Task { try await networkCall() }
-let result = await Result.fromTask(task)
-
-// Or with closure syntax
-let result = await Result.fromTask {
-    Task { try await networkCall() }
-}
-
-// Also works with Tasks returning Results
-let task = Task { await someResultOperation() }
-let result: Result<Value, Error> = await Result.fromTask(task)
+let doubled = parse("21")
+    .tap { n in print("parsed", n) }  // prints "parsed 21"
+    .map { n in n * 2 }
+    .getOrElse(0)                     // 42
 ```
 
-#### Map to Constant Value
+`Result` is Swift's own type. fp-swift adds methods like `tap` and `getOrElse` to it. A failure skips the steps that change values, so `parse("x")` gives 0.
 
-Replace the success value with a constant or discard it entirely:
+## Pipe operators
+
+`x |> f` calls `f(x)`. A chain of them reads in the order the steps run:
 
 ```swift
-let result: Result<Int, AppError> = .success(42)
+func double(_ n: Int) -> Int { n * 2 }
+func label(_ n: Int) -> String { "#\(n)" }
 
-// Map to a specific constant
-let mapped = result.as("done")  // .success("done")
-
-// Map to Void (discard the success value)
-let unit = result.asUnit()  // .success(())
-
-// Useful in chains where you only care about success/failure
-fetchUser(id: 1)
-    .tap { user in saveToCache(user) }
-    .asUnit()  // Result<Void, AppError>
+let text = 5 |> double |> label  // "#10"
 ```
 
-#### Tap for Side Effects
-
-Perform side effects while keeping the Result chain flowing:
+`|>>` passes the value as the second argument, and `|>>>` as the third:
 
 ```swift
-someOperation()
-    .tap { value in saveToCache(value) }
-    .tapError { error in logError(error) }
-    .map { value in transform(value) }
+func add(_ a: Int, _ b: Int) -> Int { a + b }
 
-// Async variants
-await result
-    .tapAsync { value in await sendAnalytics(value) }
-    .tapErrorAsync { error in await reportError(error) }
+let sum = 2 |>> (add, 10)  // add(10, 2), so 12
 ```
 
-Tap variants:
-
-- `.tap()` - Sync side effect on success
-- `.tapAsync()` - Async side effect on success
-- `.tapError()` - Sync side effect on failure
-- `.tapErrorAsync()` - Async side effect on failure
-
-Throwing variants convert the `Failure` type to `Error`; if the action throws, the thrown error becomes the failure (in the `tapError` case it replaces the original failure). Result-returning variants propagate the action's failure the same way.
-
-#### Alt — Recover with an Alternative
-
-If `self` is a success, keep it; otherwise return the lazily-evaluated alternative. The alternative may itself succeed (recovery) or fail (in which case its failure replaces the original):
+The operators also take `async` functions. A chain becomes `async` when one of its steps is:
 
 ```swift
-fetchUser(id: 1)
-    .alt { fetchUserFromCache(id: 1) }
-    .alt { .success(.guest) }
-
-// Async variant
-await fetchUser(id: 1)
-    .altAsync { await fetchUserFromCache(id: 1) }
+let page = await id
+    |> normalize  // sync
+    |> loadUser   // async
+    |> render     // sync
 ```
 
-#### GetOrElse — Unwrap with a Fallback
-
-Returns the success value, or computes/returns a fallback when the result is a failure. Unlike `alt`, this returns the unwrapped `Success` rather than another `Result`:
+The operators bind looser than arithmetic and `??`, but tighter than comparisons and `&&`. So the whole expression on the left goes into the function:
 
 ```swift
-// Closure-based — receives the error
-let count = parse(input).getOrElse { _ in 0 }
-
-// Constant default (lazily evaluated)
-let count = parse(input).getOrElse(0)
-
-// Async variant — closure receives the error
-let user = await fetchUser(id: 1).getOrElseAsync { _ in
-    await loadGuestUser()
-}
-
-// Async variant — lazily-evaluated async default
-let user = await fetchUser(id: 1).getOrElseAsync(await loadGuestUser())
+1 + 2 |> double   // double(3), not 1 + double(2)
+x |> double == 6  // (x |> double) == 6
 ```
 
-#### GetOrExit — Unwrap or Terminate the Process
+## Working with results
 
-Designed for CLI entry points. Returns the success value, or prints the failure to stderr and calls `Foundation.exit`:
+fp-swift adds these methods to `Result`:
+
+| Method                        | What it does                                                 |
+| ----------------------------- | ------------------------------------------------------------ |
+| `tap { value in … }`          | Runs a side effect on a success. The result does not change. |
+| `tapError { error in … }`     | Runs a side effect on a failure.                             |
+| `finally { … }`               | Runs a side effect in both cases.                            |
+| `as(value)`                   | Replaces the success value with `value`.                     |
+| `asUnit()`                    | Replaces the success value with `()`.                        |
+| `isSuccess`, `isFailure`      | `true` for a success, or for a failure.                      |
+| `match(onSuccess, onFailure)` | Turns both cases into one value.                             |
 
 ```swift
-// Default: prints "Error: <error>\n" and exits with status 1
+let greeting = fetchUser(id: 1)
+    .tap { user in cache.save(user) }
+    .tapError { error in log(error) }
+    .match(
+        { user in "Hello, \(user.name)" },
+        { error in "Error: \(error)" }
+    )
+```
+
+`match` also takes plain values: `result.match("ok", "error")`.
+
+`tap` and `tapError` also take a closure that throws, or one that returns a `Result`. Then an error from the closure becomes the failure.
+
+## Recovering from failures
+
+| Method                       | Gives                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `alt { otherResult }`        | `self` if it is a success, or else the other `Result`.                    |
+| `orElse { error in result }` | Like `alt`, but the closure gets the error and can change its type.       |
+| `getOrElse(value)`           | The success value, or `value`.                                            |
+| `getOrElse { error in … }`   | The success value, or a value made from the error.                        |
+| `getOrExit()`                | The success value, or prints the error and exits. For command-line tools. |
+| `orExit()`                   | Nothing, or prints the error and exits.                                   |
+
+```swift
+let user = fetchUser(id: 1)
+    .alt { fetchCachedUser(id: 1) }
+    .getOrElse(.guest)
+```
+
+In a command-line tool:
+
+```swift
 let config = loadConfig().getOrExit()
+// On a failure, prints "Error: <error>" to stderr and exits with 1.
+```
 
-// Customize the prefix and exit code
-let port = parsePort(args).getOrExit(prefix: "fatal: ", exitCode: 2)
+`getOrExit(prefix:exitCode:)` and `getOrExit { error in message }` change the message and the exit code. `orExit` takes the same arguments.
 
-// Provide a fully custom message — include any trailing newline yourself
-let user = fetchUser(id: 1).getOrExit { error in
-    "could not load user: \(error)\n"
+## Optionals
+
+`Result.fromOptional` turns an `Optional` into a `Result`:
+
+```swift
+let result: Result<User, AppError> =
+    .fromOptional(cachedUser, error: .notFound)
+```
+
+To make the error only when it is needed, pass a closure: `.fromOptional(cachedUser) { .notFound }`.
+
+fp-swift also adds a few methods to `Optional`:
+
+```swift
+let name: String? = nil
+
+name.match({ n in "Hi, \(n)" }, "Hi, guest")  // "Hi, guest"
+name.orElse(nickname)     // the first value that is not nil
+name.getOrElse("guest")   // like ??
+```
+
+`mapAsync`, `flatMapAsync`, `orElseAsync` and `getOrElseAsync` take async closures. `finally` runs a side effect in both cases.
+
+## Do notation
+
+`ResultDo` chains steps that need the values of the steps before them. `bind` adds a step that returns a `Result`, and `let` adds a plain value. Each closure gets all the values so far. The chain stops at the first failure.
+
+```swift
+func order(userID: Int, itemID: Int) -> Result<Order, AppError> {
+    ResultDo<AppError>()
+        .bind { fetchUser(id: userID) }
+        .bind { user in fetchItem(id: itemID) }
+        .let { user, item in item.price * user.discount }
+        .map { user, item, price in
+            Order(user: user, item: item, price: price)
+        }
 }
 ```
 
-#### OrExit — Terminate on Failure, Discard Success
+`bindAsync` and `letAsync` take async closures. You can mix them with `bind` and `let` in one chain. A chain holds up to 10 values.
 
-Same termination behavior as `getOrExit`, but discards the success value. Useful at the end of a pipeline that has already consumed the success:
+## Async results
+
+`mapAsync`, `flatMapAsync`, `mapErrorAsync`, `tapAsync`, `tapErrorAsync`, `altAsync` and the other `Async` methods take async closures:
 
 ```swift
-runCommand(args)
-    .tap { output in print(output) }
-    .orExit()
-
-// Custom message
-runCommand(args).orExit { error in
-    "command failed: \(error)\n"
+func profile(id: Int) async -> Result<Profile, AppError> {
+    await fetchUser(id: id)
+        .tapAsync { user in await analytics.track(user) }
+        .flatMapAsync { user in await loadProfile(of: user) }
 }
 ```
 
-#### Match
-
-Branch on a Result without switching manually:
+To call async code that throws, use `Result.fromAsync`. The failure type is then `any Error`:
 
 ```swift
-let message = result.match(
-    { "value: \($0)" },
-    { "error: \($0)" }
+let data = await Result.fromAsync {
+    try await loadData()
+}
+```
+
+`Result.fromTask(task)` waits for a `Task` and turns its value or error into a `Result`.
+
+## Arrays
+
+| Method                                        | What it does                                                                |
+| --------------------------------------------- | --------------------------------------------------------------------------- |
+| `traverse { element in result }`              | Turns each element into a `Result`. Gives all values, or the first failure. |
+| `traverseAsync { … }`                         | The same with an async closure, one element at a time.                      |
+| `traverseAsync(concurrency: n) { … }`         | Runs up to `n` closures at the same time. See below.                        |
+| `separate()`                                  | Splits `[Result]` into `(successes, failures)`.                             |
+| `successes()`, `failures()`                   | One side of `[Result]`.                                                     |
+| `compact()`                                   | Removes the `nil` elements of `[T?]`.                                       |
+| `sequence()`                                  | Turns `[T?]` into `[T]?`. It is `nil` if any element is `nil`.              |
+| `mapAsync`, `flatMapAsync`, `compactMapAsync` | `map`, `flatMap` and `compactMap` with an async closure.                    |
+
+```swift
+let ids = [1, 2, 3]
+
+let users = ids.traverse { id in fetchUser(id: id) }
+// .success([User]), or the first failure
+
+let loaded = await ids.traverseAsync(concurrency: 4) { id in
+    await loadUser(id: id)
+}
+```
+
+With `concurrency:`, the values keep the array order. When elements fail, it gives the failure of the first one in the array, and cancels the closures that still run.
+
+## Combining results
+
+`flatten` combines up to 10 results into one result of a tuple. It gives the first failure, if there is one:
+
+```swift
+let both = flatten(fetchUser(id: 1), fetchSettings(id: 1))
+// Result<(User, Settings), AppError>
+```
+
+`withAll` does the same with async calls, and runs them at the same time. The first failure returns at once and cancels the other calls:
+
+```swift
+let home = await withAll(
+    await loadUser(id: 1),
+    await loadMessages(id: 1)
 )
+// Result<(User, [Message]), AppError>
+```
 
-let fallback = result.match("ok", "error")
+## Racing and timeouts
 
-let mixed = result.match(
-    { "value: \($0)" },
-    "error"
-)
+`withAny` runs async calls at the same time and gives the first success. A failure does not win: the other calls keep running. The winner cancels the rest. When all fail, it gives the last failure.
 
-let asyncMessage = await result.matchAsync(
-    { value in
-        await Task.yield()
-        return "value: \(value)"
-    },
-    { error in
-        await Task.yield()
-        return "error: \(error)"
-    }
-)
-
-let asyncMixed = await result.matchAsync(
-    "ok",
-    { error in
-        await Task.yield()
-        return "error: \(error)"
-    }
-)
-
-// Use match for side effects without capturing the result
-result.match(
-    { value in print("Success: \(value)") },
-    { error in print("Error: \(error)") }
+```swift
+let data = await withAny(
+    await download(from: primary),
+    await download(from: backup)
 )
 ```
 
-#### From Optional
+For a number of calls known only at run time, pass an array of closures. It must not be empty.
 
-Convert optionals to Results:
+`withTimeout` gives the result of an async call, or a failure when the time runs out. Then it cancels the call. A failure that comes in time is returned as it is.
 
 ```swift
-// With static error
-let result = Result<User, AppError>.fromOptional(user, error: .notFound)
-
-// With lazy error (only evaluated if nil)
-let result = Result<User, AppError>.fromOptional(user) {
-    .notFound(id: userId)
+let profile = await withTimeout(.seconds(5), failingWith: .timeout) {
+    await loadProfile(id: 1)
 }
 ```
 
-#### Is Success / Is Failure
+Cancellation stops only code that checks for it, like `Task.sleep` and `URLSession` calls. A long loop with no `await` runs to its end.
 
-Boolean checks for simple conditionals:
+## Async sequences of results
+
+For an `AsyncSequence` of `Result`s, fp-swift adds `successes()`, `failures()`, `map`, `mapError`, `flatMap`, `tap`, `tapError` and their `Async` versions. Each one works on one side, and the other side passes through:
 
 ```swift
-let result: Result<User, AppError> = fetchUser(id: 1)
+let names = events
+    .tapError { error in log(error) }
+    .mapAsync { id in await loadName(id) }
+    .successes()
 
-if result.isSuccess {
-    print("User fetched successfully")
-}
-
-// Or in ternary expressions
-let message = result.isSuccess ? "ok" : "error"
-
-if result.isFailure {
-    scheduleRetry()
+for await name in names {
+    show(name)
 }
 ```
 
-### Combining Results
-
-Combine multiple Results into a single Result with a tuple of values:
+`AsyncStream.success(value)` and `.failure(error)` make a stream of one result. On a continuation, `success`, `failure`, `finishWithSuccess` and `finishWithFailure` add results:
 
 ```swift
-let userResult: Result<User, AppError> = fetchUser(id: 1)
-let profileResult: Result<Profile, AppError> = fetchProfile(id: 1)
-let settingsResult: Result<Settings, AppError> = fetchSettings(id: 1)
-
-// Sync flatten - combine already-computed Results
-let combined = flatten(userResult, profileResult, settingsResult)
-// Result<(User, Profile, Settings), AppError>
-
-// Use map to create named tuple for easier access
-let namedResult = flatten(userResult, profileResult)
-    .map { (user: $0, profile: $1) }
-// Result<(user: User, profile: Profile), AppError>
-
-if case .success(let data) = namedResult {
-    print(data.user.name)
-    print(data.profile.bio)
+let stream = AsyncStream<Result<Int, AppError>> { continuation in
+    continuation.success(1)
+    continuation.finishWithFailure(.timeout)
 }
 ```
 
-#### Parallel Combination with withAll
+## Concurrent mapping
 
-Run multiple async operations in parallel and combine their results:
+These map an async sequence with an async transform. Up to `concurrency` transforms run at the same time. The default is 1: one at a time.
+
+| Operators                                                                | Results come out         |
+| ------------------------------------------------------------------------ | ------------------------ |
+| `mapAsyncKeepOrder`, `flatMapAsyncKeepOrder`, `compactMapAsyncKeepOrder` | in source order          |
+| `mapAsyncUnordered`, `flatMapAsyncUnordered`, `compactMapAsyncUnordered` | in the order they finish |
+
+Rules:
+
+- No new element is read while `concurrency` elements are being transformed or waiting for the consumer. So a slow consumer pauses the source.
+- When the consumer stops, reading stops and running transforms are cancelled.
+- On a sequence of `Result`s, `map…` and `flatMap…` change only the successes. Failures pass through in their place.
+- `compactMap…` drops `nil` results. Its `passthrough:` gives a result without the transform, for example a cache hit.
+
+For an all-or-nothing pass over an array, use `traverseAsync(concurrency:)` instead (see [Arrays](#arrays)).
+
+### Keeping the source order
 
 ```swift
-func loadDashboard(userId: Int) async -> Result<Dashboard, AppError> {
-    // All three operations run in parallel
-    let result = await withAll(
-        await fetchUser(id: userId),
-        await fetchNotifications(for: userId),
-        await fetchRecommendations(for: userId)
-    )
-    // Result<(User, [Notification], [Recommendation]), AppError>
+let images = refs.mapAsyncKeepOrder(concurrency: 8) { ref in
+    await downloader.fetch(ref)
+}
 
-    return result.map { user, notifications, recommendations in
-        Dashboard(user: user, notifications: notifications, recommendations: recommendations)
-    }
+for await image in images {
+    render(image)
 }
 ```
 
-The first failure to arrive is returned right away and cancels the operations still running (cancellation is cooperative).
-
-### Racing Results
-
-Run several async operations concurrently and take the first one to finish **with a success** — not merely the first to finish. A fast `.failure` is passed over while the rest keep running, so a slower success still wins. The winner cancels the remaining operations; if every operation fails, the last failure to complete is returned.
+A slow transform holds back the results after it, but not the work: later elements are still transformed, and their results wait. `bufferLimit:` caps how many results may wait, for example when the source never ends:
 
 ```swift
-func fastestMirror(for path: String) async -> Result<Data, NetworkError> {
-    // Whichever mirror responds successfully first wins; the others are cancelled.
-    await withAny(
-        await fetch(from: primaryMirror, path),
-        await fetch(from: backupMirror, path),
-        await fetch(from: archiveMirror, path)
-    )
+refs.mapAsyncKeepOrder(concurrency: 8, bufferLimit: 64) { ref in
+    await downloader.fetch(ref)
 }
 ```
 
-Operations are taken as autoclosures (the same ergonomics as `withAll`), so calls are deferred and raced rather than evaluated up front. The variadic form supports 2–10 operations; to race a number known only at runtime, pass an array of closures:
+A `bufferLimit` below `concurrency - 1` also lowers how many transforms run at the same time.
+
+### In the order they finish
+
+Each result comes out when its transform finishes, so a slow element holds back only itself:
 
 ```swift
-let attempts: [@Sendable () async -> Result<Data, NetworkError>] =
-    mirrors.map { mirror in { await fetch(from: mirror, path) } }
-let data = await withAny(attempts)  // must be non-empty
-```
+let thumbs = photos.mapAsyncUnordered(concurrency: 8) { photo in
+    await renderer.thumbnail(for: photo)
+}
 
-Cancellation of the losers is cooperative: a long racer that never checks `Task.isCancelled` still runs to completion before `withAny` returns.
-
-### Timeouts
-
-Run an async operation with a deadline. If it finishes within `duration`, its `Result` is returned; otherwise the operation is cancelled and `.failure(timeoutError)` is returned. A failure that arrives before the timeout is _not_ swallowed — it's returned as-is.
-
-```swift
-func loadProfile(id: Int) async -> Result<Profile, AppError> {
-    await withTimeout(.seconds(5), failingWith: .timeout) {
-        await fetchProfile(id: id)
-    }
+for await thumb in thumbs {
+    gallery.insert(thumb)
 }
 ```
 
-It's a race between the operation and a timer — whichever finishes first wins — so this isn't `withAny` (which waits for the first _success_); a fast failure here returns immediately. Cancellation is cooperative: when the timeout fires, the operation stops promptly only if it observes `Task.isCancelled`.
-
-### Retrying (FPRetry)
+## Retrying
 
 `FPRetry` retries async operations that return a `Result`. It is based on [retry-ts](https://github.com/gcanti/retry-ts).
 
@@ -479,22 +397,22 @@ A `RetryPolicy` decides two things after each failure: whether to retry, and how
 ```swift
 import FPRetry
 
-// Wait up to 200ms, 400ms, 800ms, and so on, but never more than 2s.
-// Retry at most 5 times. Each wait is random (jitter).
+// Wait up to 200ms, 400ms, 800ms and so on, but never more
+// than 2s. Retry at most 5 times. Each wait is random (jitter).
 let apiPolicy = RetryPolicy.exponentialBackoff(.milliseconds(200))
     .and(.limitRetries(5))
     .capDelay(.seconds(2))
     .jitter()
 
-let user = await withRetry(apiPolicy) { await fetchUser(id) }
+let user = await withRetry(apiPolicy) { await loadUser(id: 1) }
 // Result<User, APIError>
 ```
 
 `withRetry` returns the first success. If every attempt fails, it returns the last failure. It never retries a success.
 
-#### Retry only some failures
+### Retry only some failures
 
-Some failures can pass on the next try, for example a timeout. Others fail again every time, for example "not found". Use `while:` to choose which failures to retry: return `true` to retry. Without `while:`, every failure is retried.
+Some failures can pass on the next try, for example a timeout. Others fail every time, for example "not found". Use `while:` to choose which failures to retry: return `true` to retry. Without `while:`, every failure is retried.
 
 You usually put this rule on your error type. `isTransient` is not part of FPRetry. You write it:
 
@@ -503,7 +421,6 @@ enum APIError: Error, Equatable {
     case timeout
     case rateLimited
     case server(status: Int)
-    case unauthorized
     case notFound
 
     /// True when the request can succeed if we try again.
@@ -511,31 +428,26 @@ enum APIError: Error, Equatable {
         switch self {
             case .timeout, .rateLimited: true
             case .server(let status): status >= 500
-            case .unauthorized, .notFound: false
+            case .notFound: false
         }
     }
 }
 
-let user = await withRetry(apiPolicy, while: \.isTransient) { await fetchUser(id) }
+let user = await withRetry(apiPolicy, while: \.isTransient) {
+    await loadUser(id: 1)
+}
 ```
 
-`\.isTransient` is a key path. Swift can use a key path as a function (SE-0249). These two lines do the same thing:
+`\.isTransient` is a key path, used as a function. You can also write a closure: `while: { $0 != .notFound }`.
 
-```swift
-await withRetry(apiPolicy, while: \.isTransient) { await fetchUser(id) }
-await withRetry(apiPolicy, while: { error in error.isTransient }) { await fetchUser(id) }
-```
+### Use the retry status
 
-You can also write the rule in place: `while: { $0 != .unauthorized }`.
-
-#### Use the retry status
-
-The action can take a `RetryStatus`. It tells you which attempt is running:
+The action can take a `RetryStatus`, which tells you which attempt is running:
 
 ```swift
 let user = await withRetry(apiPolicy) { status in
-    logger.debug("attempt \(status.iteration + 1)")
-    return await fetchUser(id)
+    print("attempt", status.iteration + 1)
+    return await loadUser(id: 1)
 }
 ```
 
@@ -545,7 +457,7 @@ let user = await withRetry(apiPolicy) { status in
 - `cumulativeDelay`: the total time waited so far.
 - `previousDelay`: the last wait. It is `nil` on the first attempt.
 
-#### Built-in policies
+### Built-in policies
 
 | Policy                                 | Wait before each retry                              | Stops                                          |
 | -------------------------------------- | --------------------------------------------------- | ---------------------------------------------- |
@@ -560,13 +472,11 @@ let user = await withRetry(apiPolicy) { status in
 
 `constantDelay` and `exponentialBackoff` never stop by themselves. Combine them with a limit, for example `.and(.limitRetries(5))`.
 
-`and` is associative, and `.constantDelay(.zero)` is its identity. So policies form a monoid, and you can combine them in any order of grouping.
+### Jitter
 
-#### Jitter
+When a server restarts, many clients fail at the same time. With the same policy, they also retry at the same time, and can overload the server again. Jitter makes each wait random, so the retries spread out.
 
-Many clients often fail at the same time, for example when a server restarts. With the same policy, they also retry at the same time, and this can overload the server again. Jitter makes each wait random, so the retries spread out. Use jitter when many clients use the same policy.
-
-The range contains multipliers, not durations:
+The range holds multipliers, not durations:
 
 | Call                 | Wait                                                   |
 | -------------------- | ------------------------------------------------------ |
@@ -574,9 +484,9 @@ The range contains multipliers, not durations:
 | `.jitter(0.5...1)`   | from half the wait to the full wait                    |
 | `.jitter(0.8...1.2)` | the wait, plus or minus 20%                            |
 
-Put `jitter` last, after `capDelay`. Then a wait is never longer than the cap.
+Put `jitter` last, after `capDelay`.
 
-Tests often need the same random numbers every time. For this, pass your own seeded generator. The standard library does not have one, but SplitMix64 is only a few lines:
+For tests that need the same random numbers every time, pass a seeded generator. The standard library has none, so write your own. SplitMix64 takes only a few lines. Here it is called `SeededGenerator`:
 
 ```swift
 let testPolicy = RetryPolicy.exponentialBackoff(.milliseconds(200))
@@ -584,25 +494,25 @@ let testPolicy = RetryPolicy.exponentialBackoff(.milliseconds(200))
     .jitter(using: SeededGenerator(seed: 42))
 ```
 
-The policy keeps the generator, and each use takes the next random numbers. To get the same numbers again, create the policy again with the same seed.
+The policy keeps the generator, and each use takes the next numbers. To get the same numbers again, create the policy again with the same seed.
 
-#### Write your own policy
+### Write your own policy
 
-A policy is a function. It takes a `RetryStatus` and returns a `Duration?`. Return a duration to wait and retry. Return `nil` to stop. Wrap the function in `RetryPolicy { status in … }`, and it works with all the built-in policies.
-
-A policy for one place:
+A policy is a function from a `RetryStatus` to a `Duration?`. Return a duration to wait and retry, or `nil` to stop. Wrap the function in `RetryPolicy { status in … }`, and it works with the built-in policies:
 
 ```swift
-// Retry the first time at once. Then wait 1 second before each retry.
+// Retry the first time at once. Then wait 1 second each time.
 let quickThenSlow = RetryPolicy { status in
     status.iteration == 0 ? .zero : .seconds(1)
 }
 
-let user = await withRetry(quickThenSlow.and(.limitRetries(3))) { await fetchUser(id) }
+let user = await withRetry(quickThenSlow.and(.limitRetries(3))) {
+    await loadUser(id: 1)
+}
 // Waits: 0s, 1s, 1s, then stops
 ```
 
-A policy to reuse: add a `static func` in an extension. Then you can write it with a leading dot, like the built-in policies:
+To reuse a policy, add a `static func` in an extension. Then you can write it with a leading dot, like the built-in ones:
 
 ```swift
 extension RetryPolicy {
@@ -612,13 +522,13 @@ extension RetryPolicy {
     }
 }
 
-let linearPolicy = RetryPolicy.linearBackoff(.milliseconds(500))
+let linear = RetryPolicy.linearBackoff(.milliseconds(500))
     .and(.limitRetries(4))
     .capDelay(.milliseconds(1500))
 // Waits: 0.5s, 1s, 1.5s, 1.5s, then stops
 ```
 
-A modifier changes another policy. Write it as an instance method. Call `self(status)` to get the wait of the original policy, then change it. This modifier is the opposite of `capDelay`. It sets a minimum wait:
+A modifier changes another policy. Write it as an instance method that calls `self(status)` to get the wait of the original policy. This one sets a minimum wait:
 
 ```swift
 extension RetryPolicy {
@@ -629,18 +539,13 @@ extension RetryPolicy {
         }
     }
 }
-
-let user = await withRetry(.limitRetries(3).minimumDelay(.milliseconds(100))) {
-    await fetchUser(id)
-}
-// Waits: 100ms, 100ms, 100ms, then stops
 ```
 
-When the original policy stops, `self(status)` returns `nil`. `Optional.map` keeps the `nil`, so the modifier stops too.
+When the original policy stops, `self(status)` returns `nil`, and `map` keeps it, so the modifier stops too.
 
-#### Check a policy
+### Check a policy
 
-`dryRun()` shows the steps of a policy. It does not run anything and does not wait:
+`dryRun()` lists the steps of a policy. It does not run anything and does not wait:
 
 ```swift
 RetryPolicy.exponentialBackoff(.seconds(1))
@@ -650,797 +555,82 @@ RetryPolicy.exponentialBackoff(.seconds(1))
 // [1s, 2s, 4s, nil]
 ```
 
-`dryRun()` is lazy. If a policy never stops, take only the first steps: `.dryRun().prefix(10)`.
+`dryRun()` is lazy. For a policy that never stops, take only the first steps: `.dryRun().prefix(10)`.
 
-#### Clock, cancellation, and actors
+### Clock, cancellation and actors
 
-- `withRetry` waits on a `ContinuousClock`. To use another clock, pass `clock:`. For example, a test clock that does not really wait.
+- `withRetry` waits on a `ContinuousClock`. To use another clock, for example a test clock that does not really wait, pass `clock:`.
 - A wait of zero does not use the clock.
-- If the task is cancelled, `withRetry` stops and returns the last failure.
-- A wait is never less than zero and never more than `RetryPolicy.maximumDelay` (about 292 million years). So a long backoff never overflows.
-- The action runs on the caller's actor. Code on `@MainActor` can use its own state in the action.
-
-### Array Extensions
-
-#### Traverse
-
-Apply a Result-returning transform to each element, short-circuiting on first failure:
-
-```swift
-let userIds = [1, 2, 3]
-
-// Sync traverse
-let result = userIds.traverse { id -> Result<User, AppError> in
-    fetchUser(id: id)
-}
-// Returns .success([User]) or .failure on first error
-
-// Async traverse — sequential: each element awaits the previous one,
-// and elements after a failure never run
-let result = await userIds.traverseAsync { id in
-    await fetchUserAsync(id: id)
-}
-
-// Parallel traverse — up to `concurrency` transforms in flight at once.
-// Results keep source order; fails with the lowest-index failure and
-// cancels in-flight transforms cooperatively.
-let result = await userIds.traverseAsync(concurrency: 4) { id in
-    await fetchUserAsync(id: id)
-}
-```
-
-Both `traverseAsync(concurrency:)` and `mapAsyncKeepOrder` run transforms in parallel with ordered output. Use `traverseAsync` for an all-or-nothing pass over a finite array — one `Result` at the end, the lowest-index failure wins, a failure cancels the rest. Use `mapAsyncKeepOrder` when you want each result as soon as order allows, have an endless source, or want failures kept in position in the stream — or `mapAsyncUnordered` when order does not matter, so each result is emitted the moment its transform finishes.
-
-#### Async Mapping
-
-Asynchronous versions of `map`, `flatMap`, and `compactMap`:
-
-```swift
-let items = [1, 2, 3, 4, 5]
-
-let mapped = await items.mapAsync { item in
-    "v\(item)"
-}
-
-let flattened = await items.flatMapAsync { item in
-    [item, item * 10]
-}
-
-let compacted = await items.compactMapAsync { item -> String? in
-    await processItem(item)  // Returns nil for items to filter out
-}
-
-enum ParseError: Error {
-    case invalid
-}
-
-let resultFlattened = await items.flatMapAsync { item -> Result<[Int], ParseError> in
-    .success([item, item + 100])
-}
-
-let resultCompacted = await items.compactMapAsync { item -> Result<String?, ParseError> in
-    .success(item.isMultiple(of: 2) ? "even-\(item)" : nil)
-}
-```
-
-### AsyncSequence Result Processing
-
-Process streams of Results with familiar functional operations:
-
-```swift
-let stream = AsyncStream<Result<Int, AppError>> { continuation in
-    continuation.success(1)
-    continuation.success(2)
-    continuation.failure(.invalid)
-    continuation.success(3)
-    continuation.finish()
-}
-
-// Filter to just success values
-for await value in stream.successes() {
-    print(value)  // 1, 2, 3
-}
-
-// Transform, tap, and chain
-for await result in stream
-    .tap { value in logger.info("got \(value)") }
-    .tapError { error in logger.error("\(error)") }
-    .mapAsync { value in await enrich(value) }
-    .flatMap { value in validate(value) }
-{
-    // ...
-}
-```
-
-### Ordered Concurrent Mapping
-
-Map elements through an async transform while preserving source order. By default transforms run **one at a time** — pass `concurrency` greater than 1 to opt into parallelism, bounding wall-clock time by the slowest element rather than the sum of all transforms while emission still follows source arrival order. If the consumer stops iterating early, no further elements are read from the source and in-flight transforms are cancelled cooperatively. Useful when an upstream provider streams items that should be processed concurrently but consumed in order (e.g. SSE image references that need to be fetched in parallel and rendered in order):
-
-```swift
-for await image in references.mapAsyncKeepOrder(concurrency: 8, { ref in
-    await downloader.fetch(ref)
-}) {
-    render(image)
-}
-```
-
-For an all-or-nothing parallel pass over a finite array, see `traverseAsync(concurrency:)` in [Traverse](#traverse) instead.
-
-When the source is a stream of `Result`, an overload transforms only the success values and passes failures through unchanged — preserving order across both:
-
-```swift
-for await result in events.mapAsyncKeepOrder({ event in
-    await enrich(event)
-}) {
-    handle(result)  // Result<EnrichedEvent, MyError>
-}
-```
-
-### Unordered Concurrent Mapping
-
-When results need not keep source order, `mapAsyncUnordered` emits each one as soon as its transform finishes, so a slow element holds back nothing but itself. Same concurrency model as the ordered operators — sequential by default, at most `concurrency` elements being transformed or waiting to be consumed, and in-flight transforms cancelled cooperatively if the consumer stops early:
-
-```swift
-for await thumbnail in photos.mapAsyncUnordered(concurrency: 8, { photo in
-    await renderer.thumbnail(for: photo)
-}) {
-    gallery.insert(thumbnail)
-}
-```
-
-`compactMapAsyncUnordered` drops the elements its transform returns `nil` for, and takes an optional `passthrough` for elements that need no async work — an element it maps to a value is emitted as that value without running the transform or waiting for a worker:
-
-```swift
-for await user in ids.compactMapAsyncUnordered(
-    concurrency: 8,
-    passthrough: { id in cache[id] },
-    { id in await api.user(id) }  // nil when the user is gone
-) {
-    show(user)
-}
-```
-
-The `Result` overloads, `mapAsyncUnordered` and `flatMapAsyncUnordered`, transform only successes; failures pass straight through as soon as they are read.
-
-### AsyncStream Extensions
-
-Create single-element Result streams or use convenience methods on continuations:
-
-```swift
-// Static factories — single-element streams
-let success: AsyncStream<Result<Int, MyError>> = .success(42)
-let failure: AsyncStream<Result<Int, MyError>> = .failure(.someError)
-
-// Continuation helpers
-let stream = AsyncStream<Result<Int, MyError>> { continuation in
-    continuation.success(1)
-    continuation.success(2)
-    continuation.failure(.someError)
-    continuation.finish()
-}
-
-// Or finish with a final value
-let stream = AsyncStream<Result<String, MyError>> { continuation in
-    continuation.success("processing...")
-    continuation.finishWithSuccess("done")  // Yields and finishes
-}
-
-// Finish with error
-let stream = AsyncStream<Result<Data, NetworkError>> { continuation in
-    continuation.finishWithFailure(.connectionLost)  // Yields error and finishes
-}
-```
-
-### Optional Extensions
-
-#### Match
-
-```swift
-let optional: String? = "hello"
-
-let message = optional.match(
-    { "got: \($0)" },
-    "nothing"
-)
-// "got: hello"
-
-let missing: String? = nil
-missing.match(
-    { value in print(value) },
-    ()
-)
-// Does nothing
-```
-
-#### Async Mapping
-
-```swift
-let optional: Int? = 42
-
-let mapped = await optional.mapAsync { value in
-    await fetchDetails(for: value)
-}
-// Returns nil if optional was nil, otherwise the transformed value
-
-let flatMapped = await optional.flatMapAsync { value -> String? in
-    value > 0 ? "id-\(value)" : nil
-}
-```
-
-#### OrElse / GetOrElse
-
-```swift
-let optional: Int? = nil
-let fallback = optional.orElse(99)  // 99 — first .some wins, so nil falls through
-let kept = Optional(5).orElse(99)   // 5 — keeps the wrapped value
-
-// getOrElse unwraps with a default (equivalent to ??)
-let count = optional.getOrElse(0)   // 0
-```
-
-## Result Extensions API
-
-### Do Notation
-
-Monadic do-notation for composing multiple Result operations with an accumulating context:
-
-```swift
-// ResultDo starts the chain, bind adds Result values, let adds pure values
-let result = ResultDo<MyError>()
-    .bind { getUser() }                              // Result<User, MyError>
-    .bind { user in getProfile(user) }               // Result<(User, Profile), MyError>
-    .let { _, profile in profile.name }              // Result<(User, Profile, String), MyError>
-    .map { user, _, name in "\(user.id): \(name)" }  // Result<String, MyError>
-
-// Short-circuits on the first failure
-let result = ResultDo<MyError>()
-    .bind { getUser() }                // .failure(.notFound) → stops here
-    .bind { user in getProfile(user) } // never called
-    .map { user, profile in profile }  // never called
-// result == .failure(.notFound)
-```
-
-**API:**
-
-```swift
-// Start the chain
-ResultDo<Failure>()
-
-// Bind: add a Result value, accumulates into a growing tuple
-func bind<A>(_ f: () -> Result<A, Failure>) -> Result<A, Failure>
-func bind<B>(_ f: (A) -> Result<B, Failure>) -> Result<(A, B), Failure>
-func bind<C>(_ f: (A, B) -> Result<C, Failure>) -> Result<(A, B, C), Failure>
-// ... up to 10 accumulated values
-
-// Let: add a pure (non-Result) value
-func `let`<A>(_ f: () -> A) -> Result<A, Failure>
-func `let`<B>(_ f: (A) -> B) -> Result<(A, B), Failure>
-func `let`<C>(_ f: (A, B) -> C) -> Result<(A, B, C), Failure>
-// ... up to 10 accumulated values
-
-// Async variants: bindAsync / letAsync
-func bindAsync<A>(_ f: () async -> Result<A, Failure>) async -> Result<A, Failure>
-func bindAsync<B>(_ f: (A) async -> Result<B, Failure>) async -> Result<(A, B), Failure>
-// ... up to 10 accumulated values
-
-func letAsync<A>(_ f: () async -> A) async -> Result<A, Failure>
-func letAsync<B>(_ f: (A) async -> B) async -> Result<(A, B), Failure>
-// ... up to 10 accumulated values
-```
-
-Sync and async can be freely mixed in the same chain:
-
-```swift
-let result = await ResultDo<MyError>()
-    .bind { getCachedUser() }                          // sync
-    .bindAsync { user in await fetchProfile(user) }    // async
-    .let { user, profile in profile.name }             // sync
-    .mapAsync { user, profile, name in                 // async
-        await formatDisplay(user, name)
-    }
-```
-
-### Map & FlatMap
-
-```swift
-// Non-throwing
-func mapAsync<T>(_ transform: (Success) async -> T) async -> Result<T, Failure>
-func mapErrorAsync<E: Error>(_ transform: (Failure) async -> E) async -> Result<Success, E>
-func flatMapAsync<T>(_ transform: (Success) async -> Result<T, Failure>) async -> Result<T, Failure>
-
-// Throwing (requires Failure == Error)
-func mapAsync<T>(_ transform: (Success) async throws -> T) async -> Result<T, Error>
-
-// Map to constant value
-func `as`<T>(_ value: T) -> Result<T, Failure>
-func asUnit() -> Result<Void, Failure>
-```
-
-### Alt
-
-```swift
-// Lazily provides an alternative on failure
-func alt(_ alternative: () -> Result<Success, Failure>) -> Result<Success, Failure>
-func altAsync(_ alternative: () async -> Result<Success, Failure>) async -> Result<Success, Failure>
-```
-
-### GetOrElse
-
-```swift
-// Unwrap or fall back
-func getOrElse(_ onFailure: (Failure) -> Success) -> Success
-func getOrElse(_ defaultValue: @autoclosure () -> Success) -> Success
-func getOrElseAsync(_ onFailure: (Failure) async -> Success) async -> Success
-func getOrElseAsync(_ defaultValue: @autoclosure @escaping () async -> Success) async -> Success
-```
-
-### GetOrExit / OrExit
-
-```swift
-// Unwrap or print to stderr and call Foundation.exit
-func getOrExit(prefix: String = "Error: ", exitCode: Int32 = 1) -> Success
-func getOrExit(exitCode: Int32 = 1, message: (Failure) -> String) -> Success
-
-// Discard success; print to stderr and exit on failure
-func orExit(prefix: String = "Error: ", exitCode: Int32 = 1)
-func orExit(exitCode: Int32 = 1, message: (Failure) -> String)
-```
-
-### Match
-
-All match variants are marked `@discardableResult`, so you can use them both for transforming values and for side effects without assigning the result.
-
-```swift
-@discardableResult func match<T>(_ onSuccess: (Success) -> T, _ onFailure: (Failure) -> T) -> T
-@discardableResult func match<T>(_ onSuccess: (Success) -> T, _ failure: @autoclosure () -> T) -> T
-@discardableResult func match<T>(_ success: @autoclosure () -> T, _ onFailure: (Failure) -> T) -> T
-@discardableResult func match<T>(_ success: @autoclosure () -> T, _ failure: @autoclosure () -> T) -> T
-@discardableResult func matchAsync<T>(_ onSuccess: (Success) async -> T, _ onFailure: (Failure) async -> T) async -> T
-@discardableResult func matchAsync<T>(_ onSuccess: (Success) async -> T, _ failure: @autoclosure () -> T) async -> T
-@discardableResult func matchAsync<T>(_ success: @autoclosure () -> T, _ onFailure: (Failure) async -> T) async -> T
-```
-
-### From Async
-
-```swift
-// Throwing (requires Failure == Error)
-static func fromAsync(_ operation: () async throws -> Success) async -> Result<Success, Error>
-```
-
-### From Task
-
-```swift
-// Throwing Task (requires Failure == Error)
-static func fromTask(_ task: Task<Success, Error>) async -> Result<Success, Error>
-static func fromTask(_ task: () -> Task<Success, Error>) async -> Result<Success, Error>
-
-// Non-throwing Task (requires Failure == Never)
-static func fromTask(_ task: Task<Success, Never>) async -> Result<Success, Never>
-static func fromTask(_ task: () -> Task<Success, Never>) async -> Result<Success, Never>
-
-// Task returning Result (requires Failure == Error)
-static func fromTask<S>(_ task: Task<Result<S, Error>, Never>) async -> Result<S, Error>
-static func fromTask<S>(_ task: () -> Task<Result<S, Error>, Never>) async -> Result<S, Error>
-```
-
-### From Optional
-
-```swift
-static func fromOptional(_ optional: Success?, error: Failure) -> Result<Success, Failure>
-static func fromOptional(_ optional: Success?, onError: () -> Failure) -> Result<Success, Failure>
-static func fromOptional(error: Failure) -> (Success?) -> Result<Success, Failure>
-static func fromOptional(onError: () -> Failure) -> (Success?) -> Result<Success, Failure>
-```
-
-### Is Success / Is Failure
-
-```swift
-var isSuccess: Bool  // true for success, false for failure
-var isFailure: Bool  // true for failure, false for success
-```
-
-### Tap (Side Effects)
-
-Throwing variants convert `Failure` to `Error`; a thrown error becomes the failure. Result-returning variants keep the success value but propagate the action's failure (the action's `Failure` type must match the Result's).
-
-```swift
-// Non-throwing
-func tap(_ action: (Success) -> Void) -> Result<Success, Failure>
-func tap<T>(_ action: (Success) -> T) -> Result<Success, Failure>
-
-// Result-returning
-func tap(_ action: (Success) -> Result<Void, Failure>) -> Result<Success, Failure>
-func tap<T>(_ action: (Success) -> Result<T, Failure>) -> Result<Success, Failure>
-
-// Throwing
-func tap(_ action: (Success) throws -> Void) -> Result<Success, Error>
-func tap<T>(_ action: (Success) throws -> T) -> Result<Success, Error>
-
-// Async non-throwing
-func tapAsync(_ action: (Success) async -> Void) async -> Result<Success, Failure>
-func tapAsync<T>(_ action: (Success) async -> T) async -> Result<Success, Failure>
-
-// Async Result-returning
-func tapAsync(_ action: (Success) async -> Result<Void, Failure>) async -> Result<Success, Failure>
-func tapAsync<T>(_ action: (Success) async -> Result<T, Failure>) async -> Result<Success, Failure>
-
-// Async throwing
-func tapAsync(_ action: (Success) async throws -> Void) async -> Result<Success, Error>
-func tapAsync<T>(_ action: (Success) async throws -> T) async -> Result<Success, Error>
-```
-
-### TapError (Side Effects on Failure)
-
-In the throwing variants, a thrown error replaces the original failure. In the Result-returning variants, the action's failure replaces the original; its success is discarded.
-
-```swift
-// Non-throwing
-func tapError(_ action: (Failure) -> Void) -> Result<Success, Failure>
-func tapError<T>(_ action: (Failure) -> T) -> Result<Success, Failure>
-
-// Result-returning
-func tapError<T>(_ action: (Failure) -> Result<T, Failure>) -> Result<Success, Failure>
-
-// Throwing
-func tapError(_ action: (Failure) throws -> Void) -> Result<Success, Error>
-func tapError<T>(_ action: (Failure) throws -> T) -> Result<Success, Error>
-
-// Async non-throwing
-func tapErrorAsync(_ action: (Failure) async -> Void) async -> Result<Success, Failure>
-func tapErrorAsync<T>(_ action: (Failure) async -> T) async -> Result<Success, Failure>
-
-// Async Result-returning
-func tapErrorAsync<T>(_ action: (Failure) async -> Result<T, Failure>) async -> Result<Success, Failure>
-
-// Async throwing
-func tapErrorAsync(_ action: (Failure) async throws -> Void) async -> Result<Success, Error>
-func tapErrorAsync<T>(_ action: (Failure) async throws -> T) async -> Result<Success, Error>
-```
-
-### Finally
-
-```swift
-// Runs regardless of success or failure, returns self unchanged
-func finally(_ action: () -> Void) -> Result<Success, Failure>
-func finallyAsync(_ action: () async -> Void) async -> Result<Success, Failure>
-```
-
-## Combining Functions API
-
-Combine multiple Results into a single Result containing a tuple of all success values. If any Result fails, returns the first failure.
-
-### Sync (flatten)
-
-```swift
-// Supports 2-10 arguments
-func flatten<A, B, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>) -> Result<(A, B), E>
-func flatten<A, B, C, E: Error>(_ a: Result<A, E>, _ b: Result<B, E>, _ c: Result<C, E>) -> Result<(A, B, C), E>
-// ... up to 10 arguments
-```
-
-### Async (withAll, Parallel Execution)
-
-```swift
-// Supports 2-10 arguments, runs all operations in parallel
-func withAll<A: Sendable, B: Sendable, E: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<A, E>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<B, E>
-) async -> Result<(A, B), E>
-// ... up to 10 arguments
-```
-
-## Racing and Timeout Functions API
-
-`withAny` runs async operations concurrently and returns the first to succeed, cancelling the rest. A failure that finishes first is passed over; if all fail, the last failure to complete is returned. At least one operation is required.
-
-```swift
-// Variadic (autoclosure), 2-10 operations — same ergonomics as withAll
-func withAny<Success: Sendable, Failure: Error>(
-    _ a: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>,
-    _ b: @Sendable @autoclosure @escaping () async -> Result<Success, Failure>
-) async -> Result<Success, Failure>
-// ... up to 10 arguments
-
-// Array form for a dynamic number of operations (must be non-empty)
-func withAny<Success: Sendable, Failure: Error>(
-    _ operations: [@Sendable () async -> Result<Success, Failure>]
-) async -> Result<Success, Failure>
-```
-
-`withTimeout` runs one operation, returning its result if it finishes within `duration`, or `.failure(timeoutError)` if it doesn't — cancelling the operation. A failure that arrives before the timeout is returned as-is, not swallowed.
-
-```swift
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
-func withTimeout<Success: Sendable, Failure: Error>(
-    _ duration: Duration,
-    failingWith timeoutError: Failure,
-    _ operation: @Sendable @escaping () async -> Result<Success, Failure>
-) async -> Result<Success, Failure>
-```
-
-## Retry API
-
-Everything here comes from `import FPRetry`.
-
-```swift
-struct RetryStatus: Sendable, Hashable {
-    let iteration: Int              // retries so far: 0 on the first attempt
-    let cumulativeDelay: Duration   // total time waited so far
-    let previousDelay: Duration?    // the last wait, nil on the first attempt
-    static var initial: RetryStatus
-    func applying(_ policy: RetryPolicy) -> RetryStatus  // the next status after asking the policy
-}
-
-struct RetryPolicy: Sendable {
-    init(_ delay: @escaping @Sendable (RetryStatus) -> Duration?)
-    func callAsFunction(_ status: RetryStatus) -> Duration?
-    static var maximumDelay: Duration
-
-    static func limitRetries(_ count: Int) -> RetryPolicy
-    static func constantDelay(_ delay: Duration) -> RetryPolicy
-    static func exponentialBackoff(_ base: Duration) -> RetryPolicy
-
-    func and(_ other: RetryPolicy) -> RetryPolicy  // retries while both retry, waits the longer delay
-    func capDelay(_ maximum: Duration) -> RetryPolicy
-    func limitRetriesByDelay(_ maximum: Duration) -> RetryPolicy
-    func limitRetriesByCumulativeDelay(_ maximum: Duration) -> RetryPolicy
-    func jitter(_ range: ClosedRange<Double> = 0...1) -> RetryPolicy
-    func jitter<G: RandomNumberGenerator & Sendable>(
-        _ range: ClosedRange<Double> = 0...1,
-        using generator: G
-    ) -> RetryPolicy
-
-    func dryRun() -> some Sequence<RetryStatus>
-}
-
-func withRetry<Success, Failure: Error, C: Clock<Duration>>(
-    _ policy: RetryPolicy,
-    while shouldRetry: (Failure) -> Bool = { _ in true },
-    clock: C = ContinuousClock(),
-    _ action: (RetryStatus) async -> Result<Success, Failure>
-) async -> Result<Success, Failure>
-
-// The same, for an action that does not need the status.
-func withRetry<Success, Failure: Error, C: Clock<Duration>>(
-    _ policy: RetryPolicy,
-    while shouldRetry: (Failure) -> Bool = { _ in true },
-    clock: C = ContinuousClock(),
-    _ action: () async -> Result<Success, Failure>
-) async -> Result<Success, Failure>
-```
-
-## Array Extensions API
-
-### Traverse
-
-```swift
-func traverse<Success>(_ transform: (Element) -> Success) -> Result<[Success], Never>
-func traverse<Success, Failure>(_ transform: (Element) -> Result<Success, Failure>) -> Result<[Success], Failure>
-
-// Sequential — each element awaits the previous one
-func traverseAsync<Success>(_ transform: (Element) async -> Success) async -> Result<[Success], Never>
-func traverseAsync<Success, Failure>(_ transform: (Element) async -> Result<Success, Failure>) async -> Result<[Success], Failure>
-
-// Parallel — up to `concurrency` in flight, results in source order,
-// lowest-index failure wins, in-flight transforms cancelled on failure
-func traverseAsync<Success: Sendable>(
-    concurrency: Int,
-    _ transform: @Sendable @escaping (Element) async -> Success
-) async -> Result<[Success], Never> where Element: Sendable
-func traverseAsync<Success: Sendable, Failure: Error>(
-    concurrency: Int,
-    _ transform: @Sendable @escaping (Element) async -> Result<Success, Failure>
-) async -> Result<[Success], Failure> where Element: Sendable
-```
-
-### Separate / Successes / Failures
-
-```swift
-// Split an array of Results into both sides
-func separate<Success, Failure>() -> (successes: [Success], failures: [Failure])
-    where Element == Result<Success, Failure>
-
-// Just one side
-func successes<Success, Failure>() -> [Success] where Element == Result<Success, Failure>
-func failures<Success, Failure>() -> [Failure] where Element == Result<Success, Failure>
-```
-
-### Compact / Sequence
-
-```swift
-// Drop nil elements
-func compact<T>() -> [T] where Element == T?
-
-// All-or-nothing: nil if any element is nil
-func sequence<T>() -> [T]? where Element == T?
-```
-
-### Async Mapping
-
-```swift
-// mapAsync — for Result-returning transforms, use traverseAsync
-func mapAsync<T>(_ transform: (Element) async -> T) async -> [T]
-
-// flatMapAsync
-func flatMapAsync<S: Sequence>(
-    _ transform: (Element) async -> S
-) async -> [S.Element]
-func flatMapAsync<S: Sequence, Failure: Error>(
-    _ transform: (Element) async -> Result<S, Failure>
-) async -> Result<[S.Element], Failure>
-
-// compactMapAsync
-func compactMapAsync<T>(_ transform: (Element) async -> T?) async -> [T]
-func compactMapAsync<T, Failure: Error>(
-    _ transform: (Element) async -> Result<T?, Failure>
-) async -> Result<[T], Failure>
-```
-
-## AsyncSequence Extensions API
-
-Extensions for any `AsyncSequence` where `Element == Result<Success, Failure>`.
-
-They return `ResultMapSequence`, `ResultMapAsyncSequence` and `ResultCompactMapSequence`, FP's inlinable replacements for the standard library's `AsyncMapSequence` and `AsyncCompactMapSequence`: a transform compiles into the loop that iterates the sequence instead of costing a call into the runtime per element. Each one is `Sendable` when its base sequence is and throws only what its base sequence throws. Closures run on the actor that iterates the sequence.
-
-### Filter
-
-```swift
-func successes() -> ResultCompactMapSequence<Self, Success>  // unwraps success values
-func failures() -> ResultCompactMapSequence<Self, Failure>   // unwraps failure errors
-```
-
-### Map & FlatMap
-
-```swift
-// Sync
-func map<T>(_ transform: (Success) -> T) -> ResultMapSequence<Self, Result<T, Failure>>
-func mapError<E>(_ transform: (Failure) -> E) -> ResultMapSequence<Self, Result<Success, E>>
-func flatMap<T>(_ transform: (Success) -> Result<T, Failure>) -> ResultMapSequence<Self, Result<T, Failure>>
-
-// Async
-func mapAsync<T>(_ transform: (Success) async -> T) -> ResultMapAsyncSequence<Self, Result<T, Failure>>
-func mapErrorAsync<E>(_ transform: (Failure) async -> E) -> ResultMapAsyncSequence<Self, Result<Success, E>>
-func flatMapAsync<T>(_ transform: (Success) async -> Result<T, Failure>) -> ResultMapAsyncSequence<Self, Result<T, Failure>>
-```
-
-### Tap
-
-```swift
-// Sync
-func tap(_ action: (Success) -> Void) -> ResultMapSequence<Self, Result<Success, Failure>>
-func tapError(_ action: (Failure) -> Void) -> ResultMapSequence<Self, Result<Success, Failure>>
-
-// Async
-func tapAsync(_ action: (Success) async -> Void) -> ResultMapAsyncSequence<Self, Result<Success, Failure>>
-func tapErrorAsync(_ action: (Failure) async -> Void) -> ResultMapAsyncSequence<Self, Result<Success, Failure>>
-```
-
-### Ordered Concurrent Mapping
-
-Element transforms run at most `concurrency` at a time — sequential by default (`concurrency: 1`), parallel when you raise it; output preserves source arrival order either way. Early termination by the consumer cancels in-flight transforms cooperatively.
-
-```swift
-// General form
-func mapAsyncKeepOrder<T: Sendable>(
-    concurrency: Int = 1,
-    _ transform: @Sendable @escaping (Element) async -> T
-) -> AsyncStream<T>
-where Self: Sendable, Failure == Never, Element: Sendable
-
-// Result overload — transforms successes, passes failures through
-func mapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
-    concurrency: Int = 1,
-    _ transform: @Sendable @escaping (Success) async -> T
-) -> AsyncStream<Result<T, E>>
-where Self: Sendable, Failure == Never, Element == Result<Success, E>
-
-// Fallible transform — transform failures replace the success they came from
-func flatMapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
-    concurrency: Int = 1,
-    _ transform: @Sendable @escaping (Success) async -> Result<T, E>
-) -> AsyncStream<Result<T, E>>
-where Self: Sendable, Failure == Never, Element == Result<Success, E>
-```
-
-### Unordered Concurrent Mapping
-
-Same concurrency model as the ordered operators; results emit in the order their transforms finish. Each iteration of the returned `UnorderedMapSequence` reads the source afresh.
-
-```swift
-// General form
-func mapAsyncUnordered<T: Sendable>(
-    concurrency: Int = 1,
-    _ transform: @Sendable @escaping (Element) async -> T
-) -> UnorderedMapSequence<Self, T>
-where Self: Sendable, Failure == Never, Element: Sendable
-
-// Drops nil results; passthrough maps an element straight to its result
-func compactMapAsyncUnordered<T: Sendable>(
-    concurrency: Int = 1,
-    passthrough: (@Sendable (Element) -> T?)? = nil,
-    _ transform: @Sendable @escaping (Element) async -> T?
-) -> UnorderedMapSequence<Self, T>
-where Self: Sendable, Failure == Never, Element: Sendable
-
-// Result overload — transforms successes, passes failures through
-func mapAsyncUnordered<Success: Sendable, E: Error, T: Sendable>(
-    concurrency: Int = 1,
-    _ transform: @Sendable @escaping (Success) async -> T
-) -> UnorderedMapSequence<Self, Result<T, E>>
-where Self: Sendable, Failure == Never, Element == Result<Success, E>
-
-// Fallible transform — transform failures replace the success they came from
-func flatMapAsyncUnordered<Success: Sendable, E: Error, T: Sendable>(
-    concurrency: Int = 1,
-    _ transform: @Sendable @escaping (Success) async -> Result<T, E>
-) -> UnorderedMapSequence<Self, Result<T, E>>
-where Self: Sendable, Failure == Never, Element == Result<Success, E>
-```
-
-## AsyncStream Extensions API
-
-### Static Factories
-
-Create single-element Result streams:
-
-```swift
-static func success<Success, Failure>(_ value: Success) -> AsyncStream<Result<Success, Failure>>
-static func failure<Success, Failure>(_ error: Failure) -> AsyncStream<Result<Success, Failure>>
-```
-
-### Continuation Extensions
-
-Extensions for `AsyncStream.Continuation` when the element type is `Result<Success, Failure>`:
-
-```swift
-// Yield success/failure values
-func success<Success, Failure>(_ value: Success) -> YieldResult
-func failure<Success, Failure>(_ error: Failure) -> YieldResult
-
-// Yield and finish the stream
-func finishWithSuccess<Success, Failure>(_ value: Success)
-func finishWithFailure<Success, Failure>(_ error: Failure)
-```
-
-## Optional Extensions API
-
-### Match
-
-```swift
-@discardableResult func match<T>(_ onSome: (Wrapped) -> T, _ onNone: @autoclosure () -> T) -> T
-@discardableResult func matchAsync<T>(_ onSome: (Wrapped) async -> T, _ onNone: @autoclosure () -> T) async -> T
-```
-
-### Async Mapping
-
-```swift
-func mapAsync<T>(_ transform: (Wrapped) async -> T) async -> T?
-func flatMapAsync<T>(_ transform: (Wrapped) async -> T?) async -> T?
-```
-
-### OrElse / GetOrElse
-
-```swift
-// First .some wins; the alternative is only evaluated when nil
-func orElse(_ alternative: @autoclosure () -> Wrapped?) -> Wrapped?
-func orElseAsync(_ alternative: @autoclosure @escaping () async -> Wrapped?) async -> Wrapped?
-
-// Unwrap with a default (equivalent to ??)
-func getOrElse(_ defaultValue: @autoclosure () -> Wrapped) -> Wrapped
-func getOrElseAsync(_ defaultValue: @autoclosure @escaping () async -> Wrapped) async -> Wrapped
-```
-
-### Finally
-
-```swift
-// Runs regardless of .some/.none, returns self unchanged
-func finally(_ action: () -> Void) -> Wrapped?
-func finallyAsync(_ action: () async -> Void) async -> Wrapped?
-```
+- When the task is cancelled, `withRetry` stops and returns the last failure.
+- A wait is never less than zero or more than `RetryPolicy.maximumDelay`, so a long backoff never overflows.
+- The action runs on the caller's actor, so code on `@MainActor` can use its own state in it.
+
+## API reference
+
+The operators are in [Pipe operators](#pipe-operators), and the retry API is in [Retrying](#retrying).
+
+`Result`:
+
+| Method                                             | What it does                              |
+| -------------------------------------------------- | ----------------------------------------- |
+| `tap`, `tapAsync`                                  | Runs a side effect on a success.          |
+| `tapError`, `tapErrorAsync`                        | Runs a side effect on a failure.          |
+| `finally`, `finallyAsync`                          | Runs a side effect in both cases.         |
+| `mapAsync`, `flatMapAsync`, `mapErrorAsync`        | `map`, `flatMap` and `mapError`, async.   |
+| `as`, `asUnit`                                     | Replaces the success value.               |
+| `match`, `matchAsync`                              | Turns both cases into one value.          |
+| `isSuccess`, `isFailure`                           | Checks the case.                          |
+| `alt`, `altAsync`                                  | Replaces a failure with another `Result`. |
+| `orElse`, `orElseAsync`                            | Makes a new `Result` from the error.      |
+| `getOrElse`, `getOrElseAsync`                      | The value, or a fallback.                 |
+| `getOrExit`, `orExit`                              | Exits the process on a failure.           |
+| `Result.fromOptional`                              | Turns an `Optional` into a `Result`.      |
+| `Result.fromAsync`                                 | Runs async code that throws.              |
+| `Result.fromTask`                                  | Waits for a `Task`.                       |
+| `ResultDo`: `bind`, `let`, `bindAsync`, `letAsync` | Do notation.                              |
+
+Functions:
+
+| Function      | What it does                                                  |
+| ------------- | ------------------------------------------------------------- |
+| `flatten`     | Combines up to 10 results into a result of a tuple.           |
+| `withAll`     | The same for async calls, run at the same time.               |
+| `withAny`     | The first success of async calls, run at the same time.       |
+| `withTimeout` | The result of an async call, or a failure when time runs out. |
+
+`Optional`:
+
+| Method                        | What it does                         |
+| ----------------------------- | ------------------------------------ |
+| `match`, `matchAsync`         | Turns both cases into one value.     |
+| `mapAsync`, `flatMapAsync`    | `map` and `flatMap`, async.          |
+| `orElse`, `orElseAsync`       | The first value that is not `nil`.   |
+| `getOrElse`, `getOrElseAsync` | The value, or a default (like `??`). |
+| `finally`, `finallyAsync`     | Runs a side effect in both cases.    |
+
+`Array`:
+
+| Method                                        | What it does                               |
+| --------------------------------------------- | ------------------------------------------ |
+| `traverse`, `traverseAsync`                   | All values, or the first failure.          |
+| `separate`, `successes`, `failures`           | Splits `[Result]`.                         |
+| `compact`, `sequence`                         | Removes `nil` elements, or all or nothing. |
+| `mapAsync`, `flatMapAsync`, `compactMapAsync` | `map`, `flatMap` and `compactMap`, async.  |
+
+`AsyncSequence` and `AsyncStream`:
+
+| Method                                                                     | What it does                                |
+| -------------------------------------------------------------------------- | ------------------------------------------- |
+| `successes`, `failures`                                                    | One side of a sequence of results.          |
+| `map`, `mapError`, `flatMap`, `tap`, `tapError` and their `Async` versions | Work on one side. The other passes through. |
+| `mapAsyncKeepOrder`, `flatMapAsyncKeepOrder`, `compactMapAsyncKeepOrder`   | Concurrent, in source order.                |
+| `mapAsyncUnordered`, `flatMapAsyncUnordered`, `compactMapAsyncUnordered`   | Concurrent, in the order they finish.       |
+| `AsyncStream.success`, `AsyncStream.failure`                               | A stream of one result.                     |
+| `success`, `failure`, `finishWithSuccess`, `finishWithFailure`             | Add a result on a continuation.             |
 
 ## Benchmarks
 
-Allocation, ARC and timing benchmarks for the traversals, concurrent maps and parallel combinators live in their own package under [`Benchmarks/`](Benchmarks/README.md):
+The benchmarks measure allocations, reference counting and time for the traversals, the concurrent maps and the parallel combinators. They are in their own package, in [`Benchmarks/`](Benchmarks/README.md):
 
 ```bash
 cd Benchmarks && swift package benchmark
@@ -1448,4 +638,4 @@ cd Benchmarks && swift package benchmark
 
 ## License
 
-MIT
+Released under the [MIT License](LICENSE).

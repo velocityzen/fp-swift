@@ -1,37 +1,24 @@
 // MARK: - Retry an async Result-returning operation
 
-/// Runs `action`. If it fails, waits and runs it again, as `policy` says.
+/// Runs `action`, and runs it again after a failure, as `policy` says.
 ///
-/// Returns the first success. If every attempt fails, returns the last
-/// failure. A success is never retried.
+/// Returns the first success, or the last failure when the policy stops. If the task is
+/// cancelled, it starts no new attempt and returns the last failure. A running attempt sees
+/// the cancellation only if it checks for it.
 ///
 /// ```swift
-/// let apiPolicy = RetryPolicy.exponentialBackoff(.milliseconds(200))
-///     .and(.limitRetries(5))
-///     .capDelay(.seconds(2))
-///     .jitter()
-///
+/// // isTransient is a property of your own error type.
 /// let user = await withRetry(apiPolicy, while: \.isTransient) { status in
-///     logger.debug("attempt \(status.iteration + 1)")
+///     log("attempt \(status.iteration + 1)")
 ///     return await fetchUser(id)
 /// }
-/// // Result<User, APIError>
 /// ```
-///
-/// `isTransient` is a property of your own error type. It is `true` for
-/// failures that can pass on the next try, for example a timeout. The key
-/// path `\.isTransient` is the same as `{ error in error.isTransient }`.
-///
-/// If the task is cancelled, `withRetry` stops and returns the last failure.
-/// The action sees the cancellation only if it checks for it.
 ///
 /// - Parameters:
 ///   - policy: Decides whether to retry, and how long to wait first.
-///   - shouldRetry: Returns `true` for failures to retry. By default, every
-///     failure is retried.
+///   - shouldRetry: Returns `true` for failures to retry. The default retries every failure.
 ///   - clock: The clock for the waits. A wait of zero does not use it.
-///   - action: The operation to run. It gets the current ``RetryStatus``.
-/// - Returns: The first success, or the last failure.
+///   - action: The operation. It gets the current ``RetryStatus``.
 @inlinable
 public func withRetry<Success, Failure: Error, C: Clock<Duration>>(
     _ policy: RetryPolicy,
@@ -53,24 +40,10 @@ public func withRetry<Success, Failure: Error, C: Clock<Duration>>(
     }
 }
 
-/// Runs `action`. If it fails, waits and runs it again, as `policy` says.
+/// Runs `action`, and runs it again after a failure, as `policy` says.
 ///
-/// The same as the other `withRetry`, for an action that does not need the
-/// ``RetryStatus``.
-///
-/// ```swift
-/// let user = await withRetry(.constantDelay(.seconds(1)).and(.limitRetries(3))) {
-///     await fetchUser(id)
-/// }
-/// ```
-///
-/// - Parameters:
-///   - policy: Decides whether to retry, and how long to wait first.
-///   - shouldRetry: Returns `true` for failures to retry. By default, every
-///     failure is retried.
-///   - clock: The clock for the waits. A wait of zero does not use it.
-///   - action: The operation to run.
-/// - Returns: The first success, or the last failure.
+/// For an action that does not need the ``RetryStatus``. Otherwise it works like the other
+/// `withRetry`.
 @inlinable
 public func withRetry<Success, Failure: Error, C: Clock<Duration>>(
     _ policy: RetryPolicy,
@@ -84,7 +57,7 @@ public func withRetry<Success, Failure: Error, C: Clock<Duration>>(
 extension Clock<Duration> {
     /// Waits `delay`. Returns `false` if the task is cancelled.
     ///
-    /// A wait of zero only checks for cancellation, so it does not suspend.
+    /// A wait of zero only checks for cancellation and does not suspend.
     @inlinable
     func wait(_ delay: Duration) async -> Bool {
         guard delay > .zero else { return !Task.isCancelled }

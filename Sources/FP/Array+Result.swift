@@ -1,15 +1,10 @@
 import Synchronization
 
-// Everything here is `@inlinable` so callers specialize it for their element
-// and result types: unspecialized, every element goes through generic value
-// witnesses, and async ones heap-allocate their generic temporaries.
+// Everything here is `@inlinable` so callers specialize it. Generic code is slower per element,
+// and async generic code allocates its temporaries on the heap.
 
 public extension Array {
-    /// Traverses the array, applying a transform function to each element.
-    /// Returns a Result containing an array of transformed values.
-    ///
-    /// - Parameter transform: A closure that transforms each element
-    /// - Returns: A Result containing an array of transformed values (never fails)
+    /// Transforms each element and returns the new array as a success.
     @inlinable
     func traverse<Success>(
         _ transform: (Element) -> Success
@@ -24,12 +19,10 @@ public extension Array {
         return .success(results)
     }
 
-    /// Traverses the array, applying a transform function that returns a Result.
-    /// If all transformations succeed, returns a Result containing an array of successes.
-    /// If any transformation fails, returns the first failure encountered.
+    /// Transforms each element with a transform that can fail.
     ///
-    /// - Parameter transform: A closure that transforms each element into a Result
-    /// - Returns: A Result containing either an array of all successes or the first failure
+    /// Returns all values in order, or the first failure. Elements after a failure are not
+    /// transformed.
     @inlinable
     func traverse<Success, Failure: Error>(
         _ transform: (Element) -> Result<Success, Failure>
@@ -49,14 +42,9 @@ public extension Array {
         return .success(results)
     }
 
-    /// Asynchronously traverses the array, applying a transform function to each element.
-    /// Returns a Result containing an array of transformed values.
+    /// Transforms each element with an async transform, one at a time.
     ///
-    /// Transforms run sequentially — each element awaits the previous one.
-    /// Pass `concurrency:` to run them in parallel.
-    ///
-    /// - Parameter transform: An async closure that transforms each element
-    /// - Returns: A Result containing an array of transformed values (never fails)
+    /// Pass `concurrency:` to run transforms at the same time.
     @inlinable
     func traverseAsync<Success>(
         _ transform: (Element) async -> Success
@@ -71,16 +59,10 @@ public extension Array {
         return .success(results)
     }
 
-    /// Asynchronously traverses the array, applying a transform function that returns a Result.
-    /// If all transformations succeed, returns a Result containing an array of successes.
-    /// If any transformation fails, returns the first failure encountered.
+    /// Transforms each element with an async transform that can fail, one at a time.
     ///
-    /// Transforms run sequentially — each element awaits the previous one, and
-    /// elements after a failure never run. Pass `concurrency:` to run them in
-    /// parallel.
-    ///
-    /// - Parameter transform: An async closure that transforms each element into a Result
-    /// - Returns: A Result containing either an array of all successes or the first failure
+    /// Returns all values in order, or the first failure. Elements after a failure do not run.
+    /// Pass `concurrency:` to run transforms at the same time.
     @inlinable
     func traverseAsync<Success, Failure: Error>(
         _ transform: (Element) async -> Result<Success, Failure>
@@ -100,16 +82,10 @@ public extension Array {
         return .success(results)
     }
 
-    /// Asynchronously traverses the array with up to `concurrency` transforms
-    /// in flight at once. Results keep source order.
+    /// Transforms each element with an async transform, with up to `concurrency` running at the
+    /// same time.
     ///
-    /// - Parameters:
-    ///   - concurrency: Maximum number of transforms in flight at once; must
-    ///     be at least 1. `concurrency: 1` is equivalent to the sequential
-    ///     variant.
-    ///   - transform: An async closure that transforms each element
-    /// - Returns: A Result containing an array of transformed values in
-    ///   source order (never fails)
+    /// Results keep the source order. `concurrency` must be 1 or more.
     @inlinable
     func traverseAsync<Success: Sendable>(
         concurrency: Int,
@@ -120,32 +96,23 @@ public extension Array {
         }
     }
 
-    /// Asynchronously traverses the array with up to `concurrency` transforms
-    /// in flight at once. Results keep source order.
+    /// Transforms each element with an async transform that can fail, with up to `concurrency`
+    /// running at the same time.
     ///
-    /// Fails with the failure of the lowest-index failing element. Once a
-    /// failure is observed, no further transforms start and in-flight ones
-    /// are cancelled cooperatively — elements after a failure may have
-    /// started (and been cancelled) or never run at all.
-    ///
-    /// For streaming results, endless sources, or failures kept in position,
-    /// use `mapAsyncKeepOrder` on an async sequence instead.
+    /// Returns all values in source order, or the failure with the lowest index. After the
+    /// first failure, no new transform starts and running ones are cancelled.
     ///
     /// - Parameters:
-    ///   - concurrency: Maximum number of transforms in flight at once; must
-    ///     be at least 1. `concurrency: 1` is equivalent to the sequential
-    ///     variant.
-    ///   - transform: An async closure that transforms each element into a Result
-    /// - Returns: A Result containing either an array of all successes in
-    ///   source order, or the lowest-index failure
+    ///   - concurrency: How many transforms may run at the same time. Must be 1 or more.
+    ///     With 1, it works like the version without `concurrency`.
+    ///   - transform: The transform for one element.
     @inlinable
     func traverseAsync<Success: Sendable, Failure: Error>(
         concurrency: Int,
         _ transform: @concurrent @Sendable @escaping (Element) async -> Result<Success, Failure>
     ) async -> Result<[Success], Failure> where Element: Sendable {
         precondition(concurrency >= 1, "concurrency must be at least 1")
-        // With one transform in flight at a time there is nothing to run in
-        // parallel, so loop in place rather than start a child task.
+        // One transform at a time, or one element: loop here, with no child task.
         guard concurrency > 1, count > 1 else {
             return await traverseAsync(transform)
         }
@@ -164,9 +131,7 @@ public extension Array {
         return .success(traversal.values())
     }
 
-    /// Separates an array of Results into success and failure arrays.
-    ///
-    /// - Returns: A tuple containing all success values and all failure values
+    /// Splits an array of results into its success values and its failure values.
     @inlinable
     func separate<Success, Failure>() -> (successes: [Success], failures: [Failure])
     where Element == Result<Success, Failure> {
@@ -187,12 +152,7 @@ public extension Array {
         return (successes: successes, failures: failures)
     }
 
-    /// Returns just the success values from an array of `Result`.
-    ///
-    /// ```swift
-    /// let results: [Result<Int, MyError>] = [.success(1), .failure(.bad), .success(2)]
-    /// results.successes()  // [1, 2]
-    /// ```
+    /// Returns the success values from an array of results.
     @inlinable
     func successes<Success, Failure>() -> [Success]
     where Element == Result<Success, Failure> {
@@ -206,12 +166,7 @@ public extension Array {
         return values
     }
 
-    /// Returns just the failure errors from an array of `Result`.
-    ///
-    /// ```swift
-    /// let results: [Result<Int, MyError>] = [.success(1), .failure(.bad), .success(2)]
-    /// results.failures()  // [.bad]
-    /// ```
+    /// Returns the failure values from an array of results.
     @inlinable
     func failures<Success, Failure>() -> [Failure]
     where Element == Result<Success, Failure> {
@@ -226,9 +181,8 @@ public extension Array {
 }
 
 extension Array where Element: Sendable {
-    /// Runs a child task per element, each handing its result back to the
-    /// group: with every element in flight at once there is nothing to
-    /// schedule, so children share no state and capture only their element.
+    /// Runs one child task per element. All elements run at the same time, so there is nothing
+    /// to schedule: children share no state and capture only their element.
     @inlinable
     func traverseWithTaskPerElement<Success: Sendable, Failure: Error>(
         into traversal: ConcurrentTraversal<Success>,
@@ -256,11 +210,10 @@ extension Array where Element: Sendable {
         }
     }
 
-    /// Runs a fixed pool of workers rather than a child task per element,
-    /// since a child task costs far more than most transforms: each worker
-    /// starts on its own element, then claims the next unclaimed one until
-    /// none are left. Starting every worker up front keeps the first
-    /// `workers` elements running even if one fails at once.
+    /// Runs a fixed number of workers, because a child task per element costs more than most
+    /// transforms. Each worker starts on its own element, then claims the next free one until
+    /// none are left. All workers start first, so the first `workers` elements run even if one
+    /// fails at once.
     @inlinable
     func traverseWithWorkers<Success: Sendable, Failure: Error>(
         _ workers: Int,
@@ -297,11 +250,10 @@ extension Array where Element: Sendable {
     }
 }
 
-/// The state of a concurrent `traverseAsync`: the next index for a worker
-/// to claim, and a slot per element for its result.
+/// The state of a concurrent `traverseAsync`: the next index to claim, and one result slot per
+/// element.
 ///
-/// `@unchecked Sendable`: each slot is written once, by the one task that
-/// ran its element or received its result, and read only after every
+/// `@unchecked Sendable`: each slot is written once, by one task, and read only after every
 /// child task has finished.
 @usableFromInline
 final class ConcurrentTraversal<Success>: @unchecked Sendable {
@@ -309,8 +261,8 @@ final class ConcurrentTraversal<Success>: @unchecked Sendable {
     @usableFromInline let next: Atomic<Int>
     @usableFromInline let slots: UnsafeMutablePointer<Success?>
 
-    /// - Parameter claimed: How many leading indices the workers start on,
-    ///   so `claim()` begins after them.
+    /// - Parameter claimed: How many first indices the workers start on. `claim()` starts
+    ///   after them.
     @inlinable
     init(count: Int, claimed: Int) {
         self.count = count
@@ -324,8 +276,7 @@ final class ConcurrentTraversal<Success>: @unchecked Sendable {
         slots.deallocate()
     }
 
-    /// Claims the next unclaimed index, or returns nil when every index is
-    /// claimed or the traversal stopped.
+    /// Claims the next free index. Returns nil when all are claimed or the traversal stopped.
     @inlinable
     func claim() -> Int? {
         let index = next.wrappingAdd(1, ordering: .relaxed).oldValue
@@ -343,8 +294,8 @@ final class ConcurrentTraversal<Success>: @unchecked Sendable {
         slots[index] = value
     }
 
-    /// Moves every result out, in index order. Call only after every worker
-    /// has finished and stored its results without stopping.
+    /// Moves all results out, in index order. Call it only after every worker finished and
+    /// none of them stopped the traversal.
     @inlinable
     func values() -> [Success] {
         Array(unsafeUninitializedCapacity: count) { buffer, initializedCount in

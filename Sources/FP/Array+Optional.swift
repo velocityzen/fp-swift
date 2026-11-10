@@ -1,12 +1,7 @@
 public extension Array {
-    /// Returns a new array with all `nil` elements removed.
+    /// Returns the array without its `nil` elements.
     ///
-    /// Idiomatic shorthand for `compactMap { $0 }`.
-    ///
-    /// ```swift
-    /// let xs: [Int?] = [1, nil, 2, nil, 3]
-    /// xs.compact()  // [1, 2, 3]
-    /// ```
+    /// Same as `compactMap { $0 }`.
     @inlinable
     func compact<T>() -> [T] where Element == T? {
         var values: [T] = []
@@ -19,18 +14,13 @@ public extension Array {
         return values
     }
 
-    /// Flips an array of optionals into an optional array — "all or nothing".
-    /// Returns `nil` if any element is `nil`; otherwise returns the array of
-    /// unwrapped values.
+    /// Returns the unwrapped values, or `nil` if any element is `nil`.
     ///
-    /// Partner of ``compact()``: `compact` drops nils, `sequence` rejects on nil.
+    /// To drop the `nil` elements instead, use ``compact()``.
     ///
     /// ```swift
-    /// let xs: [Int?] = [1, 2, 3]
-    /// xs.sequence()  // [1, 2, 3]
-    ///
-    /// let ys: [Int?] = [1, nil, 3]
-    /// ys.sequence()  // nil
+    /// let xs: [Int?] = [1, nil, 3]
+    /// xs.sequence()  // nil
     /// ```
     @inlinable
     func sequence<T>() -> [T]? where Element == T? {

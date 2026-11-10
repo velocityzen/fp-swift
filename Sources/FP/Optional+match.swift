@@ -1,6 +1,6 @@
 // MARK: - Optional Match Extensions
 public extension Optional {
-    /// Folds the Optional by applying one of two functions depending on some or none.
+    /// Returns `onSome(value)` if there is a value, or `onNone` if it is `nil`.
     @discardableResult
     @inlinable
     func match<T>(
@@ -15,7 +15,7 @@ public extension Optional {
         }
     }
 
-    /// Asynchronously folds the Optional, using an async function for some and a default for none.
+    /// Returns `onSome(value)` if there is a value, or `onNone` if it is `nil`. `onSome` is async.
     @discardableResult
     @inlinable
     func matchAsync<T>(

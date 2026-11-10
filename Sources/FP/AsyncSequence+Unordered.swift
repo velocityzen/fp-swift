@@ -1,29 +1,21 @@
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendable {
-    /// Maps each element through an async transform, emitting each result as
-    /// soon as its transform finishes. By default transforms run one at a
-    /// time; pass a `concurrency` greater than 1 to run them in parallel.
+    /// Maps each element with an async transform, and gives the results in the
+    /// order they finish.
     ///
-    /// Results emit in the order the transforms finish, so a slow element
-    /// holds back nothing but itself. Use
-    /// ``mapAsyncKeepOrder(concurrency:_:)->AsyncStream<T>`` when the results
-    /// must keep source order.
+    /// By default, each element is read and transformed when the consumer asks for
+    /// the next value. With a larger `concurrency`, up to that many transforms run at
+    /// the same time. A slow transform holds back only its own result. To keep the
+    /// source order, use ``mapAsyncKeepOrder(concurrency:bufferLimit:_:)->AsyncStream<T>``.
     ///
-    /// The sequence applies backpressure: at most `concurrency` elements are
-    /// being transformed or waiting to be consumed at any time, so a slow
-    /// consumer pauses reading from the source instead of buffering results.
-    /// With `concurrency: 1` nothing is read ahead — each element is read and
-    /// transformed when the consumer asks for the next value.
-    ///
-    /// If the consumer stops iterating early, no further elements are read
-    /// from the source and in-flight transforms are cancelled cooperatively.
-    /// Each iteration of the returned sequence reads the source afresh.
+    /// No new element is read while `concurrency` elements are being transformed or
+    /// waiting for the consumer, so a slow consumer pauses the source. When the
+    /// consumer stops, reading stops and running transforms are cancelled.
     ///
     /// - Parameters:
-    ///   - concurrency: Maximum number of transforms in flight at once;
-    ///     must be at least 1. Defaults to 1 — sequential execution. Pass a
-    ///     larger value (or `.max`) to opt into parallelism.
-    ///   - transform: The async transform applied to each element.
+    ///   - concurrency: How many transforms may run at the same time. Must be 1 or
+    ///     more. The default is 1.
+    ///   - transform: The transform for one element.
     ///
     /// ```swift
     /// for await thumbnail in photos.mapAsyncUnordered(concurrency: 8, { photo in
@@ -42,26 +34,14 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
         }
     }
 
-    /// Maps each element through an async transform that may drop it,
-    /// emitting each non-nil result as soon as its transform finishes. Same
-    /// concurrency model as ``mapAsyncUnordered(concurrency:_:)->UnorderedMapSequence<Self,T>``
-    /// — sequential by default, parallel up to `concurrency` when you raise
-    /// it. A dropped element frees its slot at once.
+    /// Maps each element with an async transform that can drop it, and gives the
+    /// results in the order they finish.
     ///
-    /// Pass `passthrough` for elements that need no async work, such as cache
-    /// hits: an element it maps to a value is emitted as that value without
-    /// calling `transform`. It runs on the task that reads the source, so it
-    /// should be quick; passed-through elements count toward `concurrency`
-    /// until the consumer takes them, but never wait for a transform to
-    /// finish.
-    ///
-    /// - Parameters:
-    ///   - concurrency: Maximum number of elements being transformed or
-    ///     waiting to be consumed at once; must be at least 1.
-    ///   - passthrough: Maps an element straight to its result, or returns
-    ///     nil to have `transform` run on it.
-    ///   - transform: The async transform applied to each element; returns
-    ///     nil to drop it.
+    /// A transform that returns nil drops the element. `passthrough` is for elements
+    /// that need no async work, like cache hits: when it returns a value, that value
+    /// is the result and `transform` is not called. It runs on the task that reads
+    /// the source, so keep it fast. Otherwise it works like
+    /// ``mapAsyncUnordered(concurrency:_:)->UnorderedMapSequence<Self,T>``.
     ///
     /// ```swift
     /// for await user in ids.compactMapAsyncUnordered(
@@ -86,21 +66,11 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
         )
     }
 
-    /// Maps each `Result` element's success value through an async transform,
-    /// emitting each result as soon as it is ready. Same concurrency model as
-    /// ``mapAsyncUnordered(concurrency:_:)->UnorderedMapSequence<Self,T>`` —
-    /// sequential by default, parallel up to `concurrency` when you raise it.
+    /// Maps the success value of each `Result` with an async transform, and gives
+    /// the results in the order they finish.
     ///
-    /// Failures are not transformed — they pass through unchanged, emitted as
-    /// soon as they are read, without waiting for a worker.
-    ///
-    /// ```swift
-    /// for await result in events.mapAsyncUnordered(concurrency: 4, { event in
-    ///     await enrich(event)
-    /// }) {
-    ///     handle(result)
-    /// }
-    /// ```
+    /// Failures pass through unchanged, as soon as they are read. Otherwise it works
+    /// like ``mapAsyncUnordered(concurrency:_:)->UnorderedMapSequence<Self,T>``.
     @inlinable
     public func mapAsyncUnordered<Success: Sendable, E: Error, T: Sendable>(
         concurrency: Int = 1,
@@ -116,22 +86,12 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
         }
     }
 
-    /// Maps each `Result` element's success value through a fallible async
-    /// transform, emitting each result as soon as it is ready. Same
-    /// concurrency model as ``mapAsyncUnordered(concurrency:_:)->UnorderedMapSequence<Self,T>``
-    /// — sequential by default, parallel up to `concurrency` when you raise
-    /// it.
+    /// Maps the success value of each `Result` with an async transform that can
+    /// fail, and gives the results in the order they finish.
     ///
-    /// Source failures pass through unchanged, without waiting for a worker;
-    /// transform failures replace the success they originated from.
-    ///
-    /// ```swift
-    /// for await result in events.flatMapAsyncUnordered(concurrency: 4, { event in
-    ///     await validateAndEnrich(event)  // returns Result<Enriched, MyError>
-    /// }) {
-    ///     handle(result)
-    /// }
-    /// ```
+    /// Failures pass through unchanged, as soon as they are read. A failure from the
+    /// transform replaces the value it came from. Otherwise it works like
+    /// ``mapAsyncUnordered(concurrency:_:)->UnorderedMapSequence<Self,T>``.
     @inlinable
     public func flatMapAsyncUnordered<Success: Sendable, E: Error, T: Sendable>(
         concurrency: Int = 1,
@@ -148,14 +108,11 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     }
 }
 
-/// An async sequence of the results of transforming each element of `Base`
-/// with an async closure, up to `concurrency` at a time, in the order the
-/// transforms finish.
+/// An async sequence of the results of `mapAsyncUnordered` and its variants, in
+/// the order they finish.
 ///
-/// `mapAsyncUnordered`, `compactMapAsyncUnordered` and
-/// `flatMapAsyncUnordered` return it. Each iterator reads `Base` afresh, and
-/// above `concurrency: 1` runs its own reader and workers, which stop when
-/// the iterator is released or the task iterating it is cancelled.
+/// Each new iterator reads `Base` again from the start. Its transforms stop when
+/// the iterator is released or its task is cancelled.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 @frozen
 public struct UnorderedMapSequence<Base: AsyncSequence & Sendable, Transformed: Sendable>:
@@ -186,9 +143,8 @@ where Base.Element: Sendable, Base.Failure == Never {
     @inlinable
     public func makeAsyncIterator() -> Iterator {
         if concurrency == 1 {
-            // Sequential: each pull reads one element and transforms it in
-            // the consumer's task — no child tasks, no internal buffers, and
-            // nothing is read ahead of the consumer.
+            // One at a time: each pull reads one element and transforms it in
+            // the consumer's task, with no child tasks, buffers or read-ahead.
             return Iterator(
                 sequential: SequentialMapIterator(
                     base.makeAsyncIterator(),

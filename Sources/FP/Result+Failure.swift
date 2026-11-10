@@ -1,11 +1,10 @@
 import Foundation
 
 public extension Result {
-    /// Returns `self` if it's a success; otherwise returns the alternative.
-    /// The alternative is only evaluated on failure.
+    /// Returns `self` if it is a success, or `alternative()` if it is a failure.
     ///
-    /// The left-most success wins, but if both sides are failures the
-    /// alternative's failure is returned.
+    /// `alternative` runs only on failure. If both fail, you get the failure from
+    /// `alternative`.
     ///
     /// ```swift
     /// fetchUser(id: 1).alt { fetchUserFromCache(id: 1) }
@@ -20,7 +19,7 @@ public extension Result {
         }
     }
 
-    /// Asynchronous variant of ``alt(_:)``.
+    /// Async version of ``alt(_:)``.
     @inlinable
     func altAsync(
         _ alternative: () async -> Result<Success, Failure>
@@ -33,11 +32,9 @@ public extension Result {
         }
     }
 
-    /// Returns `self` if it's a success; otherwise computes a recovery `Result`
-    /// from the failure. The recovery may change the `Failure` type.
+    /// Returns `self` if it is a success, or a new `Result` made from the error.
     ///
-    /// Unlike ``alt(_:)``, the recovery receives the failure value and can
-    /// transform the error type.
+    /// Unlike ``alt(_:)``, `onFailure` gets the error and can change the error type.
     ///
     /// ```swift
     /// fetchUser(id: 1).orElse { error in
@@ -56,7 +53,7 @@ public extension Result {
         }
     }
 
-    /// Asynchronous variant of ``orElse(_:)``.
+    /// Async version of ``orElse(_:)``.
     @inlinable
     func orElseAsync<NewFailure>(
         _ onFailure: (Failure) async -> Result<Success, NewFailure>
@@ -69,14 +66,7 @@ public extension Result {
         }
     }
 
-    /// Returns the success value, or computes a fallback from the failure.
-    ///
-    /// Unlike ``alt(_:)``, the fallback returns an unwrapped `Success` rather
-    /// than another `Result`.
-    ///
-    /// ```swift
-    /// let count = parse(input).getOrElse { _ in 0 }
-    /// ```
+    /// Returns the success value, or makes one from the error.
     @inlinable
     func getOrElse(_ onFailure: (Failure) -> Success) -> Success {
         switch self {
@@ -87,12 +77,9 @@ public extension Result {
         }
     }
 
-    /// Returns the success value, or a default value if it's a failure.
-    /// The default is only evaluated on failure.
+    /// Returns the success value, or `defaultValue` on failure.
     ///
-    /// ```swift
-    /// let count = parse(input).getOrElse(0)
-    /// ```
+    /// `defaultValue` is evaluated only on failure.
     @inlinable
     func getOrElse(_ defaultValue: @autoclosure () -> Success) -> Success {
         switch self {
@@ -103,7 +90,7 @@ public extension Result {
         }
     }
 
-    /// Asynchronous variant of ``getOrElse(_:)-((Failure)->Success)``.
+    /// Async version of ``getOrElse(_:)-((Failure)->Success)``.
     @inlinable
     func getOrElseAsync(
         _ onFailure: (Failure) async -> Success
@@ -116,8 +103,9 @@ public extension Result {
         }
     }
 
-    /// Returns the success value, or awaits a default value if it's a failure.
-    /// The default is only evaluated on failure.
+    /// Returns the success value, or awaits `defaultValue` on failure.
+    ///
+    /// `defaultValue` is evaluated only on failure.
     ///
     /// ```swift
     /// let user = await fetchUser(id: 1).getOrElseAsync(await loadGuestUser())
@@ -134,17 +122,10 @@ public extension Result {
         }
     }
 
-    /// Returns the success value, or prints the failure to stderr and exits
-    /// the process. Designed for CLI entry points where any failure should
-    /// terminate the program with a diagnostic line.
+    /// Returns the success value, or prints the error to stderr and exits the process.
     ///
-    /// On failure, writes `"<prefix><error>\n"` to stderr and calls
+    /// On failure, it writes `"<prefix><error>\n"` to stderr and calls
     /// `Foundation.exit(exitCode)`.
-    ///
-    /// ```swift
-    /// let config = loadConfig().getOrExit()
-    /// // failure prints: "Error: <error>\n" and exits with status 1
-    /// ```
     func getOrExit(
         prefix: String = "Error: ",
         exitCode: Int32 = 1
@@ -158,15 +139,9 @@ public extension Result {
         }
     }
 
-    /// Returns the success value, or prints a custom message to stderr and
-    /// exits the process. The closure receives the failure and returns the
-    /// full message — include any trailing newline yourself.
+    /// Returns the success value, or prints a custom message to stderr and exits the process.
     ///
-    /// ```swift
-    /// let user = fetchUser(id: 1).getOrExit { error in
-    ///     "could not load user: \(error)\n"
-    /// }
-    /// ```
+    /// `message` gets the error and returns the full text. Add the trailing newline yourself.
     func getOrExit(
         exitCode: Int32 = 1,
         message: (Failure) -> String
@@ -180,18 +155,10 @@ public extension Result {
         }
     }
 
-    /// Exits the process on failure, ignoring the success value. Useful at
-    /// the end of a pipeline that has already consumed the success (via
-    /// `tap` or similar) and just needs to terminate on error.
+    /// Exits the process on failure, and does nothing on success.
     ///
-    /// On failure, writes `"<prefix><error>\n"` to stderr and calls
-    /// `Foundation.exit(exitCode)`. On success, does nothing.
-    ///
-    /// ```swift
-    /// runCommand(args)
-    ///     .tap { output in print(output) }
-    ///     .orExit()
-    /// ```
+    /// On failure, it writes `"<prefix><error>\n"` to stderr and calls
+    /// `Foundation.exit(exitCode)`. Use it at the end of a chain that already used the value.
     func orExit(
         prefix: String = "Error: ",
         exitCode: Int32 = 1
@@ -202,15 +169,9 @@ public extension Result {
         }
     }
 
-    /// Exits the process on failure with a custom message, ignoring the
-    /// success value. The closure receives the failure and returns the full
-    /// message — include any trailing newline yourself.
+    /// Exits the process with a custom message on failure, and does nothing on success.
     ///
-    /// ```swift
-    /// runCommand(args).orExit { error in
-    ///     "command failed: \(error)\n"
-    /// }
-    /// ```
+    /// `message` gets the error and returns the full text. Add the trailing newline yourself.
     func orExit(
         exitCode: Int32 = 1,
         message: (Failure) -> String

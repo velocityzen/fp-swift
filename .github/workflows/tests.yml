@@ -37,8 +37,13 @@ jobs:
 
       - name: Lint
         run: >-
-          swift format lint --strict --recursive Sources Tests
+          swift format lint --strict --recursive Sources Tests Scripts
           Benchmarks/Package.swift Benchmarks/Sources Benchmarks/Benchmarks
+
+      # The DocC articles are made from README.md. This fails when an article
+      # was edited by hand, or when README.md changed and the script wasn't run.
+      - name: DocC articles match README.md
+        run: swift Scripts/make-docc-articles.swift --check
 
   test-macos:
     name: Run macOS Tests

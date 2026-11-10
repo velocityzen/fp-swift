@@ -1,3 +1,3 @@
 # ``FP/Swift/Array``
 
-Functional extensions for `Array`: traversal with error handling, async map variants, splitting Results into successes and failures, and compacting optionals.
+Extensions for `Array`: `traverse` and `sequence` for `Result` values, async maps, splitting results into successes and failures, and removing `nil` values.

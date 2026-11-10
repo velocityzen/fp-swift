@@ -1,6 +1,6 @@
 // MARK: - Optional Async Extensions
 public extension Optional {
-    /// Asynchronously transforms the wrapped value, returning nil if the optional is empty.
+    /// Transforms the wrapped value, if there is one, with an async closure.
     @inlinable
     func mapAsync<T>(
         _ transform: (Wrapped) async -> T
@@ -13,7 +13,8 @@ public extension Optional {
         }
     }
 
-    /// Asynchronously transforms the wrapped value to another optional value and flattens the result.
+    /// Transforms the wrapped value, if there is one, with an async closure that
+    /// returns an optional.
     @inlinable
     func flatMapAsync<T>(
         _ transform: (Wrapped) async -> T?
@@ -26,11 +27,9 @@ public extension Optional {
         }
     }
 
-    /// Returns `self` if it's `.some`; otherwise returns the alternative.
-    /// The alternative is only evaluated when `self` is nil.
+    /// Returns `self` if it has a value, or else `alternative`.
     ///
-    /// The left-most `.some` wins; the alternative is chained only when `self`
-    /// is `.none`.
+    /// `alternative` runs only when `self` is nil.
     ///
     /// ```swift
     /// let name = cachedName.orElse(fetchName())
@@ -45,7 +44,7 @@ public extension Optional {
         }
     }
 
-    /// Asynchronous variant of ``orElse(_:)``.
+    /// Returns `self` if it has a value, or else awaits `alternative`.
     @inlinable
     func orElseAsync(
         _ alternative: @autoclosure @escaping () async -> Wrapped?
@@ -58,13 +57,9 @@ public extension Optional {
         }
     }
 
-    /// Returns the wrapped value, or a default if `self` is nil.
-    /// The default is only evaluated when `self` is nil. Equivalent to Swift's
-    /// `??` operator, in method-chain form.
+    /// Returns the wrapped value, or `defaultValue` if `self` is nil.
     ///
-    /// ```swift
-    /// let count = parsed.getOrElse(0)
-    /// ```
+    /// It works like `??`: `defaultValue` runs only when `self` is nil.
     @inlinable
     func getOrElse(_ defaultValue: @autoclosure () -> Wrapped) -> Wrapped {
         switch self {
@@ -75,7 +70,7 @@ public extension Optional {
         }
     }
 
-    /// Asynchronous variant of ``getOrElse(_:)``.
+    /// Returns the wrapped value, or awaits `defaultValue` if `self` is nil.
     @inlinable
     func getOrElseAsync(
         _ defaultValue: @autoclosure @escaping () async -> Wrapped
@@ -88,20 +83,15 @@ public extension Optional {
         }
     }
 
-    /// Performs a side effect regardless of `.some` or `.none`, returning self
-    /// unchanged. Useful for cleanup or logging that should run no matter the
-    /// outcome.
-    ///
-    /// ```swift
-    /// loadUser(id: 1).finally { spinner.stop() }
-    /// ```
+    /// Runs `action` whether or not `self` has a value, and returns `self`
+    /// unchanged.
     @inlinable
     func finally(_ action: () -> Void) -> Wrapped? {
         action()
         return self
     }
 
-    /// Asynchronous variant of ``finally(_:)``.
+    /// Awaits `action`, and returns `self` unchanged.
     @inlinable
     func finallyAsync(_ action: () async -> Void) async -> Wrapped? {
         await action()

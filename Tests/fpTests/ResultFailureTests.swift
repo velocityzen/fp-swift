@@ -405,7 +405,7 @@ struct ResultFailureTests {
         #expect(evaluated == false)
     }
 
-    // Exit tests need process spawning — unavailable on iOS/tvOS.
+    // Exit tests start a new process, which iOS and tvOS can't do.
     #if os(macOS) || os(Linux)
         @Test(
             "getOrExit on failure writes prefix and error to stderr and exits with the given code"
@@ -486,7 +486,7 @@ struct ResultFailureTests {
         #expect(evaluated == false)
     }
 
-    // Exit tests need process spawning — unavailable on iOS/tvOS.
+    // Exit tests start a new process, which iOS and tvOS can't do.
     #if os(macOS) || os(Linux)
         @Test("orExit on failure writes prefix and error to stderr and exits with the given code")
         func orExitExitsOnFailure() async {

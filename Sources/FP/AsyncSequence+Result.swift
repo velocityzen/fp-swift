@@ -12,7 +12,7 @@ public extension AsyncSequence {
         }
     }
 
-    /// Returns an async sequence of only the failure errors.
+    /// Returns an async sequence of only the errors.
     @inlinable
     func failures<Success, Failure>()
         -> ResultCompactMapSequence<Self, Failure>
@@ -25,7 +25,7 @@ public extension AsyncSequence {
 
     // MARK: Map
 
-    /// Transforms the success values, preserving failures.
+    /// Transforms each success value, and passes failures through unchanged.
     @inlinable
     func map<Success, Failure, T>(
         _ transform: @Sendable @escaping (Success) -> T
@@ -36,7 +36,8 @@ public extension AsyncSequence {
         }
     }
 
-    /// Asynchronously transforms the success values, preserving failures.
+    /// Transforms each success value with an async closure, and passes failures
+    /// through unchanged.
     @inlinable
     func mapAsync<Success, Failure, T>(
         _ transform: @Sendable @escaping (Success) async -> T
@@ -47,7 +48,7 @@ public extension AsyncSequence {
         }
     }
 
-    /// Transforms the failure errors, preserving successes.
+    /// Transforms each error, and passes successes through unchanged.
     @inlinable
     func mapError<Success, Failure, E>(
         _ transform: @Sendable @escaping (Failure) -> E
@@ -58,7 +59,8 @@ public extension AsyncSequence {
         }
     }
 
-    /// Asynchronously transforms the failure errors, preserving successes.
+    /// Transforms each error with an async closure, and passes successes
+    /// through unchanged.
     @inlinable
     func mapErrorAsync<Success, Failure, E: Error>(
         _ transform: @Sendable @escaping (Failure) async -> E
@@ -71,7 +73,7 @@ public extension AsyncSequence {
 
     // MARK: FlatMap
 
-    /// Transforms the success values with a Result-returning closure.
+    /// Transforms each success value with a closure that returns a `Result`.
     @inlinable
     func flatMap<Success, Failure, T>(
         _ transform: @Sendable @escaping (Success) -> Result<T, Failure>
@@ -82,7 +84,8 @@ public extension AsyncSequence {
         }
     }
 
-    /// Asynchronously transforms the success values with a Result-returning closure.
+    /// Transforms each success value with an async closure that returns a
+    /// `Result`.
     @inlinable
     func flatMapAsync<Success, Failure, T>(
         _ transform: @Sendable @escaping (Success) async -> Result<T, Failure>
@@ -95,7 +98,8 @@ public extension AsyncSequence {
 
     // MARK: Tap
 
-    /// Performs a side effect on success values, passing through all Results unchanged.
+    /// Runs `action` on each success value, and passes every element through
+    /// unchanged.
     @inlinable
     func tap<Success, Failure>(
         _ action: @Sendable @escaping (Success) -> Void
@@ -106,7 +110,8 @@ public extension AsyncSequence {
         }
     }
 
-    /// Asynchronously performs a side effect on success values, passing through all Results unchanged.
+    /// Runs an async `action` on each success value, and passes every element
+    /// through unchanged.
     @inlinable
     func tapAsync<Success, Failure>(
         _ action: @Sendable @escaping (Success) async -> Void
@@ -119,7 +124,7 @@ public extension AsyncSequence {
 
     // MARK: TapError
 
-    /// Performs a side effect on failure errors, passing through all Results unchanged.
+    /// Runs `action` on each error, and passes every element through unchanged.
     @inlinable
     func tapError<Success, Failure>(
         _ action: @Sendable @escaping (Failure) -> Void
@@ -130,7 +135,8 @@ public extension AsyncSequence {
         }
     }
 
-    /// Asynchronously performs a side effect on failure errors, passing through all Results unchanged.
+    /// Runs an async `action` on each error, and passes every element through
+    /// unchanged.
     @inlinable
     func tapErrorAsync<Success, Failure>(
         _ action: @Sendable @escaping (Failure) async -> Void

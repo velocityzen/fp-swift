@@ -2,16 +2,16 @@ import Testing
 
 @testable import FPRetry
 
-// The custom policies from the README and the DocC page, so the examples
-// stay true to what the library does.
+// The custom policies from "Write your own policy" in README.md. The DocC
+// article is made from README.md. Keep the code here the same.
 
 extension RetryPolicy {
-    /// Waits `step` before the first retry, `2 × step` before the second, and so on.
+    /// Waits `step`, then `2 × step`, then `3 × step`, and so on.
     static func linearBackoff(_ step: Duration) -> RetryPolicy {
         RetryPolicy { status in step * (status.iteration + 1) }
     }
 
-    /// Waits at least `minimum` before every retry.
+    /// Waits at least `minimum` before each retry.
     func minimumDelay(_ minimum: Duration) -> RetryPolicy {
         RetryPolicy { status in
             self(status).map { delay in max(delay, minimum) }

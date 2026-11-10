@@ -1,5 +1,5 @@
 public extension Result {
-    /// Folds the Result by applying one of two functions depending on success or failure.
+    /// Returns `onSuccess(value)` on success, or `onFailure(error)` on failure.
     @discardableResult
     @inlinable
     func match<T>(
@@ -14,7 +14,7 @@ public extension Result {
         }
     }
 
-    /// Folds the Result, using a function for success and a default value for failure.
+    /// Returns `onSuccess(value)` on success, or `failure` on failure.
     @discardableResult
     @inlinable
     func match<T>(
@@ -29,7 +29,7 @@ public extension Result {
         }
     }
 
-    /// Folds the Result, using a default value for success and a function for failure.
+    /// Returns `success` on success, or `onFailure(error)` on failure.
     @discardableResult
     @inlinable
     func match<T>(
@@ -44,7 +44,7 @@ public extension Result {
         }
     }
 
-    /// Folds the Result using default values for both success and failure.
+    /// Returns `success` on success, or `failure` on failure.
     @discardableResult
     @inlinable
     func match<T>(
@@ -59,7 +59,7 @@ public extension Result {
         }
     }
 
-    /// Asynchronously folds the Result by applying one of two async functions.
+    /// Returns `onSuccess(value)` on success, or `onFailure(error)` on failure. Both are async.
     @discardableResult
     @inlinable
     func matchAsync<T>(
@@ -74,7 +74,7 @@ public extension Result {
         }
     }
 
-    /// Asynchronously folds the Result, using an async function for success and a default for failure.
+    /// Returns `onSuccess(value)` on success, or `failure` on failure. `onSuccess` is async.
     @discardableResult
     @inlinable
     func matchAsync<T>(
@@ -89,7 +89,7 @@ public extension Result {
         }
     }
 
-    /// Asynchronously folds the Result, using a default for success and an async function for failure.
+    /// Returns `success` on success, or `onFailure(error)` on failure. `onFailure` is async.
     @discardableResult
     @inlinable
     func matchAsync<T>(

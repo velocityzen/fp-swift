@@ -26,7 +26,7 @@ struct ResultTimeoutTests {
             .failure(.failed)
         }
 
-        // The fast failure wins — it must NOT be replaced by .timeout.
+        // The fast failure wins. It must not be replaced by .timeout.
         #expect(result == .failure(.failed))
     }
 

@@ -696,7 +696,7 @@ struct AsyncSequenceUnorderedTests {
     )
     func sourceOrderDropsElements(concurrency: Int) async {
         var results: [Int] = []
-        for await value in Numbers(count: 300).keepOrderStream(
+        for await value in Numbers(count: 300).compactMapAsyncKeepOrder(
             concurrency: concurrency,
             passthrough: { $0.isMultiple(of: 7) ? -$0 : nil },
             { element in

@@ -1,13 +1,13 @@
 // MARK: - Do Notation (Async)
 
 public extension ResultDo {
-    /// Binds the first async Result value in the chain.
+    /// Starts the chain with an async `Result`.
     @inlinable
     func bindAsync<A>(_ fn: () async -> Result<A, Failure>) async -> Result<A, Failure> {
         await fn()
     }
 
-    /// Adds an async pure value as the first element in the chain.
+    /// Starts the chain with an async value.
     @inlinable
     func letAsync<A>(_ fn: () async -> A) async -> Result<A, Failure> {
         .success(await fn())

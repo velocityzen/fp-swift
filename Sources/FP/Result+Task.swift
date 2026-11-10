@@ -1,5 +1,5 @@
 public extension Result where Failure == Error, Success: Sendable {
-    /// Creates a Result from a Task that returns a value and may throw
+    /// Creates a `Result` from the value or the error of a throwing task.
     @inlinable
     static func fromTask(
         _ task: Task<Success, Error>
@@ -12,7 +12,7 @@ public extension Result where Failure == Error, Success: Sendable {
         }
     }
 
-    /// Creates a Result from a closure that returns a Task
+    /// Creates a `Result` from a closure that returns a throwing task.
     @inlinable
     static func fromTask(
         _ task: () -> Task<Success, Error>
@@ -27,7 +27,7 @@ public extension Result where Failure == Error, Success: Sendable {
 }
 
 public extension Result where Failure == Error {
-    /// Creates a Result from a Task that returns a Result
+    /// Returns the `Result` of a task.
     @inlinable
     static func fromTask<S: Sendable>(
         _ task: Task<Result<S, Error>, Never>
@@ -35,7 +35,7 @@ public extension Result where Failure == Error {
         await task.value
     }
 
-    /// Creates a Result from a closure that returns a Task with Result
+    /// Returns the `Result` of the task that a closure returns.
     @inlinable
     static func fromTask<S: Sendable>(
         _ task: () -> Task<Result<S, Error>, Never>
@@ -45,7 +45,7 @@ public extension Result where Failure == Error {
 }
 
 public extension Result where Failure == Never, Success: Sendable {
-    /// Creates a Result from a non-throwing Task
+    /// Creates a `Result` from the value of a task that cannot fail.
     @inlinable
     static func fromTask(
         _ task: Task<Success, Never>
@@ -54,7 +54,7 @@ public extension Result where Failure == Never, Success: Sendable {
         return .success(value)
     }
 
-    /// Creates a Result from a closure that returns a non-throwing Task
+    /// Creates a `Result` from a closure that returns a task that cannot fail.
     @inlinable
     static func fromTask(
         _ task: () -> Task<Success, Never>

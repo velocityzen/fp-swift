@@ -83,6 +83,22 @@ let benchmarks: @Sendable () -> Void = {
                     )
                 }
             }
+
+            // Every other element is dropped.
+            Benchmark(
+                "compactMapAsyncKeepOrder",
+                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
+            ) { benchmark in
+                for _ in benchmark.scaledIterations {
+                    blackHole(
+                        await drain(
+                            source.compactMapAsyncKeepOrder(concurrency: concurrency) {
+                                $0 & 1 == 0 ? $0 : nil
+                            }
+                        )
+                    )
+                }
+            }
         }
 
         // The consumer stops after 8 elements: the cost of tearing the

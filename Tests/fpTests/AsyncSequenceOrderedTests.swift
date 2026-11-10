@@ -45,8 +45,8 @@ struct AsyncSequenceOrderedTests {
         for await value in stream.mapAsyncKeepOrder(
             concurrency: .max,
             { element in
-                // Earlier elements sleep longer — without strict-order
-                // emission, the output would be reordered.
+                // Earlier elements sleep longer. Without the order rule,
+                // the output would be out of order.
                 let nanos = UInt64((5 - element) * 20_000_000)
                 try? await Task.sleep(nanoseconds: nanos)
                 return element
@@ -459,7 +459,7 @@ struct AsyncSequenceOrderedTests {
         #expect(highWater <= 3)
         #expect(highWater >= 1)
         // 10 sleeps of 20ms with at most 3 in flight can never finish
-        // faster than 200ms / 3 — the cap must cost wall-clock time
+        // faster than 200ms / 3, so the cap must cost wall-clock time.
         #expect(elapsed >= .milliseconds(66))
     }
 
@@ -690,7 +690,7 @@ struct AsyncSequenceOrderedTests {
             for i in 1...3 {
                 continuation.yield(i)
             }
-            // never calls finish() — like a long-lived SSE stream
+            // Never calls finish(), like a long-lived SSE stream.
         }
 
         var values: [Int] = []
@@ -772,9 +772,12 @@ struct AsyncSequenceOrderedTests {
     // MARK: - backpressure
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder does not run ahead of a slow consumer")
+    @Test("mapAsyncKeepOrder does not run ahead of a slow consumer", .hangGuard)
     func backpressureBoundsWorkAheadOfConsumer() async {
         let started = AsyncCounter()
+        // Results that finish before an earlier element take no slot, so
+        // the transforms finish in source order to keep the bound exact.
+        let inOrder = InSourceOrder()
         let source = AsyncStream<Int> { continuation in
             for i in 1...100 {
                 continuation.yield(i)
@@ -786,6 +789,7 @@ struct AsyncSequenceOrderedTests {
             concurrency: 3,
             { (element: Int) -> Int in
                 await started.increment()
+                await inOrder.finish(element)
                 return element
             }
         )
@@ -804,8 +808,8 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder bounds results waiting behind a slow early element")
-    func backpressureBoundsReorderBuffer() async {
+    @Test("mapAsyncKeepOrder transforms later elements while an early one is slow", .hangGuard)
+    func workersRunPastSlowElement() async {
         let started = AsyncCounter()
         let source = AsyncStream<Int> { continuation in
             for i in 1...100 {
@@ -835,21 +839,102 @@ struct AsyncSequenceOrderedTests {
             return values
         }
 
-        // element 1 holds back everything after it; only its window may run
+        // Element 1 holds back the results after it, but not the work: the
+        // other two workers transform all 99 later elements meanwhile.
+        var startedWhileBlocked = 0
+        for _ in 0..<500 {
+            startedWhileBlocked = await started.count
+            if startedWhileBlocked == 100 { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        gateCont.finish()
+        let values = await consumer.value
+
+        #expect(startedWhileBlocked == 100)
+        #expect(values == Array(1...100))
+    }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test("mapAsyncKeepOrder bufferLimit caps results waiting behind a slow element", .hangGuard)
+    func bufferLimitCapsResultsWaitingBehindSlowElement() async {
+        let started = AsyncCounter()
+        let source = AsyncStream<Int> { continuation in
+            for i in 1...100 {
+                continuation.yield(i)
+            }
+            continuation.finish()
+        }
+
+        let (gate, gateCont) = AsyncStream.makeStream(of: Void.self)
+
+        let consumer = Task {
+            var values: [Int] = []
+            for await value in source.mapAsyncKeepOrder(
+                concurrency: 3,
+                bufferLimit: 4,
+                { (element: Int) -> Int in
+                    await started.increment()
+                    if element == 1 {
+                        for await _ in gate {}
+                    }
+                    return element
+                }
+            ) {
+                values.append(value)
+            }
+            return values
+        }
+
+        // element 1, then the four whose results may wait for it
         var startedWhileBlocked = 0
         for _ in 0..<200 {
             startedWhileBlocked = await started.count
-            if startedWhileBlocked >= 3 { break }
+            if startedWhileBlocked >= 5 { break }
             try? await Task.sleep(for: .milliseconds(10))
         }
-        // give an unbounded pipeline time to start more
+        // give a pipeline that ignores the limit time to start more
         try? await Task.sleep(for: .milliseconds(50))
         startedWhileBlocked = await started.count
         gateCont.finish()
         let values = await consumer.value
 
-        #expect(startedWhileBlocked == 3)
+        #expect(startedWhileBlocked == 5)
         #expect(values == Array(1...100))
+    }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test(
+        "mapAsyncKeepOrder bufferLimit below concurrency - 1 lowers transforms in flight",
+        arguments: [0, 1, 2]
+    )
+    func bufferLimitLowersTransformsInFlight(bufferLimit: Int) async {
+        let tracker = ConcurrencyTracker()
+        let source = AsyncStream<Int> { continuation in
+            for i in 1...12 {
+                continuation.yield(i)
+            }
+            continuation.finish()
+        }
+
+        var results: [Int] = []
+        for await value in source.mapAsyncKeepOrder(
+            concurrency: 8,
+            bufferLimit: bufferLimit,
+            { element in
+                await tracker.enter()
+                try? await Task.sleep(for: .milliseconds(10))
+                await tracker.exit()
+                return element
+            }
+        ) {
+            results.append(value)
+        }
+
+        let highWater = await tracker.highWater
+        #expect(results == Array(1...12))
+        // every transform after the first unfinished one may finish first,
+        // so at most `bufferLimit` of them run beside it
+        #expect(highWater <= bufferLimit + 1)
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
@@ -967,6 +1052,100 @@ struct AsyncSequenceOrderedTests {
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test(
+        "compactMapAsyncKeepOrder with a bufferLimit delivers every element in order under contention",
+        .hangGuard,
+        arguments: zip([2, 3, 8, 8, Int.max], [0, 1, 2, 16, 4])
+    )
+    func deliversEveryElementWithBufferLimit(concurrency: Int, bufferLimit: Int) async {
+        let count = 500
+        for _ in 0..<20 {
+            let source = AsyncStream<Int> { continuation in
+                for i in 0..<count {
+                    continuation.yield(i)
+                }
+                continuation.finish()
+            }
+
+            var results: [Int] = []
+            for await value in source.compactMapAsyncKeepOrder(
+                concurrency: concurrency,
+                bufferLimit: bufferLimit,
+                passthrough: { $0.isMultiple(of: 5) ? -$0 : nil },
+                { element in
+                    for _ in 0..<(element % 4) {
+                        await Task.yield()
+                    }
+                    return element.isMultiple(of: 3) ? nil : element
+                }
+            ) {
+                results.append(value)
+                if value.isMultiple(of: 7) {
+                    await Task.yield()
+                }
+            }
+
+            let expected = (0..<count).compactMap { (element: Int) -> Int? in
+                element.isMultiple(of: 5) ? -element : element.isMultiple(of: 3) ? nil : element
+            }
+            #expect(results == expected)
+        }
+    }
+
+    // MARK: - compactMapAsyncKeepOrder
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test("compactMapAsyncKeepOrder drops nil results and keeps passed-through ones in place")
+    func compactMapDropsAndPassesThroughInOrder() async {
+        let stream = AsyncStream<Int> { continuation in
+            for value in 1...8 { continuation.yield(value) }
+            continuation.finish()
+        }
+        let counter = AsyncCounter()
+
+        var values: [String] = []
+        for await value in stream.compactMapAsyncKeepOrder(
+            concurrency: 4,
+            passthrough: { $0.isMultiple(of: 4) ? "cached \($0)" : nil },
+            { element in
+                await counter.increment()
+                // earlier elements are slower than later ones
+                try? await Task.sleep(for: .milliseconds((9 - element) * 5))
+                return element.isMultiple(of: 3) ? nil : "v\(element)"
+            }
+        ) {
+            values.append(value)
+        }
+
+        #expect(values == ["v1", "v2", "cached 4", "v5", "v7", "cached 8"])
+        // passed-through elements never reach the transform
+        #expect(await counter.count == 6)
+    }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test("compactMapAsyncKeepOrder with concurrency 1 runs transforms one at a time")
+    func compactMapSequential() async {
+        let tracker = ConcurrencyTracker()
+        let stream = AsyncStream<Int> { continuation in
+            for value in 1...6 { continuation.yield(value) }
+            continuation.finish()
+        }
+
+        var values: [Int] = []
+        for await value in stream.compactMapAsyncKeepOrder({ (element: Int) -> Int? in
+            await tracker.enter()
+            try? await Task.sleep(for: .milliseconds(5))
+            await tracker.exit()
+            return element.isMultiple(of: 2) ? element : nil
+        }) {
+            values.append(value)
+        }
+
+        #expect(values == [2, 4, 6])
+        #expect(await tracker.highWater == 1)
+    }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test(
         "mapAsyncKeepOrder ends right after the consumer is cancelled at any point",
         .hangGuard,
         arguments: [2, 8, Int.max]
@@ -1001,5 +1180,20 @@ struct AsyncSequenceOrderedTests {
 
             #expect(await consumer.value == Array(0..<stopAfter))
         }
+    }
+}
+
+/// Lets the transforms of elements 1, 2, 3… finish only in that order, so no
+/// result ever finishes before an earlier element.
+private actor InSourceOrder {
+    private var next = 1
+    private var waiting: [Int: CheckedContinuation<Void, Never>] = [:]
+
+    func finish(_ element: Int) async {
+        if element != next {
+            await withCheckedContinuation { waiting[element] = $0 }
+        }
+        next = element + 1
+        waiting.removeValue(forKey: next)?.resume()
     }
 }

@@ -1,14 +1,12 @@
 // MARK: - Sequences returned by the AsyncSequence Result operators
 
-// The standard library's `AsyncMapSequence` and `AsyncCompactMapSequence`
-// keep their initializers and stored properties out of client code, so each
-// element costs calls into the runtime and an indirect call of a closure the
-// optimizer cannot see. These sequences are inlinable throughout, and frozen
-// so they stay that way in a library-evolution build: a transform written at
-// the call site compiles into the loop that iterates the sequence.
+// The standard `AsyncMapSequence` and `AsyncCompactMapSequence` hide their
+// initializers and stored properties from client code. So each element costs
+// runtime calls and a closure call the optimizer cannot see into. These types
+// are inlinable and frozen (also in a library-evolution build), so a transform
+// at the call site compiles into the loop that reads the sequence.
 
-/// An async sequence that transforms each element of `Base` with a
-/// synchronous closure, run wherever the sequence is iterated.
+/// An async sequence that transforms each element of `Base` with a sync closure.
 ///
 /// `map`, `mapError`, `flatMap`, `tap` and `tapError` on an async sequence of
 /// `Result`s return it. It throws only what `Base` throws.
@@ -63,13 +61,12 @@ public struct ResultMapSequence<Base: AsyncSequence, Transformed>: AsyncSequence
 extension ResultMapSequence: Sendable where Base: Sendable {}
 extension ResultMapSequence.Iterator: Sendable where Base.AsyncIterator: Sendable {}
 
-/// An async sequence that transforms each element of `Base` with an
-/// asynchronous closure, run on the actor that iterates the sequence like
-/// the closures of the other async combinators.
+/// An async sequence that transforms each element of `Base` with an async
+/// closure. The closure runs on the actor that reads the sequence.
 ///
-/// `mapAsync`, `mapErrorAsync`, `flatMapAsync`, `tapAsync` and
-/// `tapErrorAsync` on an async sequence of `Result`s return it. It throws
-/// only what `Base` throws.
+/// `mapAsync`, `mapErrorAsync`, `flatMapAsync`, `tapAsync` and `tapErrorAsync`
+/// on an async sequence of `Result`s return it. It throws only what `Base`
+/// throws.
 @frozen
 public struct ResultMapAsyncSequence<Base: AsyncSequence, Transformed>: AsyncSequence {
     public typealias Element = Transformed
@@ -121,8 +118,8 @@ public struct ResultMapAsyncSequence<Base: AsyncSequence, Transformed>: AsyncSeq
 extension ResultMapAsyncSequence: Sendable where Base: Sendable {}
 extension ResultMapAsyncSequence.Iterator: Sendable where Base.AsyncIterator: Sendable {}
 
-/// An async sequence of the non-nil results of transforming each element of
-/// `Base` with a synchronous closure, run wherever the sequence is iterated.
+/// An async sequence that transforms each element of `Base` with a sync
+/// closure, and drops nil results.
 ///
 /// `successes` and `failures` on an async sequence of `Result`s return it. It
 /// throws only what `Base` throws.

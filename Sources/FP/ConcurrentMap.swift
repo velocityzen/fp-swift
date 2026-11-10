@@ -2,18 +2,14 @@ import Synchronization
 
 // MARK: - The engine of the concurrent maps
 
-// `mapAsyncKeepOrder`, `mapAsyncUnordered` and their variants share one
-// engine. At `concurrency: 1` it is `SequentialMapIterator`, which reads and
-// transforms an element only when the consumer asks for the next result.
-// Above that it is `ConcurrentMapPipeline`, a reader and a pool of workers;
-// the operators differ only in the `DeliveryOrder` it hands results over in.
+// `mapAsyncKeepOrder`, `mapAsyncUnordered` and their variants share this
+// engine. Above `concurrency: 1` it is `ConcurrentMapPipeline`: one reader and
+// a pool of workers. The variants differ only in their `DeliveryOrder`.
 //
-// Every transform returns an optional: nil drops the element. And an element
-// `passthrough` maps to a value is admitted with that value as its result,
-// with no worker or transform.
+// A transform returns nil to drop an element. A value from `passthrough` is the
+// result itself, with no worker or transform.
 
-/// Maps elements one at a time, each when the consumer asks for the next
-/// result: the concurrent maps at `concurrency: 1`.
+/// Maps one element each time the consumer asks. Used at `concurrency: 1`.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 @usableFromInline
 struct SequentialMapIterator<Base: AsyncIteratorProtocol, Value>: AsyncIteratorProtocol
@@ -40,7 +36,7 @@ where Base.Element: Sendable, Base.Failure == Never {
 
     @inlinable
     mutating func next(isolation actor: isolated (any Actor)?) async -> Value? {
-        // Ends once the consumer is cancelled, as the concurrent pipeline does.
+        // Stops when the consumer's task is cancelled, like the pipeline.
         while !Task.isCancelled, let element = await base.next(isolation: actor) {
             if let passthrough, let value = passthrough(element) {
                 return value
@@ -54,10 +50,8 @@ where Base.Element: Sendable, Base.Failure == Never {
     }
 }
 
-/// Shares an iterator with the `AsyncStream(unfolding:)` closure.
-///
-/// `@unchecked Sendable`: an `AsyncStream` has a single consumer, so `next()`
-/// is never called concurrently.
+/// Holds an iterator for an `AsyncStream(unfolding:)` closure. It is
+/// `@unchecked Sendable` because an `AsyncStream` has only one consumer.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 @usableFromInline
 final class SharedIterator<Base: AsyncIteratorProtocol>: @unchecked Sendable
@@ -77,25 +71,30 @@ where Base.Failure == Never {
 
 // MARK: - Delivery orders
 
-/// The order a `ConcurrentMapCoordinator` hands results over in, and the
-/// results that finished before the consumer could take them.
+/// The order in which results are given out. It keeps the results that wait
+/// for their turn. An `index` counts the admitted elements, from 0.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 @usableFromInline
 protocol DeliveryOrder: SendableMetatype {
     associatedtype Value: Sendable
 
-    init(concurrency: Int)
+    init(concurrency: Int, bufferLimit: Int)
 
-    /// Whether the result of the element admitted `index`-th is the next one
-    /// due, in which case it counts as delivered.
+    /// Kept results that wait for an earlier element, not for the consumer.
+    var early: Int { get }
+
+    /// Whether element `index` may be admitted. There must never be more than
+    /// `bufferLimit` early results.
+    func mayAdmit(_ index: Int) -> Bool
+
+    /// Whether the result of element `index` is due. If so, it counts as delivered.
     mutating func deliverNow(_ index: Int) -> Bool
 
-    /// Keeps the result of the element admitted `index`-th, nil when the
-    /// element was dropped, until it is due.
+    /// Keeps the result of element `index` (nil if dropped) until it is due.
     mutating func keep(_ result: Value?, at index: Int)
 
-    /// Removes the next result due if it is ready: `.some(nil)` for a
-    /// dropped element.
+    /// Removes the next result due if it is ready. `.some(nil)` is a dropped
+    /// element.
     mutating func takeNext() -> Value??
 }
 
@@ -103,14 +102,29 @@ protocol DeliveryOrder: SendableMetatype {
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 @usableFromInline
 struct SourceOrder<Value: Sendable>: DeliveryOrder {
-    /// Results that finished before they were due, by admission index.
+    /// Results that finished before they were due, by index.
     @usableFromInline var ready: [Int: Value?] = [:]
-    /// The admission index of the next result due.
+    /// The index of the next result due.
     @usableFromInline var due = 0
+    /// The index of the first element that has not finished.
+    @usableFromInline var frontier = 0
+    /// The results in `ready` after `frontier`.
+    @usableFromInline var early = 0
+    @usableFromInline let bufferLimit: Int
 
     @inlinable
-    init(concurrency: Int) {
-        ready.reserveCapacity(Swift.min(concurrency, 64))
+    init(concurrency: Int, bufferLimit: Int) {
+        self.bufferLimit = bufferLimit
+        // Room for the results that wait for the consumer and about as many
+        // early ones, so the dictionary rarely grows.
+        let waiting = Swift.min(concurrency, 64)
+        ready.reserveCapacity(waiting + Swift.min(waiting, bufferLimit))
+    }
+
+    @inlinable
+    func mayAdmit(_ index: Int) -> Bool {
+        // Every element after `frontier` may finish before it, and be early.
+        index - frontier <= bufferLimit
     }
 
     @inlinable
@@ -120,12 +134,29 @@ struct SourceOrder<Value: Sendable>: DeliveryOrder {
         }
 
         due += 1
+        // The element due is the first one that has not finished.
+        passFrontier(index)
         return true
     }
 
     @inlinable
     mutating func keep(_ result: Value?, at index: Int) {
         ready[index] = .some(result)
+        if index == frontier {
+            passFrontier(index)
+        } else {
+            early += 1
+        }
+    }
+
+    /// Moves `frontier` past element `index` and the early results after it.
+    @inlinable
+    mutating func passFrontier(_ index: Int) {
+        frontier = index + 1
+        while early > 0, ready[frontier] != nil {
+            frontier += 1
+            early -= 1
+        }
     }
 
     @inlinable
@@ -139,14 +170,24 @@ struct SourceOrder<Value: Sendable>: DeliveryOrder {
     }
 }
 
-/// Results in the order their transforms finished.
+/// Results in the order the transforms finished.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 @usableFromInline
 struct CompletionOrder<Value: Sendable>: DeliveryOrder {
     @usableFromInline var ready = FIFOQueue<Value>()
 
     @inlinable
-    init(concurrency: Int) {}
+    init(concurrency: Int, bufferLimit: Int) {}
+
+    @inlinable
+    var early: Int {
+        0
+    }
+
+    @inlinable
+    func mayAdmit(_ index: Int) -> Bool {
+        true
+    }
 
     @inlinable
     func deliverNow(_ index: Int) -> Bool {
@@ -167,7 +208,7 @@ struct CompletionOrder<Value: Sendable>: DeliveryOrder {
     }
 }
 
-/// A first-in, first-out queue that reuses its storage once it empties.
+/// A first-in, first-out queue that reuses its storage when it is empty.
 @usableFromInline
 struct FIFOQueue<Element> {
     /// The queued elements, from `head` on.
@@ -201,20 +242,18 @@ struct FIFOQueue<Element> {
 
 // MARK: - The concurrent pipeline
 
-/// The concurrent maps above `concurrency: 1`: owns the task that reads the
-/// source and runs the transforms, and stops it when the consumer is
-/// cancelled or drops the pipeline.
+/// Runs the concurrent maps above `concurrency: 1`. Its task reads the source
+/// and runs the transforms. It stops when the consumer is cancelled or drops
+/// the pipeline.
 ///
-/// A reader admits a source element only while fewer than `concurrency` are
-/// being transformed or waiting to be consumed, so a slow consumer pauses the
-/// source; in source order, a slow early element also bounds how many later
-/// results wait behind it. Admitted elements go to a pool of at most
-/// `concurrency` workers, started as they are needed, each of which loops:
-/// transform, hand the result over, take the next element.
+/// An element takes a slot while it is transformed or its result waits for the
+/// consumer. The reader admits an element only while a slot is free, so a slow
+/// consumer pauses the source. Early results take no slot, so a slow element
+/// does not stop the workers. Only `bufferLimit` limits them.
 ///
-/// Every handoff between the reader, the workers and the consumer resumes a
-/// continuation, so after the pool has started an element costs its
-/// transform and a few wakeups, with no task, stream or other allocation.
+/// Up to `concurrency` workers start as needed, and each one loops over
+/// elements. Handoffs resume continuations, so once the workers run, an element
+/// needs no allocation.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 @usableFromInline
 final class ConcurrentMapPipeline<Element: Sendable, Order: DeliveryOrder>: Sendable {
@@ -225,13 +264,17 @@ final class ConcurrentMapPipeline<Element: Sendable, Order: DeliveryOrder>: Send
     init<Source: AsyncSequence & Sendable>(
         source: Source,
         concurrency: Int,
+        bufferLimit: Int = .max,
         passthrough: (@Sendable (Element) -> Order.Value?)?,
         transform: @concurrent @Sendable @escaping (Element) async -> Order.Value?
     ) where Source.Element == Element, Source.Failure == Never {
-        let coordinator = ConcurrentMapCoordinator<Element, Order>(concurrency: concurrency)
+        let coordinator = ConcurrentMapCoordinator<Element, Order>(
+            concurrency: concurrency,
+            bufferLimit: bufferLimit
+        )
         self.coordinator = coordinator
-        // Workers are children of the root's group, so cancelling the root
-        // cancels in-flight transforms cooperatively.
+        // Workers are children of the root task, so cancelling the root
+        // cancels the running transforms.
         root = Task {
             await withTaskGroup(of: Void.self) { workers in
                 var iterator = source.makeAsyncIterator()
@@ -276,23 +319,20 @@ final class ConcurrentMapPipeline<Element: Sendable, Order: DeliveryOrder>: Send
     }
 }
 
-/// The state the reader, the workers and the consumer of a
+/// The state that the reader, the workers and the consumer of a
 /// `ConcurrentMapPipeline` share, behind one lock.
 ///
-/// A task waiting on it parks its continuation in the state and is resumed
-/// by whichever task changes what it waits for: a waiter never misses a
-/// change, since it checks and parks under the same lock that change takes.
+/// A waiting task parks its continuation in the state. The task that changes
+/// what it waits for resumes it. Both happen under the lock, so no change is
+/// missed.
 ///
-/// Continuations are resumed while the lock is held, and a parked task takes
-/// the lock once more after it is resumed. A continuation resumed before its
-/// task reaches the `await` lets that task run on with no synchronization
-/// ThreadSanitizer can see, so without the lock it would report the task's
-/// next use of the same memory as a race with the resume.
+/// A parked task can be resumed before it reaches its `await`. ThreadSanitizer
+/// then sees no sync and reports a false race. So resumes happen under the
+/// lock, and a resumed task takes the lock once more.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 @usableFromInline
 final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: Sendable {
     @usableFromInline typealias Value = Order.Value
-    /// An admitted element and its position in the source.
     @usableFromInline typealias Work = (index: Int, element: Element)
     @usableFromInline typealias Consumer = UnsafeContinuation<Value?, Never>
     /// Resumed with false when the pipeline is cancelled.
@@ -301,16 +341,15 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
 
     @usableFromInline
     struct State {
-        /// Admitted elements no worker has taken yet.
+        /// Admitted elements that no worker has taken yet.
         @usableFromInline var queue = FIFOQueue<Work>()
         @usableFromInline var results: Order
-        /// Elements read from the source.
         @usableFromInline var admitted = 0
-        /// Admitted elements whose result the consumer has not taken and
-        /// that were not dropped: the slots in use.
+        /// Admitted elements not dropped and not yet taken by the consumer.
         @usableFromInline var pending = 0
         @usableFromInline var workers = 0
-        /// The reader stopped, so no element is admitted after `admitted`.
+        @usableFromInline let concurrency: Int
+        /// The reader stopped. No more elements are admitted.
         @usableFromInline var finished = false
         @usableFromInline var cancelled = false
         @usableFromInline var consumer: Consumer?
@@ -320,12 +359,19 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
         @usableFromInline var idle: [Worker] = []
 
         @inlinable
-        init(concurrency: Int) {
-            results = Order(concurrency: concurrency)
+        init(concurrency: Int, bufferLimit: Int) {
+            self.concurrency = concurrency
+            results = Order(concurrency: concurrency, bufferLimit: bufferLimit)
         }
 
-        /// The consumer's next result: the value when it is ready, nil once
-        /// the stream has ended, or no answer when the consumer must wait.
+        /// Whether a slot is free and the delivery order allows another element.
+        @inlinable
+        var mayAdmit: Bool {
+            pending - results.early < concurrency && results.mayAdmit(admitted)
+        }
+
+        /// The consumer's next result: the value, `.some(nil)` at the end, or
+        /// nil if the consumer must wait.
         @inlinable
         mutating func takeNext() -> Value?? {
             if cancelled {
@@ -345,8 +391,8 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
             return nil
         }
 
-        /// Hands the result of the element admitted `index`-th to the waiting
-        /// consumer when it is due, or keeps it until it is.
+        /// Gives the result of element `index` to the waiting consumer if it
+        /// is due, or keeps it.
         @inlinable
         mutating func complete(_ result: Value?, at index: Int) {
             if cancelled {
@@ -360,26 +406,34 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
                     freeSlot()
                 } else {
                     results.keep(value, at: index)
+                    // The reader may go on: an early result frees a slot,
+                    // or `frontier` moved.
+                    wakeReader()
                 }
             } else if results.deliverNow(index) {
-                // A dropped element whose turn has come frees its slot at
-                // once, and may be all the consumer was waiting on.
+                // The consumer may be waiting for this dropped element.
                 freeSlot()
                 wakeConsumer()
             } else {
                 results.keep(nil, at: index)
+                wakeReader()
             }
         }
 
-        /// Gives back a slot, which lets the reader admit another element.
         @inlinable
         mutating func freeSlot() {
             pending -= 1
-            reader?.resume(returning: true)
-            reader = nil
+            wakeReader()
         }
 
-        /// Resumes the consumer if what it waits for has arrived.
+        @inlinable
+        mutating func wakeReader() {
+            if let reader, mayAdmit {
+                reader.resume(returning: true)
+                self.reader = nil
+            }
+        }
+
         @inlinable
         mutating func wakeConsumer() {
             if let consumer, let next = takeNext() {
@@ -388,8 +442,17 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
             }
         }
 
-        /// Resumes every task waiting on the state but the reader, which
-        /// either called this or is waiting for a slot.
+        @inlinable
+        mutating func park(_ worker: Worker) {
+            if idle.capacity == 0 {
+                // Room for all workers. Growing allocates at each doubling.
+                idle.reserveCapacity(Swift.min(concurrency, 64))
+            }
+            idle.append(worker)
+        }
+
+        /// Resumes all waiting tasks but the reader. The reader called this
+        /// (`finish()`), or `cancel()` resumes it.
         @inlinable
         mutating func endWaits() {
             for worker in idle {
@@ -402,27 +465,21 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
 
     @usableFromInline
     enum Admission {
-        /// An idle worker took the element, or a busy one takes it when it
-        /// finishes its own.
+        /// An idle worker took the element, or a busy one takes it later.
         case taken
-        /// Start another worker on the element.
         case start(Work)
-        /// The pipeline was cancelled: read no further.
         case cancelled
     }
 
-    @usableFromInline let concurrency: Int
     @usableFromInline let state: Mutex<State>
 
     @inlinable
-    init(concurrency: Int) {
-        self.concurrency = concurrency
-        state = Mutex(State(concurrency: concurrency))
+    init(concurrency: Int, bufferLimit: Int) {
+        state = Mutex(State(concurrency: concurrency, bufferLimit: bufferLimit))
     }
 
-    /// Suspends the calling task until `decide`, run under the lock, returns
-    /// the value to go on with, or, when it parks the task's continuation in
-    /// the state and returns nil, until another task resumes it.
+    /// Runs `decide` under the lock and goes on with the value it returns. If
+    /// `decide` parks the continuation and returns nil, waits to be resumed.
     @inlinable
     func wait<Outcome: Sendable>(
         _ decide: (inout State, UnsafeContinuation<Outcome, Never>) -> Outcome?
@@ -439,8 +496,7 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
             }
         }
         if parked {
-            // Orders everything after this with the resume, for
-            // ThreadSanitizer (see the type's documentation).
+            // For ThreadSanitizer. See the type's documentation.
             state.withLock { _ in }
         }
         return outcome
@@ -448,8 +504,7 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
 
     // MARK: Reader
 
-    /// Waits until fewer than `concurrency` slots are in use. Returns false
-    /// once the pipeline is cancelled.
+    /// Waits until the reader may admit an element. Returns false once cancelled.
     @inlinable
     func waitForSlot() async -> Bool {
         await wait { state, reader in
@@ -457,7 +512,7 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
                 return false
             }
 
-            if state.pending < concurrency {
+            if state.mayAdmit {
                 return true
             }
 
@@ -466,7 +521,7 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
         }
     }
 
-    /// Takes a slot for `element` and hands it to a worker.
+    /// Takes a slot for `element` and gives it to a worker.
     @inlinable
     func admit(_ element: Element) -> Admission {
         state.withLock { state in
@@ -482,7 +537,7 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
                 return .taken
             }
 
-            if state.workers < concurrency {
+            if state.workers < state.concurrency {
                 state.workers += 1
                 return .start(work)
             }
@@ -492,8 +547,8 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
         }
     }
 
-    /// Takes a slot for an element `passthrough` produced `value` for, which
-    /// needs no worker. Returns false once the pipeline is cancelled.
+    /// Takes a slot for an element that `passthrough` turned into `value`.
+    /// Returns false once the pipeline is cancelled.
     @inlinable
     func admit(result value: Value) -> Bool {
         state.withLock { state in
@@ -509,8 +564,8 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
         }
     }
 
-    /// Records that the reader stopped: idle workers exit, and the consumer
-    /// ends once it has taken every result.
+    /// Records that the reader stopped. Idle workers exit, and the consumer
+    /// ends after it takes every result.
     @inlinable
     func finish() {
         state.withLock { state in
@@ -532,9 +587,8 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
         }
     }
 
-    /// Hands a finished result over, then takes the next admitted element,
-    /// under the same lock, waiting for the reader if there is none. Returns
-    /// nil once the reader finished or the pipeline was cancelled.
+    /// Hands over a result, then takes the next element or waits for one, under
+    /// the same lock. Returns nil when the reader finished or once cancelled.
     @inlinable
     func complete(_ result: Value?, at index: Int) async -> Work? {
         await wait { state, worker in
@@ -551,15 +605,15 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
                 return .some(nil)
             }
 
-            state.idle.append(worker)
+            state.park(worker)
             return nil
         }
     }
 
     // MARK: Consumer
 
-    /// Takes the next result due, waiting for it if it is not ready. Returns
-    /// nil after the last one, or once cancelled.
+    /// Takes the next result due, or waits for it. Returns nil at the end or
+    /// once cancelled.
     @inlinable
     func next() async -> Value? {
         await wait { state, consumer in
@@ -572,7 +626,7 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
         }
     }
 
-    /// Ends the stream: the reader stops, idle workers exit, and every later
+    /// Ends the stream. The reader stops, idle workers exit, and every later
     /// result is dropped.
     @inlinable
     func cancel() {
@@ -586,9 +640,8 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
 }
 
 extension Result {
-    /// The failure re-typed under another success type, or nil for a
-    /// success: the `passthrough` of the concurrent maps over `Result`s,
-    /// which transform only successes.
+    /// Returns the failure with a new success type, or nil for a success. The
+    /// maps over `Result`s use it as `passthrough`.
     @inlinable
     func passthroughFailure<NewSuccess>() -> Result<NewSuccess, Failure>? {
         guard case .failure(let error) = self else {

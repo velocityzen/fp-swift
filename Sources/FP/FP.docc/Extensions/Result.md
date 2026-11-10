@@ -1,3 +1,3 @@
 # ``FP/Swift/Result``
 
-Functional extensions for `Result`: side-effect taps, async transforms, do-notation, recovery, boolean checks, and CLI exit helpers.
+Extensions for `Result`: `tap` for side effects, async transforms, `Do` chains, recovery from failures, `Bool` checks, and exit helpers for command-line tools.

@@ -2,9 +2,9 @@
 
 // MARK: Arity 2
 
-/// Combines multiple Results into a single Result containing a tuple of all success values.
+/// Combines several results into one result with a tuple of their values.
 ///
-/// Returns the first failure if any Result fails. Supports 2 to 10 arguments.
+/// Returns the first failure in argument order, if any. Takes 2 to 10 results.
 @inlinable
 public func flatten<A, B, E: Error>(
     _ a: Result<A, E>,
@@ -127,13 +127,14 @@ public func flatten<A, B, C, D, F, G, H, I, J, K, E: Error>(
 
 // MARK: - Combine async Results in parallel
 
+// Arities 3 to 10 repeat arity 2, so only arity 2 has comments.
+
 // MARK: Arity 2
 
-/// Runs multiple async Result-producing operations in parallel and combines their success values into a tuple.
+/// Runs several async operations at the same time and combines their values into a tuple.
 ///
-/// Returns the first failure to arrive and cancels the operations still
-/// running; cancellation is cooperative, so this waits until they stop.
-/// Supports 2 to 10 arguments.
+/// The first failure to arrive is the result. The other operations are cancelled, and this
+/// function returns only after they stop. Takes 2 to 10 operations.
 @inlinable
 public func withAll<A: Sendable, B: Sendable, E: Error>(
     _ a: @concurrent @Sendable @autoclosure @escaping () async -> Result<A, E>,
@@ -143,11 +144,10 @@ public func withAll<A: Sendable, B: Sendable, E: Error>(
     async let ra = gate.success(of: await a())
     async let rb = gate.success(of: await b())
     if let failure = await gate.wait() {
-        // Leaving the scope cancels the operations still running
-        // and waits for them to stop.
+        // Leaving the scope cancels the running operations and waits for them to stop.
         return .failure(failure)
     }
-    // The gate opened without a failure, so every operation succeeded.
+    // The gate opened with no failure, so every operation succeeded.
     return .success((await ra!, await rb!))
 }
 
@@ -164,11 +164,8 @@ public func withAll<A: Sendable, B: Sendable, C: Sendable, E: Error>(
     async let rb = gate.success(of: await b())
     async let rc = gate.success(of: await c())
     if let failure = await gate.wait() {
-        // Leaving the scope cancels the operations still running
-        // and waits for them to stop.
         return .failure(failure)
     }
-    // The gate opened without a failure, so every operation succeeded.
     return .success((await ra!, await rb!, await rc!))
 }
 
@@ -187,11 +184,8 @@ public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, E: Error
     async let rc = gate.success(of: await c())
     async let rd = gate.success(of: await d())
     if let failure = await gate.wait() {
-        // Leaving the scope cancels the operations still running
-        // and waits for them to stop.
         return .failure(failure)
     }
-    // The gate opened without a failure, so every operation succeeded.
     return .success((await ra!, await rb!, await rc!, await rd!))
 }
 
@@ -212,11 +206,8 @@ public func withAll<A: Sendable, B: Sendable, C: Sendable, D: Sendable, F: Senda
     async let rd = gate.success(of: await d())
     async let rf = gate.success(of: await f())
     if let failure = await gate.wait() {
-        // Leaving the scope cancels the operations still running
-        // and waits for them to stop.
         return .failure(failure)
     }
-    // The gate opened without a failure, so every operation succeeded.
     return .success((await ra!, await rb!, await rc!, await rd!, await rf!))
 }
 
@@ -247,11 +238,8 @@ public func withAll<
     async let rf = gate.success(of: await f())
     async let rg = gate.success(of: await g())
     if let failure = await gate.wait() {
-        // Leaving the scope cancels the operations still running
-        // and waits for them to stop.
         return .failure(failure)
     }
-    // The gate opened without a failure, so every operation succeeded.
     return .success((await ra!, await rb!, await rc!, await rd!, await rf!, await rg!))
 }
 
@@ -285,11 +273,8 @@ public func withAll<
     async let rg = gate.success(of: await g())
     async let rh = gate.success(of: await h())
     if let failure = await gate.wait() {
-        // Leaving the scope cancels the operations still running
-        // and waits for them to stop.
         return .failure(failure)
     }
-    // The gate opened without a failure, so every operation succeeded.
     return .success((await ra!, await rb!, await rc!, await rd!, await rf!, await rg!, await rh!))
 }
 
@@ -326,11 +311,8 @@ public func withAll<
     async let rh = gate.success(of: await h())
     async let ri = gate.success(of: await i())
     if let failure = await gate.wait() {
-        // Leaving the scope cancels the operations still running
-        // and waits for them to stop.
         return .failure(failure)
     }
-    // The gate opened without a failure, so every operation succeeded.
     return .success(
         (
             await ra!, await rb!, await rc!, await rd!, await rf!, await rg!, await rh!, await ri!
@@ -374,11 +356,8 @@ public func withAll<
     async let ri = gate.success(of: await i())
     async let rj = gate.success(of: await j())
     if let failure = await gate.wait() {
-        // Leaving the scope cancels the operations still running
-        // and waits for them to stop.
         return .failure(failure)
     }
-    // The gate opened without a failure, so every operation succeeded.
     return .success(
         (
             await ra!, await rb!, await rc!, await rd!, await rf!, await rg!, await rh!, await ri!,
@@ -426,11 +405,8 @@ public func withAll<
     async let rj = gate.success(of: await j())
     async let rk = gate.success(of: await k())
     if let failure = await gate.wait() {
-        // Leaving the scope cancels the operations still running
-        // and waits for them to stop.
         return .failure(failure)
     }
-    // The gate opened without a failure, so every operation succeeded.
     return .success(
         (
             await ra!, await rb!, await rc!, await rd!, await rf!, await rg!, await rh!, await ri!,

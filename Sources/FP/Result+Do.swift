@@ -1,28 +1,28 @@
 // MARK: - Do Notation
 
-/// Starting point for Result's do-notation chain.
+/// The start of a do-notation chain for `Result`.
 ///
-/// Provides `bind` and `let` to begin a monadic computation that accumulates values
-/// into a growing tuple, short-circuiting on the first failure.
+/// Each `bind` or `let` step adds one value to a tuple. The chain stops at the first failure.
 ///
 /// ```swift
 /// let result = ResultDo<MyError>()
-///     .bind { getUser() }                             // Result<User, MyError>
-///     .bind { user in getProfile(user) }              // Result<(User, Profile), MyError>
-///     .let { _, profile in profile.name }             // Result<(User, Profile, String), MyError>
-///     .map { user, _, name in "\(user.id): \(name)" } // Result<String, MyError>
+///     .bind { getUser() }                  // User
+///     .bind { user in getProfile(user) }   // (User, Profile)
+///     .let { _, profile in profile.name }  // (User, Profile, String)
+///     .map { user, _, name in "\(user.id): \(name)" }
 /// ```
 public struct ResultDo<Failure: Error> {
-    @usableFromInline
-    init() {}
+    /// Starts an empty chain.
+    @inlinable
+    public init() {}
 
-    /// Binds the first Result value in the chain.
+    /// Starts the chain with a `Result`.
     @inlinable
     public func bind<A>(_ fn: () -> Result<A, Failure>) -> Result<A, Failure> {
         fn()
     }
 
-    /// Adds a pure value as the first element in the chain.
+    /// Starts the chain with a value.
     @inlinable
     public func `let`<A>(_ fn: () -> A) -> Result<A, Failure> {
         .success(fn())
@@ -37,7 +37,7 @@ public extension Result where Failure: Error {
 // MARK: - bind / let (1 → 2)
 
 public extension Result {
-    /// Binds a new Result, accumulating the success value into a pair.
+    /// Calls `fn` and adds its success value to a tuple.
     @_disfavoredOverload
     @inlinable
     func bind<B>(
@@ -46,7 +46,7 @@ public extension Result {
         flatMap { a in fn(a).map { b in (a, b) } }
     }
 
-    /// Adds a pure computed value, accumulating into a pair.
+    /// Calls `fn` and adds what it returns to a tuple.
     @_disfavoredOverload
     @inlinable
     func `let`<B>(

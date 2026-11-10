@@ -70,7 +70,7 @@ struct ResultRaceTests {
             { .failure(.other) },  // fast failure
             {
                 try? await Task.sleep(nanoseconds: 80_000_000)
-                return .success(99)  // slower success — the winner
+                return .success(99)  // slower success, the winner
             },
             {
                 try? await Task.sleep(nanoseconds: 10_000_000_000)
