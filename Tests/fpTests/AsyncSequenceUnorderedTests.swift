@@ -660,17 +660,17 @@ struct AsyncSequenceUnorderedTests {
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test(
-        "mapAsyncKeepOrder on Result keeps failures in place under contention",
+        "mapAsyncOrdered on Result keeps failures in place under contention",
         .hangGuard,
         arguments: [2, 8, Int.max]
     )
-    func keepOrderPassthroughUnderContention(concurrency: Int) async {
+    func orderedPassthroughUnderContention(concurrency: Int) async {
         let source = Numbers(count: 300).map { (element: Int) -> Result<Int, TestError> in
             element.isMultiple(of: 3) ? .failure(.failed) : .success(element)
         }
 
         var results: [Result<Int, TestError>] = []
-        for await result in source.mapAsyncKeepOrder(
+        for await result in source.mapAsyncOrdered(
             concurrency: concurrency,
             { (value: Int) -> Int in
                 for _ in 0..<(value % 4) {
@@ -696,7 +696,7 @@ struct AsyncSequenceUnorderedTests {
     )
     func sourceOrderDropsElements(concurrency: Int) async {
         var results: [Int] = []
-        for await value in Numbers(count: 300).compactMapAsyncKeepOrder(
+        for await value in Numbers(count: 300).compactMapAsyncOrdered(
             concurrency: concurrency,
             passthrough: { $0.isMultiple(of: 7) ? -$0 : nil },
             { element in

@@ -6,7 +6,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     /// By default, each element is read and transformed when the consumer asks for
     /// the next value. With a larger `concurrency`, up to that many transforms run at
     /// the same time. A slow transform holds back only its own result. To keep the
-    /// source order, use ``mapAsyncKeepOrder(concurrency:bufferLimit:_:)->AsyncStream<T>``.
+    /// source order, use ``mapAsyncOrdered(concurrency:bufferLimit:_:)->AsyncStream<T>``.
     ///
     /// No new element is read while `concurrency` elements are being transformed or
     /// waiting for the consumer, so a slow consumer pauses the source. When the

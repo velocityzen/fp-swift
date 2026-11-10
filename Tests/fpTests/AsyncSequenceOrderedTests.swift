@@ -10,10 +10,10 @@ struct AsyncSequenceOrderedTests {
         case other
     }
 
-    // MARK: - mapAsyncKeepOrder
+    // MARK: - mapAsyncOrdered
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder transforms each element")
+    @Test("mapAsyncOrdered transforms each element")
     func transformsEachElement() async {
         let stream = AsyncStream<Int> { continuation in
             continuation.yield(1)
@@ -23,7 +23,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var values: [String] = []
-        for await value in stream.mapAsyncKeepOrder({ "v\($0)" }) {
+        for await value in stream.mapAsyncOrdered({ "v\($0)" }) {
             values.append(value)
         }
 
@@ -31,7 +31,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder preserves source order even when later transforms finish first")
+    @Test("mapAsyncOrdered preserves source order even when later transforms finish first")
     func preservesOrderWithVariableLatency() async {
         let stream = AsyncStream<Int> { continuation in
             continuation.yield(1)
@@ -42,7 +42,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var values: [Int] = []
-        for await value in stream.mapAsyncKeepOrder(
+        for await value in stream.mapAsyncOrdered(
             concurrency: .max,
             { element in
                 // Earlier elements sleep longer. Without the order rule,
@@ -59,7 +59,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder runs transforms concurrently")
+    @Test("mapAsyncOrdered runs transforms concurrently")
     func transformsRunConcurrently() async {
         let tracker = ConcurrencyTracker()
         let stream = AsyncStream<Int> { continuation in
@@ -68,7 +68,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var values: [Int] = []
-        for await value in stream.mapAsyncKeepOrder(
+        for await value in stream.mapAsyncOrdered(
             concurrency: .max,
             { element in
                 await tracker.enter()
@@ -90,14 +90,14 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder finishes when source is empty")
+    @Test("mapAsyncOrdered finishes when source is empty")
     func finishesOnEmptySource() async {
         let stream = AsyncStream<Int> { continuation in
             continuation.finish()
         }
 
         var values: [Int] = []
-        for await value in stream.mapAsyncKeepOrder({ $0 * 2 }) {
+        for await value in stream.mapAsyncOrdered({ $0 * 2 }) {
             values.append(value)
         }
 
@@ -105,7 +105,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder invokes transform once per element")
+    @Test("mapAsyncOrdered invokes transform once per element")
     func invokesTransformOncePerElement() async {
         let stream = AsyncStream<Int> { continuation in
             for value in 1...5 { continuation.yield(value) }
@@ -114,7 +114,7 @@ struct AsyncSequenceOrderedTests {
 
         let counter = AsyncCounter()
         var values: [Int] = []
-        for await value in stream.mapAsyncKeepOrder({ element in
+        for await value in stream.mapAsyncOrdered({ element in
             await counter.increment()
             return element
         }) {
@@ -127,14 +127,14 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder allows the consumer to break out early without hanging")
+    @Test("mapAsyncOrdered allows the consumer to break out early without hanging")
     func allowsEarlyTermination() async {
         let stream = AsyncStream<Int> { continuation in
             for value in 1...10 { continuation.yield(value) }
             continuation.finish()
         }
 
-        let mapped = stream.mapAsyncKeepOrder({ $0 * 10 })
+        let mapped = stream.mapAsyncOrdered({ $0 * 10 })
 
         var values: [Int] = []
         for await value in mapped {
@@ -145,10 +145,10 @@ struct AsyncSequenceOrderedTests {
         #expect(values == [10, 20])
     }
 
-    // MARK: - mapAsyncKeepOrder (Result)
+    // MARK: - mapAsyncOrdered (Result)
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder on Result transforms successes and preserves failures")
+    @Test("mapAsyncOrdered on Result transforms successes and preserves failures")
     func resultTransformsSuccessesPreservesFailures() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.success(1))
@@ -159,7 +159,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Result<String, TestError>] = []
-        for await result in stream.mapAsyncKeepOrder({ value in "v\(value)" }) {
+        for await result in stream.mapAsyncOrdered({ value in "v\(value)" }) {
             results.append(result)
         }
 
@@ -171,7 +171,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder on Result preserves order with mixed successes and failures")
+    @Test("mapAsyncOrdered on Result preserves order with mixed successes and failures")
     func resultPreservesOrderWithVariableLatency() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.success(1))
@@ -182,7 +182,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Result<Int, TestError>] = []
-        for await result in stream.mapAsyncKeepOrder(
+        for await result in stream.mapAsyncOrdered(
             concurrency: .max,
             { (value: Int) -> Int in
                 // Earlier successes sleep longer.
@@ -202,7 +202,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder on Result runs success transforms concurrently")
+    @Test("mapAsyncOrdered on Result runs success transforms concurrently")
     func resultRunsTransformsConcurrently() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.success(1))
@@ -215,7 +215,7 @@ struct AsyncSequenceOrderedTests {
 
         let tracker = ConcurrencyTracker()
         var results: [Result<Int, TestError>] = []
-        for await result in stream.mapAsyncKeepOrder(
+        for await result in stream.mapAsyncOrdered(
             concurrency: .max,
             { (value: Int) -> Int in
                 await tracker.enter()
@@ -233,7 +233,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder on Result skips transform for failures")
+    @Test("mapAsyncOrdered on Result skips transform for failures")
     func resultSkipsTransformForFailures() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.failure(.failed))
@@ -245,7 +245,7 @@ struct AsyncSequenceOrderedTests {
 
         let counter = AsyncCounter()
         var results: [Result<Int, TestError>] = []
-        for await result in stream.mapAsyncKeepOrder({ (value: Int) -> Int in
+        for await result in stream.mapAsyncOrdered({ (value: Int) -> Int in
             await counter.increment()
             return value * 10
         }) {
@@ -262,7 +262,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder on Result passes through all-failure stream untouched")
+    @Test("mapAsyncOrdered on Result passes through all-failure stream untouched")
     func resultAllFailures() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.failure(.failed))
@@ -271,17 +271,17 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Result<String, TestError>] = []
-        for await result in stream.mapAsyncKeepOrder({ "v\($0)" }) {
+        for await result in stream.mapAsyncOrdered({ "v\($0)" }) {
             results.append(result)
         }
 
         #expect(results == [.failure(.failed), .failure(.other)])
     }
 
-    // MARK: - flatMapAsyncKeepOrder (Result)
+    // MARK: - flatMapAsyncOrdered (Result)
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("flatMapAsyncKeepOrder transforms successes, preserves source failures")
+    @Test("flatMapAsyncOrdered transforms successes, preserves source failures")
     func flatMapTransformsAndPreserves() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.success(1))
@@ -291,7 +291,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Result<String, TestError>] = []
-        for await result in stream.flatMapAsyncKeepOrder({ value -> Result<String, TestError> in
+        for await result in stream.flatMapAsyncOrdered({ value -> Result<String, TestError> in
             .success("v\(value)")
         }) {
             results.append(result)
@@ -304,7 +304,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("flatMapAsyncKeepOrder transform failure replaces success it came from")
+    @Test("flatMapAsyncOrdered transform failure replaces success it came from")
     func flatMapTransformFailureReplacesSuccess() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.success(1))
@@ -314,7 +314,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Result<Int, TestError>] = []
-        for await result in stream.flatMapAsyncKeepOrder({ value -> Result<Int, TestError> in
+        for await result in stream.flatMapAsyncOrdered({ value -> Result<Int, TestError> in
             value == 2 ? .failure(.failed) : .success(value * 10)
         }) {
             results.append(result)
@@ -324,7 +324,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("flatMapAsyncKeepOrder distinguishes source vs transform failures by error")
+    @Test("flatMapAsyncOrdered distinguishes source vs transform failures by error")
     func flatMapDistinguishesFailureSources() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.failure(.failed))  // source failure
@@ -334,7 +334,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Result<Int, TestError>] = []
-        for await result in stream.flatMapAsyncKeepOrder({ value -> Result<Int, TestError> in
+        for await result in stream.flatMapAsyncOrdered({ value -> Result<Int, TestError> in
             value == 1 ? .failure(.other) : .success(value * 10)
         }) {
             results.append(result)
@@ -344,7 +344,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("flatMapAsyncKeepOrder preserves order when later transforms finish first")
+    @Test("flatMapAsyncOrdered preserves order when later transforms finish first")
     func flatMapPreservesOrderWithVariableLatency() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.success(1))
@@ -355,7 +355,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Result<Int, TestError>] = []
-        for await result in stream.flatMapAsyncKeepOrder(
+        for await result in stream.flatMapAsyncOrdered(
             concurrency: .max,
             { (value: Int) -> Result<Int, TestError> in
                 // Earlier successes sleep longer.
@@ -371,7 +371,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("flatMapAsyncKeepOrder runs successful transforms concurrently")
+    @Test("flatMapAsyncOrdered runs successful transforms concurrently")
     func flatMapRunsTransformsConcurrently() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.success(1))
@@ -384,7 +384,7 @@ struct AsyncSequenceOrderedTests {
 
         let tracker = ConcurrencyTracker()
         var results: [Result<Int, TestError>] = []
-        for await result in stream.flatMapAsyncKeepOrder(
+        for await result in stream.flatMapAsyncOrdered(
             concurrency: .max,
             { (value: Int) -> Result<Int, TestError> in
                 await tracker.enter()
@@ -402,7 +402,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("flatMapAsyncKeepOrder skips transform for source failures")
+    @Test("flatMapAsyncOrdered skips transform for source failures")
     func flatMapSkipsTransformForSourceFailures() async {
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
             continuation.yield(.failure(.failed))
@@ -414,7 +414,7 @@ struct AsyncSequenceOrderedTests {
 
         let counter = AsyncCounter()
         var results: [Result<Int, TestError>] = []
-        for await result in stream.flatMapAsyncKeepOrder({ (value: Int) -> Result<Int, TestError> in
+        for await result in stream.flatMapAsyncOrdered({ (value: Int) -> Result<Int, TestError> in
             await counter.increment()
             return .success(value * 10)
         }) {
@@ -429,7 +429,7 @@ struct AsyncSequenceOrderedTests {
     // MARK: - concurrency
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder never exceeds the concurrency limit")
+    @Test("mapAsyncOrdered never exceeds the concurrency limit")
     func respectsConcurrencyLimit() async {
         let tracker = ConcurrencyTracker()
         let source = AsyncStream<Int> { continuation in
@@ -441,7 +441,7 @@ struct AsyncSequenceOrderedTests {
 
         let start = ContinuousClock.now
         var results: [Int] = []
-        for await value in source.mapAsyncKeepOrder(
+        for await value in source.mapAsyncOrdered(
             concurrency: 3,
             { element in
                 await tracker.enter()
@@ -464,7 +464,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder with concurrency 1 runs transforms one at a time in order")
+    @Test("mapAsyncOrdered with concurrency 1 runs transforms one at a time in order")
     func concurrencyOneIsSequential() async {
         let tracker = ConcurrencyTracker()
         let source = AsyncStream<Int> { continuation in
@@ -475,7 +475,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Int] = []
-        for await value in source.mapAsyncKeepOrder(
+        for await value in source.mapAsyncOrdered(
             concurrency: 1,
             { element in
                 await tracker.enter()
@@ -494,7 +494,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder preserves order with bounded concurrency under variable latency")
+    @Test("mapAsyncOrdered preserves order with bounded concurrency under variable latency")
     func boundedConcurrencyPreservesOrder() async {
         let source = AsyncStream<Int> { continuation in
             for i in 1...6 {
@@ -504,7 +504,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Int] = []
-        for await value in source.mapAsyncKeepOrder(
+        for await value in source.mapAsyncOrdered(
             concurrency: 2,
             { element in
                 // earlier elements are slower than later ones
@@ -520,7 +520,7 @@ struct AsyncSequenceOrderedTests {
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test(
-        "mapAsyncKeepOrder cancels in-flight transforms when the consumer stops early",
+        "mapAsyncOrdered cancels in-flight transforms when the consumer stops early",
         .hangGuard
     )
     func cancelsInFlightOnEarlyTermination() async {
@@ -534,7 +534,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         let consumer = Task {
-            for await _ in source.mapAsyncKeepOrder(
+            for await _ in source.mapAsyncOrdered(
                 concurrency: .max,
                 { (element: Int) -> Int in
                     await started.increment()
@@ -568,7 +568,7 @@ struct AsyncSequenceOrderedTests {
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test(
-        "mapAsyncKeepOrder with a cap stops reading the source when the consumer stops early",
+        "mapAsyncOrdered with a cap stops reading the source when the consumer stops early",
         .hangGuard
     )
     func cancellationWithCapStopsReadingSource() async {
@@ -582,7 +582,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         let consumer = Task {
-            for await _ in source.mapAsyncKeepOrder(
+            for await _ in source.mapAsyncOrdered(
                 concurrency: 2,
                 { (element: Int) -> Int in
                     await started.increment()
@@ -617,7 +617,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder timing: unlimited overlaps sleeps, concurrency 1 serializes them")
+    @Test("mapAsyncOrdered timing: unlimited overlaps sleeps, concurrency 1 serializes them")
     func timingParallelVsSequential() async {
         func run(concurrency: Int) async -> (elapsed: Duration, highWater: Int) {
             let tracker = ConcurrencyTracker()
@@ -628,7 +628,7 @@ struct AsyncSequenceOrderedTests {
                 continuation.finish()
             }
             let start = ContinuousClock.now
-            for await _ in source.mapAsyncKeepOrder(
+            for await _ in source.mapAsyncOrdered(
                 concurrency: concurrency,
                 { (element: Int) -> Int in
                     await tracker.enter()
@@ -653,7 +653,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder defaults to sequential execution")
+    @Test("mapAsyncOrdered defaults to sequential execution")
     func defaultIsSequential() async {
         let tracker = ConcurrencyTracker()
         let source = AsyncStream<Int> { continuation in
@@ -665,7 +665,7 @@ struct AsyncSequenceOrderedTests {
 
         let start = ContinuousClock.now
         var results: [Int] = []
-        for await value in source.mapAsyncKeepOrder({ element in
+        for await value in source.mapAsyncOrdered({ element in
             await tracker.enter()
             try? await Task.sleep(for: .milliseconds(30))
             await tracker.exit()
@@ -684,7 +684,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder terminates cleanly when the source never finishes")
+    @Test("mapAsyncOrdered terminates cleanly when the source never finishes")
     func earlyTerminationWithUnfinishedSource() async {
         let source = AsyncStream<Int> { continuation in
             for i in 1...3 {
@@ -694,7 +694,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var values: [Int] = []
-        for await value in source.mapAsyncKeepOrder({ $0 * 2 }) {
+        for await value in source.mapAsyncOrdered({ $0 * 2 }) {
             values.append(value)
             if values.count == 2 { break }
         }
@@ -703,7 +703,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder on Result forwards concurrency")
+    @Test("mapAsyncOrdered on Result forwards concurrency")
     func resultOverloadRespectsConcurrencyLimit() async {
         let tracker = ConcurrencyTracker()
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
@@ -714,7 +714,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Result<Int, TestError>] = []
-        for await result in stream.mapAsyncKeepOrder(
+        for await result in stream.mapAsyncOrdered(
             concurrency: 2,
             { (value: Int) -> Int in
                 await tracker.enter()
@@ -736,7 +736,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("flatMapAsyncKeepOrder forwards concurrency")
+    @Test("flatMapAsyncOrdered forwards concurrency")
     func flatMapOverloadRespectsConcurrencyLimit() async {
         let tracker = ConcurrencyTracker()
         let stream = AsyncStream<Result<Int, TestError>> { continuation in
@@ -747,7 +747,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Result<Int, TestError>] = []
-        for await result in stream.flatMapAsyncKeepOrder(
+        for await result in stream.flatMapAsyncOrdered(
             concurrency: 2,
             { (value: Int) -> Result<Int, TestError> in
                 await tracker.enter()
@@ -772,7 +772,7 @@ struct AsyncSequenceOrderedTests {
     // MARK: - backpressure
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder does not run ahead of a slow consumer", .hangGuard)
+    @Test("mapAsyncOrdered does not run ahead of a slow consumer", .hangGuard)
     func backpressureBoundsWorkAheadOfConsumer() async {
         let started = AsyncCounter()
         // Results that finish before an earlier element take no slot, so
@@ -785,7 +785,7 @@ struct AsyncSequenceOrderedTests {
             continuation.finish()
         }
 
-        let mapped = source.mapAsyncKeepOrder(
+        let mapped = source.mapAsyncOrdered(
             concurrency: 3,
             { (element: Int) -> Int in
                 await started.increment()
@@ -808,7 +808,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder transforms later elements while an early one is slow", .hangGuard)
+    @Test("mapAsyncOrdered transforms later elements while an early one is slow", .hangGuard)
     func workersRunPastSlowElement() async {
         let started = AsyncCounter()
         let source = AsyncStream<Int> { continuation in
@@ -824,7 +824,7 @@ struct AsyncSequenceOrderedTests {
 
         let consumer = Task {
             var values: [Int] = []
-            for await value in source.mapAsyncKeepOrder(
+            for await value in source.mapAsyncOrdered(
                 concurrency: 3,
                 { (element: Int) -> Int in
                     await started.increment()
@@ -855,7 +855,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder bufferLimit caps results waiting behind a slow element", .hangGuard)
+    @Test("mapAsyncOrdered bufferLimit caps results waiting behind a slow element", .hangGuard)
     func bufferLimitCapsResultsWaitingBehindSlowElement() async {
         let started = AsyncCounter()
         let source = AsyncStream<Int> { continuation in
@@ -869,7 +869,7 @@ struct AsyncSequenceOrderedTests {
 
         let consumer = Task {
             var values: [Int] = []
-            for await value in source.mapAsyncKeepOrder(
+            for await value in source.mapAsyncOrdered(
                 concurrency: 3,
                 bufferLimit: 4,
                 { (element: Int) -> Int in
@@ -904,7 +904,7 @@ struct AsyncSequenceOrderedTests {
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test(
-        "mapAsyncKeepOrder bufferLimit below concurrency - 1 lowers transforms in flight",
+        "mapAsyncOrdered bufferLimit below concurrency - 1 lowers transforms in flight",
         arguments: [0, 1, 2]
     )
     func bufferLimitLowersTransformsInFlight(bufferLimit: Int) async {
@@ -917,7 +917,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var results: [Int] = []
-        for await value in source.mapAsyncKeepOrder(
+        for await value in source.mapAsyncOrdered(
             concurrency: 8,
             bufferLimit: bufferLimit,
             { element in
@@ -938,7 +938,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder with concurrency 1 reads nothing ahead of the consumer")
+    @Test("mapAsyncOrdered with concurrency 1 reads nothing ahead of the consumer")
     func sequentialReadsNothingAhead() async {
         let started = AsyncCounter()
         let source = AsyncStream<Int> { continuation in
@@ -948,7 +948,7 @@ struct AsyncSequenceOrderedTests {
             continuation.finish()
         }
 
-        let mapped = source.mapAsyncKeepOrder({ (element: Int) -> Int in
+        let mapped = source.mapAsyncOrdered({ (element: Int) -> Int in
             await started.increment()
             return element
         })
@@ -964,7 +964,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("mapAsyncKeepOrder cancels in-flight transforms when the stream is dropped", .hangGuard)
+    @Test("mapAsyncOrdered cancels in-flight transforms when the stream is dropped", .hangGuard)
     func droppingTheStreamCancelsInFlight() async {
         let started = AsyncCounter()
         let cancelled = AsyncCounter()
@@ -978,7 +978,7 @@ struct AsyncSequenceOrderedTests {
         // The consumer stops without its task being cancelled; releasing
         // the stream is the only signal the pipeline gets.
         func takeFirst() async -> Int? {
-            let mapped = source.mapAsyncKeepOrder(
+            let mapped = source.mapAsyncOrdered(
                 concurrency: 3,
                 { (element: Int) -> Int in
                     await started.increment()
@@ -1014,7 +1014,7 @@ struct AsyncSequenceOrderedTests {
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test(
-        "mapAsyncKeepOrder delivers every element in order under contention",
+        "mapAsyncOrdered delivers every element in order under contention",
         .hangGuard,
         arguments: [2, 3, 8, Int.max]
     )
@@ -1029,7 +1029,7 @@ struct AsyncSequenceOrderedTests {
             }
 
             var results: [Int] = []
-            for await value in source.mapAsyncKeepOrder(
+            for await value in source.mapAsyncOrdered(
                 concurrency: concurrency,
                 { element in
                     // finish out of order: elements yield a varying number of times
@@ -1052,7 +1052,7 @@ struct AsyncSequenceOrderedTests {
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test(
-        "compactMapAsyncKeepOrder with a bufferLimit delivers every element in order under contention",
+        "compactMapAsyncOrdered with a bufferLimit delivers every element in order under contention",
         .hangGuard,
         arguments: zip([2, 3, 8, 8, Int.max], [0, 1, 2, 16, 4])
     )
@@ -1067,7 +1067,7 @@ struct AsyncSequenceOrderedTests {
             }
 
             var results: [Int] = []
-            for await value in source.compactMapAsyncKeepOrder(
+            for await value in source.compactMapAsyncOrdered(
                 concurrency: concurrency,
                 bufferLimit: bufferLimit,
                 passthrough: { $0.isMultiple(of: 5) ? -$0 : nil },
@@ -1091,10 +1091,10 @@ struct AsyncSequenceOrderedTests {
         }
     }
 
-    // MARK: - compactMapAsyncKeepOrder
+    // MARK: - compactMapAsyncOrdered
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("compactMapAsyncKeepOrder drops nil results and keeps passed-through ones in place")
+    @Test("compactMapAsyncOrdered drops nil results and keeps passed-through ones in place")
     func compactMapDropsAndPassesThroughInOrder() async {
         let stream = AsyncStream<Int> { continuation in
             for value in 1...8 { continuation.yield(value) }
@@ -1103,7 +1103,7 @@ struct AsyncSequenceOrderedTests {
         let counter = AsyncCounter()
 
         var values: [String] = []
-        for await value in stream.compactMapAsyncKeepOrder(
+        for await value in stream.compactMapAsyncOrdered(
             concurrency: 4,
             passthrough: { $0.isMultiple(of: 4) ? "cached \($0)" : nil },
             { element in
@@ -1122,7 +1122,7 @@ struct AsyncSequenceOrderedTests {
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    @Test("compactMapAsyncKeepOrder with concurrency 1 runs transforms one at a time")
+    @Test("compactMapAsyncOrdered with concurrency 1 runs transforms one at a time")
     func compactMapSequential() async {
         let tracker = ConcurrencyTracker()
         let stream = AsyncStream<Int> { continuation in
@@ -1131,7 +1131,7 @@ struct AsyncSequenceOrderedTests {
         }
 
         var values: [Int] = []
-        for await value in stream.compactMapAsyncKeepOrder({ (element: Int) -> Int? in
+        for await value in stream.compactMapAsyncOrdered({ (element: Int) -> Int? in
             await tracker.enter()
             try? await Task.sleep(for: .milliseconds(5))
             await tracker.exit()
@@ -1146,7 +1146,7 @@ struct AsyncSequenceOrderedTests {
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test(
-        "mapAsyncKeepOrder ends right after the consumer is cancelled at any point",
+        "mapAsyncOrdered ends right after the consumer is cancelled at any point",
         .hangGuard,
         arguments: [2, 8, Int.max]
     )
@@ -1161,7 +1161,7 @@ struct AsyncSequenceOrderedTests {
 
             let consumer = Task {
                 var taken: [Int] = []
-                for await value in source.mapAsyncKeepOrder(
+                for await value in source.mapAsyncOrdered(
                     concurrency: concurrency,
                     { element in
                         for _ in 0..<(element % 3) {

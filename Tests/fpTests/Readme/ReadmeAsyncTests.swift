@@ -209,7 +209,7 @@ struct ReadmeAsyncTests {
         var rendered: [String] = []
         func render(_ image: String) { rendered.append(image) }
 
-        let images = refs.mapAsyncKeepOrder(concurrency: 8) { ref in
+        let images = refs.mapAsyncOrdered(concurrency: 8) { ref in
             await downloader.fetch(ref)
         }
 
@@ -220,7 +220,7 @@ struct ReadmeAsyncTests {
         #expect(rendered == (1...6).map { "image \($0)" })
 
         let moreRefs = stream(Array(1...6))
-        let limited = moreRefs.mapAsyncKeepOrder(concurrency: 8, bufferLimit: 64) { ref in
+        let limited = moreRefs.mapAsyncOrdered(concurrency: 8, bufferLimit: 64) { ref in
             await downloader.fetch(ref)
         }
 

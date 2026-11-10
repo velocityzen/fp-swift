@@ -58,7 +58,7 @@ Functions:
 | -------------------------------------------------------------------------- | ------------------------------------------- |
 | `successes`, `failures`                                                    | One side of a sequence of results.          |
 | `map`, `mapError`, `flatMap`, `tap`, `tapError` and their `Async` versions | Work on one side. The other passes through. |
-| `mapAsyncKeepOrder`, `flatMapAsyncKeepOrder`, `compactMapAsyncKeepOrder`   | Concurrent, in source order.                |
+| `mapAsyncOrdered`, `flatMapAsyncOrdered`, `compactMapAsyncOrdered`         | Concurrent, in source order.                |
 | `mapAsyncUnordered`, `flatMapAsyncUnordered`, `compactMapAsyncUnordered`   | Concurrent, in the order they finish.       |
 | `AsyncStream.success`, `AsyncStream.failure`                               | A stream of one result.                     |
 | `success`, `failure`, `finishWithSuccess`, `finishWithFailure`             | Add a result on a continuation.             |

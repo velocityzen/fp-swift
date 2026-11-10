@@ -30,7 +30,7 @@ These map an async sequence with an async transform. Up to `concurrency` transfo
 
 | Operators                                                                | Results come out         |
 | ------------------------------------------------------------------------ | ------------------------ |
-| `mapAsyncKeepOrder`, `flatMapAsyncKeepOrder`, `compactMapAsyncKeepOrder` | in source order          |
+| `mapAsyncOrdered`, `flatMapAsyncOrdered`, `compactMapAsyncOrdered`       | in source order          |
 | `mapAsyncUnordered`, `flatMapAsyncUnordered`, `compactMapAsyncUnordered` | in the order they finish |
 
 Rules:
@@ -45,7 +45,7 @@ For an all-or-nothing pass over an array, use `traverseAsync(concurrency:)` inst
 ### Keeping the source order
 
 ```swift
-let images = refs.mapAsyncKeepOrder(concurrency: 8) { ref in
+let images = refs.mapAsyncOrdered(concurrency: 8) { ref in
     await downloader.fetch(ref)
 }
 
@@ -57,7 +57,7 @@ for await image in images {
 A slow transform holds back the results after it, but not the work: later elements are still transformed, and their results wait. `bufferLimit:` caps how many results may wait, for example when the source never ends:
 
 ```swift
-refs.mapAsyncKeepOrder(concurrency: 8, bufferLimit: 64) { ref in
+refs.mapAsyncOrdered(concurrency: 8, bufferLimit: 64) { ref in
     await downloader.fetch(ref)
 }
 ```

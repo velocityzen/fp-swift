@@ -38,18 +38,18 @@ let benchmarks: @Sendable () -> Void = {
             }
         }
 
-        // MARK: mapAsyncKeepOrder
+        // MARK: mapAsyncOrdered
 
         for concurrency in [1, 8, 64] {
             let tags = ["n": "\(n)", "concurrency": "\(concurrency)"]
 
             Benchmark(
-                "mapAsyncKeepOrder",
+                "mapAsyncOrdered",
                 configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
             ) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
-                        await drain(source.mapAsyncKeepOrder(concurrency: concurrency) { $0 &* 2 })
+                        await drain(source.mapAsyncOrdered(concurrency: concurrency) { $0 &* 2 })
                     )
                 }
             }
@@ -59,24 +59,24 @@ let benchmarks: @Sendable () -> Void = {
             let tags = ["n": "\(n)", "concurrency": "\(concurrency)"]
 
             Benchmark(
-                "mapAsyncKeepOrder Result",
+                "mapAsyncOrdered Result",
                 configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
             ) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
-                        await drain(results.mapAsyncKeepOrder(concurrency: concurrency) { $0 &* 2 })
+                        await drain(results.mapAsyncOrdered(concurrency: concurrency) { $0 &* 2 })
                     )
                 }
             }
 
             Benchmark(
-                "flatMapAsyncKeepOrder Result",
+                "flatMapAsyncOrdered Result",
                 configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
             ) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
                         await drain(
-                            results.flatMapAsyncKeepOrder(concurrency: concurrency) {
+                            results.flatMapAsyncOrdered(concurrency: concurrency) {
                                 IntResult.success($0 &* 2)
                             }
                         )
@@ -86,13 +86,13 @@ let benchmarks: @Sendable () -> Void = {
 
             // Every other element is dropped.
             Benchmark(
-                "compactMapAsyncKeepOrder",
+                "compactMapAsyncOrdered",
                 configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
             ) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
                         await drain(
-                            source.compactMapAsyncKeepOrder(concurrency: concurrency) {
+                            source.compactMapAsyncOrdered(concurrency: concurrency) {
                                 $0 & 1 == 0 ? $0 : nil
                             }
                         )
@@ -104,7 +104,7 @@ let benchmarks: @Sendable () -> Void = {
         // The consumer stops after 8 elements: the cost of tearing the
         // pipeline down while transforms are still in flight.
         Benchmark(
-            "mapAsyncKeepOrder taking 8",
+            "mapAsyncOrdered taking 8",
             configuration: .fp(
                 ["n": "\(n)", "concurrency": "8"],
                 scaling: streamScaling,
@@ -113,7 +113,7 @@ let benchmarks: @Sendable () -> Void = {
         ) { benchmark in
             for _ in benchmark.scaledIterations {
                 var taken = 0
-                for await value in source.mapAsyncKeepOrder(concurrency: 8, { $0 &* 2 }) {
+                for await value in source.mapAsyncOrdered(concurrency: 8, { $0 &* 2 }) {
                     blackHole(value)
                     taken += 1
                     if taken == 8 { break }

@@ -22,14 +22,16 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     ///   - transform: The transform for one element.
     ///
     /// ```swift
-    /// for await image in refs.mapAsyncKeepOrder(concurrency: 8, { ref in
+    /// let images = refs.mapAsyncOrdered(concurrency: 8) { ref in
     ///     await downloader.fetch(ref)
-    /// }) {
+    /// }
+    ///
+    /// for await image in images {
     ///     render(image)
     /// }
     /// ```
     @inlinable
-    public func mapAsyncKeepOrder<T: Sendable>(
+    public func mapAsyncOrdered<T: Sendable>(
         concurrency: Int = 1,
         bufferLimit: Int = .max,
         _ transform: @concurrent @Sendable @escaping (Element) async -> T
@@ -37,7 +39,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
         precondition(bufferLimit >= 0, "bufferLimit must be at least 0")
         if concurrency == 1 {
             // Calls `transform` directly. Going through
-            // `compactMapAsyncKeepOrder` costs one more async call per element.
+            // `compactMapAsyncOrdered` costs one more async call per element.
             let source = SharedIterator(makeAsyncIterator())
             return AsyncStream(unfolding: {
                 guard let element = await source.next() else {
@@ -47,7 +49,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
             })
         }
 
-        return compactMapAsyncKeepOrder(
+        return compactMapAsyncOrdered(
             concurrency: concurrency,
             bufferLimit: bufferLimit
         ) { element in
@@ -59,9 +61,9 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     /// the source order.
     ///
     /// Failures pass through unchanged, in their place. Otherwise it works like
-    /// ``mapAsyncKeepOrder(concurrency:bufferLimit:_:)->AsyncStream<T>``.
+    /// ``mapAsyncOrdered(concurrency:bufferLimit:_:)->AsyncStream<T>``.
     @inlinable
-    public func mapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
+    public func mapAsyncOrdered<Success: Sendable, E: Error, T: Sendable>(
         concurrency: Int = 1,
         bufferLimit: Int = .max,
         _ transform: @concurrent @Sendable @escaping (Success) async -> T
@@ -70,7 +72,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
         precondition(bufferLimit >= 0, "bufferLimit must be at least 0")
         if concurrency == 1 {
             // Captures `transform` directly. Going through
-            // `compactMapAsyncKeepOrder` allocates a closure around it.
+            // `compactMapAsyncOrdered` allocates a closure around it.
             let source = SharedIterator(makeAsyncIterator())
             return AsyncStream(unfolding: {
                 guard let element = await source.next() else {
@@ -80,7 +82,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
             })
         }
 
-        return compactMapAsyncKeepOrder(
+        return compactMapAsyncOrdered(
             concurrency: concurrency,
             bufferLimit: bufferLimit,
             passthrough: { $0.passthroughFailure() }
@@ -94,9 +96,9 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     ///
     /// Failures pass through unchanged, in their place. A failure from the transform
     /// replaces the value it came from. Otherwise it works like
-    /// ``mapAsyncKeepOrder(concurrency:bufferLimit:_:)->AsyncStream<T>``.
+    /// ``mapAsyncOrdered(concurrency:bufferLimit:_:)->AsyncStream<T>``.
     @inlinable
-    public func flatMapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
+    public func flatMapAsyncOrdered<Success: Sendable, E: Error, T: Sendable>(
         concurrency: Int = 1,
         bufferLimit: Int = .max,
         _ transform: @concurrent @Sendable @escaping (Success) async -> Result<T, E>
@@ -104,7 +106,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     where Element == Result<Success, E> {
         precondition(bufferLimit >= 0, "bufferLimit must be at least 0")
         if concurrency == 1 {
-            // Captures `transform` directly, like `mapAsyncKeepOrder` above.
+            // Captures `transform` directly, like `mapAsyncOrdered` above.
             let source = SharedIterator(makeAsyncIterator())
             return AsyncStream(unfolding: {
                 guard let element = await source.next() else {
@@ -114,7 +116,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
             })
         }
 
-        return compactMapAsyncKeepOrder(
+        return compactMapAsyncOrdered(
             concurrency: concurrency,
             bufferLimit: bufferLimit,
             passthrough: { $0.passthroughFailure() }
@@ -130,10 +132,10 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     /// that need no async work, like cache hits: when it returns a value, that value
     /// is the result and `transform` is not called. It runs on the task that reads
     /// the source, so keep it fast. Otherwise it works like
-    /// ``mapAsyncKeepOrder(concurrency:bufferLimit:_:)->AsyncStream<T>``.
+    /// ``mapAsyncOrdered(concurrency:bufferLimit:_:)->AsyncStream<T>``.
     ///
     /// ```swift
-    /// for await user in ids.compactMapAsyncKeepOrder(
+    /// for await user in ids.compactMapAsyncOrdered(
     ///     concurrency: 8,
     ///     passthrough: { id in cache[id] },
     ///     { id in await api.user(id) }  // nil when the user is gone
@@ -142,7 +144,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     /// }
     /// ```
     @inlinable
-    public func compactMapAsyncKeepOrder<T: Sendable>(
+    public func compactMapAsyncOrdered<T: Sendable>(
         concurrency: Int = 1,
         bufferLimit: Int = .max,
         passthrough: (@Sendable (Element) -> T?)? = nil,
@@ -180,5 +182,42 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
             unfolding: { await pipeline.next() },
             onCancel: { pipeline.cancel() }
         )
+    }
+}
+
+// MARK: - Old names
+
+@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendable {
+    /// Renamed to `mapAsyncOrdered`.
+    @available(*, deprecated, renamed: "mapAsyncOrdered(concurrency:_:)")
+    @inlinable
+    public func mapAsyncKeepOrder<T: Sendable>(
+        concurrency: Int = 1,
+        _ transform: @concurrent @Sendable @escaping (Element) async -> T
+    ) -> AsyncStream<T> {
+        mapAsyncOrdered(concurrency: concurrency, transform)
+    }
+
+    /// Renamed to `mapAsyncOrdered`.
+    @available(*, deprecated, renamed: "mapAsyncOrdered(concurrency:_:)")
+    @inlinable
+    public func mapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
+        concurrency: Int = 1,
+        _ transform: @concurrent @Sendable @escaping (Success) async -> T
+    ) -> AsyncStream<Result<T, E>>
+    where Element == Result<Success, E> {
+        mapAsyncOrdered(concurrency: concurrency, transform)
+    }
+
+    /// Renamed to `flatMapAsyncOrdered`.
+    @available(*, deprecated, renamed: "flatMapAsyncOrdered(concurrency:_:)")
+    @inlinable
+    public func flatMapAsyncKeepOrder<Success: Sendable, E: Error, T: Sendable>(
+        concurrency: Int = 1,
+        _ transform: @concurrent @Sendable @escaping (Success) async -> Result<T, E>
+    ) -> AsyncStream<Result<T, E>>
+    where Element == Result<Success, E> {
+        flatMapAsyncOrdered(concurrency: concurrency, transform)
     }
 }

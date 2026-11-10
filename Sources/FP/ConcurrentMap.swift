@@ -2,7 +2,7 @@ import Synchronization
 
 // MARK: - The engine of the concurrent maps
 
-// `mapAsyncKeepOrder`, `mapAsyncUnordered` and their variants share this
+// `mapAsyncOrdered`, `mapAsyncUnordered` and their variants share this
 // engine. Above `concurrency: 1` it is `ConcurrentMapPipeline`: one reader and
 // a pool of workers. The variants differ only in their `DeliveryOrder`.
 //
