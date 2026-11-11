@@ -103,7 +103,7 @@ protocol DeliveryOrder: SendableMetatype {
 @usableFromInline
 struct SourceOrder<Value: Sendable>: DeliveryOrder {
     /// Results that finished before they were due, by index.
-    @usableFromInline var ready: [Int: Value?] = [:]
+    @usableFromInline var ready: RingBuffer<Value?>
     /// The index of the next result due.
     @usableFromInline var due = 0
     /// The index of the first element that has not finished.
@@ -115,10 +115,14 @@ struct SourceOrder<Value: Sendable>: DeliveryOrder {
     @inlinable
     init(concurrency: Int, bufferLimit: Int) {
         self.bufferLimit = bufferLimit
-        // Room for the results that wait for the consumer and about as many
-        // early ones, so the dictionary rarely grows.
-        let waiting = Swift.min(concurrency, 64)
-        ready.reserveCapacity(waiting + Swift.min(waiting, bufferLimit))
+        // Every element from `due` on holds a slot or is early, so `ready`
+        // never spans more than `concurrency + bufferLimit` indices. Room
+        // for all of them is made now, so with a `bufferLimit` it never
+        // grows. With no limit, room is made for twice as many early results
+        // as `concurrency`, and it grows past that.
+        let waiting = Swift.min(concurrency, preallocationLimit)
+        let early = bufferLimit == .max ? 2 * waiting : Swift.min(bufferLimit, preallocationLimit)
+        ready = RingBuffer(capacity: preallocated(waiting + early))
     }
 
     @inlinable
@@ -141,7 +145,7 @@ struct SourceOrder<Value: Sendable>: DeliveryOrder {
 
     @inlinable
     mutating func keep(_ result: Value?, at index: Int) {
-        ready[index] = .some(result)
+        ready.store(result, at: index, from: due)
         if index == frontier {
             passFrontier(index)
         } else {
@@ -153,7 +157,7 @@ struct SourceOrder<Value: Sendable>: DeliveryOrder {
     @inlinable
     mutating func passFrontier(_ index: Int) {
         frontier = index + 1
-        while early > 0, ready[frontier] != nil {
+        while early > 0, ready.contains(frontier, from: due) {
             frontier += 1
             early -= 1
         }
@@ -161,7 +165,7 @@ struct SourceOrder<Value: Sendable>: DeliveryOrder {
 
     @inlinable
     mutating func takeNext() -> Value?? {
-        guard let result = ready.removeValue(forKey: due) else {
+        guard let result = ready.take(due) else {
             return nil
         }
 
@@ -174,10 +178,14 @@ struct SourceOrder<Value: Sendable>: DeliveryOrder {
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 @usableFromInline
 struct CompletionOrder<Value: Sendable>: DeliveryOrder {
-    @usableFromInline var ready = FIFOQueue<Value>()
+    @usableFromInline var ready: FIFOQueue<Value>
 
     @inlinable
-    init(concurrency: Int, bufferLimit: Int) {}
+    init(concurrency: Int, bufferLimit: Int) {
+        // Each result here holds a slot until the consumer takes it, so
+        // there are never more than `concurrency` of them.
+        ready = FIFOQueue(capacity: preallocated(concurrency))
+    }
 
     @inlinable
     var early: Int {
@@ -208,35 +216,115 @@ struct CompletionOrder<Value: Sendable>: DeliveryOrder {
     }
 }
 
-/// A first-in, first-out queue that reuses its storage when it is empty.
+// MARK: - Buffers
+
+/// The most slots a buffer of the pipeline makes room for when it is
+/// made. A buffer that needs more grows when it fills.
+@inlinable
+var preallocationLimit: Int {
+    1024
+}
+
+/// How many slots to make room for when a buffer is made: `count`, up to
+/// `preallocationLimit`.
+@inlinable
+func preallocated(_ count: Int) -> Int {
+    Swift.min(count, preallocationLimit)
+}
+
+/// Elements stored by index in a ring: index `i` lives in slot `i & mask`.
+///
+/// The stored indices are all in `start..<(start + capacity)`, where `start`
+/// is the lowest index that can still be stored, so no two share a slot.
+/// Storing an index further on grows the ring, which is the only time it
+/// allocates after it is made.
 @usableFromInline
-struct FIFOQueue<Element> {
-    /// The queued elements, from `head` on.
-    @usableFromInline var items: [Element] = []
-    @usableFromInline var head = 0
+struct RingBuffer<Element> {
+    /// The slots, a power of two of them, or none. nil is an empty slot.
+    @usableFromInline var slots: [Element?]
+
+    /// Makes room for `capacity` elements, rounded up to a power of two.
+    @inlinable
+    init(capacity: Int) {
+        slots = Array(repeating: nil, count: Self.roundedUp(capacity))
+    }
 
     @inlinable
-    init() {}
+    static func roundedUp(_ capacity: Int) -> Int {
+        capacity <= 0 ? 0 : 1 << (Int.bitWidth - (capacity - 1).leadingZeroBitCount)
+    }
+
+    @inlinable
+    var mask: Int {
+        slots.count - 1
+    }
+
+    /// Whether an element is stored at `index`. `start` is the lowest index
+    /// that can still be stored.
+    @inlinable
+    func contains(_ index: Int, from start: Int) -> Bool {
+        index - start < slots.count && slots[index & mask] != nil
+    }
+
+    /// Stores `element` at `index`. `start` is the lowest index that can
+    /// still be stored.
+    @inlinable
+    mutating func store(_ element: Element, at index: Int, from start: Int) {
+        if index - start >= slots.count {
+            grow(toFit: index, from: start)
+        }
+        slots[index & mask] = element
+    }
+
+    /// Removes the element at `index` and returns it, or returns nil if there
+    /// is none. `index` must be in `start..<(start + capacity)`.
+    @inlinable
+    mutating func take(_ index: Int) -> Element? {
+        slots[index & mask].take()
+    }
+
+    /// Moves the elements from `start` on to a ring with room for `index`.
+    @inlinable
+    mutating func grow(toFit index: Int, from start: Int) {
+        var grown = [Element?](repeating: nil, count: Self.roundedUp(index - start + 1))
+        let grownMask = grown.count - 1
+        for stored in start..<(start + slots.count) {
+            grown[stored & grownMask] = slots[stored & mask].take()
+        }
+        slots = grown
+    }
+}
+
+/// A first-in, first-out queue in a `RingBuffer`. It allocates only when it
+/// holds more elements than it has room for, and keeps no element it gave
+/// out.
+@usableFromInline
+struct FIFOQueue<Element> {
+    @usableFromInline var ring: RingBuffer<Element>
+    /// The index of the first element.
+    @usableFromInline var head = 0
+    /// The index the next element is stored at.
+    @usableFromInline var tail = 0
+
+    @inlinable
+    init(capacity: Int = 0) {
+        ring = RingBuffer(capacity: capacity)
+    }
 
     @inlinable
     mutating func append(_ element: Element) {
-        items.append(element)
+        ring.store(element, at: tail, from: head)
+        tail += 1
     }
 
     @inlinable
     mutating func popFirst() -> Element? {
-        guard head < items.count else {
+        guard head < tail else {
             return nil
         }
 
-        let element = items[head]
-        head += 1
-
-        if head == items.count {
-            items.removeAll(keepingCapacity: true)
-            head = 0
-        }
-        return element
+        defer { head += 1 }
+        return ring.take(head)
     }
 }
 
@@ -252,8 +340,9 @@ struct FIFOQueue<Element> {
 /// does not stop the workers. Only `bufferLimit` limits them.
 ///
 /// Up to `concurrency` workers start as needed, and each one loops over
-/// elements. Handoffs resume continuations, so once the workers run, an element
-/// needs no allocation.
+/// elements. Handoffs resume continuations, and the buffers are made with
+/// room for every element in flight (up to `preallocationLimit`), so once the
+/// workers run, an element needs no allocation.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 @usableFromInline
 final class ConcurrentMapPipeline<Element: Sendable, Order: DeliveryOrder>: Sendable {
@@ -341,7 +430,9 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
 
     @usableFromInline
     struct State {
-        /// Admitted elements that no worker has taken yet.
+        /// Admitted elements that no worker has taken yet. It is made with no
+        /// room: the reader waits for a free slot, and a free slot means a
+        /// worker is idle or another may start.
         @usableFromInline var queue = FIFOQueue<Work>()
         @usableFromInline var results: Order
         @usableFromInline var admitted = 0
@@ -362,6 +453,9 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
         init(concurrency: Int, bufferLimit: Int) {
             self.concurrency = concurrency
             results = Order(concurrency: concurrency, bufferLimit: bufferLimit)
+            // Room for every worker (up to `preallocationLimit`), so parking
+            // one does not allocate.
+            idle.reserveCapacity(preallocated(concurrency))
         }
 
         /// Whether a slot is free and the delivery order allows another element.
@@ -440,15 +534,6 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
                 consumer.resume(returning: next)
                 self.consumer = nil
             }
-        }
-
-        @inlinable
-        mutating func park(_ worker: Worker) {
-            if idle.capacity == 0 {
-                // Room for all workers. Growing allocates at each doubling.
-                idle.reserveCapacity(Swift.min(concurrency, 64))
-            }
-            idle.append(worker)
         }
 
         /// Resumes all waiting tasks but the reader. The reader called this
@@ -605,7 +690,7 @@ final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: S
                 return .some(nil)
             }
 
-            state.park(worker)
+            state.idle.append(worker)
             return nil
         }
     }

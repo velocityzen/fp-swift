@@ -19,6 +19,8 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
     ///   - bufferLimit: How many results may wait for an earlier, slower element.
     ///     Must be 0 or more. The default is `.max`, no limit. A limit below
     ///     `concurrency - 1` also lowers how many transforms run at the same time.
+    ///     With a limit, room for every result the stream can hold is made when
+    ///     it starts, up to 1,024 results, so its buffer never grows.
     ///   - transform: The transform for one element.
     ///
     /// ```swift

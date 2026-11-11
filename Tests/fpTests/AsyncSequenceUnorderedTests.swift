@@ -714,4 +714,178 @@ struct AsyncSequenceUnorderedTests {
         }
         #expect(results == expected)
     }
+
+    // MARK: - Memory
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test(
+        "mapAsyncUnordered keeps no result the consumer took",
+        .hangGuard,
+        arguments: [2, 8]
+    )
+    func unorderedReleasesTakenResults(concurrency: Int) async {
+        let count = 300
+        let counter = PayloadCounter()
+        let results = Numbers(count: count).mapAsyncUnordered(concurrency: concurrency) { _ in
+            Payload(counter)
+        }
+
+        let taken = await drainSlowly(results, concurrency: concurrency, count: count, counter)
+
+        #expect(taken == count)
+        // the results that hold slots, and each worker's last result, which
+        // it keeps until its next element
+        #expect(counter.peak <= 2 * concurrency + 1)
+        // Parked workers let go of their last results when they end, just
+        // after the stream does.
+        #expect(await counter.allReleased())
+    }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test(
+        "mapAsyncOrdered keeps no result the consumer took",
+        .hangGuard,
+        arguments: [2, 8]
+    )
+    func orderedReleasesTakenResults(concurrency: Int) async {
+        let count = 300
+        let counter = PayloadCounter()
+        // Early results take no slot, so without a limit a stalled worker
+        // lets any number of them pile up.
+        let results = Numbers(count: count).mapAsyncOrdered(
+            concurrency: concurrency,
+            bufferLimit: concurrency
+        ) { _ in
+            Payload(counter)
+        }
+
+        let taken = await drainSlowly(results, concurrency: concurrency, count: count, counter)
+
+        #expect(taken == count)
+        // as for `mapAsyncUnordered`, plus up to `bufferLimit` early results
+        #expect(counter.peak <= 3 * concurrency + 1)
+        // Parked workers let go of their last results when they end, just
+        // after the stream does.
+        #expect(await counter.allReleased())
+    }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    @Test(
+        "with a bufferLimit, the engine in source order never grows its buffer",
+        .hangGuard,
+        arguments: zip([2, 3, 8, 4], [2, 5, 8, 0])
+    )
+    func sourceOrderBufferNeverGrows(concurrency: Int, bufferLimit: Int) async {
+        let count = 300
+        let started = Mutex(0)
+        let pipeline = ConcurrentMapPipeline<Int, SourceOrder<Int>>(
+            source: Numbers(count: count),
+            concurrency: concurrency,
+            bufferLimit: bufferLimit,
+            passthrough: nil,
+            transform: { element in
+                started.withLock { $0 += 1 }
+                // Every 50th element waits until all the elements whose
+                // results may wait for it have started, so `bufferLimit`
+                // early results pile up behind it.
+                if element.isMultiple(of: 50) {
+                    let behind = Swift.min(count, element + bufferLimit + 1)
+                    while started.withLock({ $0 }) < behind {
+                        await Task.yield()
+                    }
+                }
+                return element
+            }
+        )
+        func room() -> Int {
+            pipeline.coordinator.state.withLock { $0.results.ready.slots.count }
+        }
+        let roomAtStart = room()
+
+        var results: [Int] = []
+        var widest = 0
+        while let value = await pipeline.next() {
+            results.append(value)
+            let window = pipeline.coordinator.state.withLock { state in
+                state.admitted - state.results.due
+            }
+            widest = Swift.max(widest, window)
+            if value.isMultiple(of: 7) {
+                await Task.yield()
+            }
+        }
+
+        #expect(results == Array(0..<count))
+        #expect(roomAtStart == concurrency + bufferLimit)
+        #expect(room() == roomAtStart)
+        // the buffer was used: early results piled up behind slow elements
+        #expect(widest >= bufferLimit)
+    }
+}
+
+/// Counts the `Payload`s made, the ones alive, and the most alive at once.
+private final class PayloadCounter: Sendable {
+    struct Counts {
+        var made = 0
+        var live = 0
+        var peak = 0
+    }
+
+    let counts = Mutex(Counts())
+
+    var made: Int { counts.withLock { $0.made } }
+    var live: Int { counts.withLock { $0.live } }
+    var peak: Int { counts.withLock { $0.peak } }
+
+    func add() {
+        counts.withLock { counts in
+            counts.made += 1
+            counts.live += 1
+            counts.peak = Swift.max(counts.peak, counts.live)
+        }
+    }
+
+    func remove() {
+        counts.withLock { $0.live -= 1 }
+    }
+
+    /// Waits up to 5 seconds for every payload to be released.
+    func allReleased() async -> Bool {
+        for _ in 0..<500 where live > 0 {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return live == 0
+    }
+}
+
+/// A result that its counter counts while it is alive.
+private final class Payload: Sendable {
+    let counter: PayloadCounter
+
+    init(_ counter: PayloadCounter) {
+        self.counter = counter
+        counter.add()
+    }
+
+    deinit {
+        counter.remove()
+    }
+}
+
+/// Takes every result, each only once every slot holds a result again, so
+/// results always wait for the consumer. Returns how many it took.
+private func drainSlowly<Results: AsyncSequence>(
+    _ results: Results,
+    concurrency: Int,
+    count: Int,
+    _ counter: PayloadCounter
+) async -> Int where Results.Element == Payload, Results.Failure == Never {
+    var taken = 0
+    for await _ in results {
+        taken += 1
+        while counter.made < Swift.min(count, taken + concurrency) {
+            await Task.yield()
+        }
+    }
+    return taken
 }
