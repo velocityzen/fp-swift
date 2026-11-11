@@ -17,12 +17,17 @@
 /// - Parameters:
 ///   - policy: Decides whether to retry, and how long to wait first.
 ///   - shouldRetry: Returns `true` for failures to retry. The default retries every failure.
+///   - requestedDelay: Returns the wait a failure asks for, for example from an HTTP
+///     `Retry-After` header, or `nil` if it asks for none. The policy gets it as
+///     ``RetryStatus/requestedDelay``, and waits it only if it uses it, for example with
+///     ``RetryPolicy/requestedDelay``. The default asks for no wait.
 ///   - clock: The clock for the waits. A wait of zero does not use it.
 ///   - action: The operation. It gets the current ``RetryStatus``.
 @inlinable
 public func withRetry<Success, Failure: Error, C: Clock<Duration>>(
     _ policy: RetryPolicy,
     while shouldRetry: (Failure) -> Bool = { _ in true },
+    requestedDelay: (Failure) -> Duration? = { _ in nil },
     clock: C = ContinuousClock(),
     _ action: (RetryStatus) async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
@@ -32,7 +37,7 @@ public func withRetry<Success, Failure: Error, C: Clock<Duration>>(
         guard case .failure(let error) = result, shouldRetry(error) else {
             return result
         }
-        let next = status.applying(policy)
+        let next = status.applying(policy, requestedDelay: requestedDelay(error))
         guard let delay = next.previousDelay, await clock.wait(delay) else {
             return result
         }
@@ -48,10 +53,16 @@ public func withRetry<Success, Failure: Error, C: Clock<Duration>>(
 public func withRetry<Success, Failure: Error, C: Clock<Duration>>(
     _ policy: RetryPolicy,
     while shouldRetry: (Failure) -> Bool = { _ in true },
+    requestedDelay: (Failure) -> Duration? = { _ in nil },
     clock: C = ContinuousClock(),
     _ action: () async -> Result<Success, Failure>
 ) async -> Result<Success, Failure> {
-    await withRetry(policy, while: shouldRetry, clock: clock) { _ in await action() }
+    await withRetry(
+        policy,
+        while: shouldRetry,
+        requestedDelay: requestedDelay,
+        clock: clock
+    ) { _ in await action() }
 }
 
 extension Clock<Duration> {

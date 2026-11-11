@@ -67,6 +67,28 @@ public extension RetryPolicy {
             base.doubled(times: status.iteration)
         }
     }
+
+    /// Waits as long as the last failure asked, or retries at once when it asked for nothing.
+    /// Never stops.
+    ///
+    /// The wait comes from the `requestedDelay` function of `withRetry`, for example from an
+    /// HTTP `Retry-After` header. Combine it with ``and(_:)``, so the policy waits at least as
+    /// long as the failure asks:
+    ///
+    /// ```swift
+    /// let serverPolicy = apiPolicy.and(.requestedDelay)
+    ///     .limitRetriesByDelay(.seconds(30))
+    /// ```
+    ///
+    /// Put ``capDelay(_:)`` and ``jitter(_:)`` before it, or they shorten the requested wait.
+    /// To give up when the failure asks for too long a wait, put ``limitRetriesByDelay(_:)``
+    /// after it.
+    @inlinable
+    static var requestedDelay: RetryPolicy {
+        RetryPolicy { status in
+            status.requestedDelay ?? .zero
+        }
+    }
 }
 
 // MARK: - Modifiers
@@ -131,7 +153,8 @@ public extension RetryPolicy {
 public extension RetryPolicy {
     /// Returns the steps of this policy when every attempt fails, without waiting.
     ///
-    /// The last step is where the policy stops. If the policy never stops, the sequence never
+    /// No failure asks for a wait, so ``RetryStatus/requestedDelay`` is always `nil`. The last
+    /// step is where the policy stops. If the policy never stops, the sequence never
     /// ends, so use `prefix`.
     ///
     /// ```swift

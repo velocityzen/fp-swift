@@ -7,7 +7,7 @@ import Testing
 
 private enum APIError: Error, Equatable {
     case timeout
-    case rateLimited
+    case rateLimited(retryAfter: Duration?)
     case server(status: Int)
     case notFound
 
@@ -18,6 +18,14 @@ private enum APIError: Error, Equatable {
             case .server(let status): status >= 500
             case .notFound: false
         }
+    }
+}
+
+extension APIError {
+    /// The wait from the Retry-After header, if the server sent one.
+    var retryAfter: Duration? {
+        guard case .rateLimited(let wait) = self else { return nil }
+        return wait
     }
 }
 
@@ -56,6 +64,28 @@ struct ReadmeRetryTests {
         #expect(user == .success(User(id: 1)))
         #expect(APIError.server(status: 503).isTransient)
         #expect(!APIError.notFound.isTransient)
+    }
+
+    @Test
+    func waitAsLongAsTheFailureAsks() async {
+        let serverPolicy = apiPolicy.and(.requestedDelay)
+            .limitRetriesByDelay(.seconds(30))
+
+        let user = await withRetry(
+            serverPolicy,
+            while: \.isTransient,
+            requestedDelay: \.retryAfter
+        ) {
+            await loadUser(id: 1)
+        }
+
+        #expect(user == .success(User(id: 1)))
+        #expect(APIError.rateLimited(retryAfter: .seconds(5)).retryAfter == .seconds(5))
+        #expect(APIError.timeout.retryAfter == nil)
+        // The server's wait wins over apiPolicy's, which is at most 2s.
+        #expect(serverPolicy(RetryStatus(requestedDelay: .seconds(10))) == .seconds(10))
+        // Past 30s, the policy gives up.
+        #expect(serverPolicy(RetryStatus(requestedDelay: .seconds(31))) == nil)
     }
 
     @Test

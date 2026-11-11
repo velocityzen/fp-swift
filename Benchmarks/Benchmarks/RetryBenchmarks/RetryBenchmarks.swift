@@ -25,6 +25,32 @@ func retryLoop(times: Int, _ action: () async -> IntResult) async -> IntResult {
     return result
 }
 
+/// The hand-written floor when each failure asks for a wait: read the wait,
+/// keep it at zero or more, and wait it before the retry.
+func retryLoop(
+    times: Int,
+    requested: (BenchError) -> Duration?,
+    _ action: () async -> IntResult
+) async -> IntResult {
+    var result = await action()
+    var retries = 0
+    while case .failure(let error) = result, retries < times {
+        let wait = max(requested(error) ?? .zero, .zero)
+        if wait > .zero {
+            try? await ContinuousClock().sleep(for: wait)
+        }
+        guard !Task.isCancelled else { break }
+        retries += 1
+        result = await action()
+    }
+    return result
+}
+
+/// Every failure asks for no wait, so nothing sleeps.
+func noWait(_: BenchError) -> Duration? {
+    .zero
+}
+
 let benchmarks: @Sendable () -> Void = {
     // MARK: First attempt succeeds
 
@@ -69,6 +95,22 @@ let benchmarks: @Sendable () -> Void = {
         Benchmark("withRetry failing composed", configuration: .fp(tags)) { benchmark in
             for _ in benchmark.scaledIterations {
                 blackHole(await withRetry(composed, fail))
+            }
+        }
+
+        // Every failure asks for a wait, and the policy compares it with its own.
+        let requested = RetryPolicy.limitRetries(times).and(.requestedDelay)
+
+        Benchmark("retry failing requested (baseline)", configuration: .fp(tags)) {
+            benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await retryLoop(times: times, requested: noWait, fail))
+            }
+        }
+
+        Benchmark("withRetry failing requested", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await withRetry(requested, requestedDelay: noWait, fail))
             }
         }
     }

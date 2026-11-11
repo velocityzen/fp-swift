@@ -31,7 +31,7 @@ You usually put this rule on your error type. `isTransient` is not part of FPRet
 ```swift
 enum APIError: Error, Equatable {
     case timeout
-    case rateLimited
+    case rateLimited(retryAfter: Duration?)
     case server(status: Int)
     case notFound
 
@@ -52,6 +52,37 @@ let user = await withRetry(apiPolicy, while: \.isTransient) {
 
 `\.isTransient` is a key path, used as a function. You can also write a closure: `while: { $0 != .notFound }`.
 
+## Wait as long as the failure asks
+
+Some failures say how long to wait. A server that answers 429 or 503 can send a `Retry-After` header. Pass `requestedDelay:` to read that wait from the failure, and add `.requestedDelay` to the policy with `and`:
+
+```swift
+extension APIError {
+    /// The wait from the Retry-After header, if the server sent one.
+    var retryAfter: Duration? {
+        guard case .rateLimited(let wait) = self else { return nil }
+        return wait
+    }
+}
+
+let serverPolicy = apiPolicy.and(.requestedDelay)
+    .limitRetriesByDelay(.seconds(30))
+
+let user = await withRetry(
+    serverPolicy,
+    while: \.isTransient,
+    requestedDelay: \.retryAfter
+) {
+    await loadUser(id: 1)
+}
+```
+
+`and` waits the longer of the two waits, so `serverPolicy` waits at least as long as the server asks. When the server asks for nothing, it waits as `apiPolicy` says. `limitRetriesByDelay` gives up when the server asks for more than 30 seconds.
+
+Put `.and(.requestedDelay)` after `capDelay` and `jitter`, or they shorten the wait the server asked for.
+
+FPRetry does not read HTTP headers. Your error type turns the header into a `Duration`, as `retryAfter` does here. The wait does not have to come from a server: any failure can ask for one.
+
 ## Use the retry status
 
 The action can take a `RetryStatus`, which tells you which attempt is running:
@@ -63,11 +94,12 @@ let user = await withRetry(apiPolicy) { status in
 }
 ```
 
-`RetryStatus` has three values:
+`RetryStatus` has four values:
 
 - `iteration`: the number of retries so far. It is `0` on the first attempt.
 - `cumulativeDelay`: the total time waited so far.
 - `previousDelay`: the last wait. It is `nil` on the first attempt.
+- `requestedDelay`: the wait the last failure asked for, from `requestedDelay:`. It is `nil` on the first attempt, and when the failure asked for no wait.
 
 ## Built-in policies
 
@@ -76,13 +108,14 @@ let user = await withRetry(apiPolicy) { status in
 | `.limitRetries(n)`                     | no wait                                             | after `n` retries                              |
 | `.constantDelay(d)`                    | `d`                                                 | never                                          |
 | `.exponentialBackoff(d)`               | `d`, `2d`, `4d`, …                                  | never                                          |
+| `.requestedDelay`                      | the wait the last failure asked for, or no wait     | never                                          |
 | `p.and(q)`                             | the longer wait of `p` and `q`                      | when `p` or `q` stops                          |
 | `p.capDelay(max)`                      | the wait of `p`, at most `max`                      | when `p` stops                                 |
 | `p.limitRetriesByDelay(max)`           | the wait of `p`                                     | when the next wait is longer than `max`        |
 | `p.limitRetriesByCumulativeDelay(max)` | the wait of `p`                                     | when the total wait would be longer than `max` |
 | `p.jitter(range)`                      | the wait of `p`, times a random number from `range` | when `p` stops                                 |
 
-`constantDelay` and `exponentialBackoff` never stop by themselves. Combine them with a limit, for example `.and(.limitRetries(5))`.
+`constantDelay`, `exponentialBackoff` and `requestedDelay` never stop by themselves. Combine them with a limit, for example `.and(.limitRetries(5))`.
 
 ## Jitter
 
@@ -96,7 +129,7 @@ The range holds multipliers, not durations:
 | `.jitter(0.5...1)`   | from half the wait to the full wait                    |
 | `.jitter(0.8...1.2)` | the wait, plus or minus 20%                            |
 
-Put `jitter` last, after `capDelay`.
+Put `jitter` after `capDelay`, and before `.and(.requestedDelay)`.
 
 For tests that need the same random numbers every time, pass a seeded generator. The standard library has none, so write your own. SplitMix64 takes only a few lines. Here it is called `SeededGenerator`:
 

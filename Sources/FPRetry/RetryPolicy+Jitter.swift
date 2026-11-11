@@ -11,7 +11,8 @@ public extension RetryPolicy {
     /// - `0.5...1`: from half the wait to the full wait.
     /// - `0.8...1.2`: the wait, plus or minus 20%.
     ///
-    /// Put jitter last, after ``capDelay(_:)``. A multiplier of zero or less means no wait. The
+    /// Put jitter after ``capDelay(_:)`` and before ``requestedDelay``, so the random wait never
+    /// shortens a wait the failure asked for. A multiplier of zero or less means no wait. The
     /// status records the random wait.
     ///
     /// - Parameter range: The multipliers, not durations. Must be finite.
