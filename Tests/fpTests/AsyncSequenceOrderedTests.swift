@@ -774,10 +774,13 @@ struct AsyncSequenceOrderedTests {
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     @Test("mapAsyncOrdered does not run ahead of a slow consumer", .hangGuard)
     func backpressureBoundsWorkAheadOfConsumer() async {
+        let concurrency = 3
+        // Early results take no slot, so without a limit a worker slow to
+        // hand over its result lets the others run ahead. Transforms that
+        // finish in source order do not prevent that: workers hand results
+        // over in the order they take the lock, not the order they finish.
+        let bufferLimit = concurrency
         let started = AsyncCounter()
-        // Results that finish before an earlier element take no slot, so
-        // the transforms finish in source order to keep the bound exact.
-        let inOrder = InSourceOrder()
         let source = AsyncStream<Int> { continuation in
             for i in 1...100 {
                 continuation.yield(i)
@@ -786,10 +789,10 @@ struct AsyncSequenceOrderedTests {
         }
 
         let mapped = source.mapAsyncOrdered(
-            concurrency: 3,
+            concurrency: concurrency,
+            bufferLimit: bufferLimit,
             { (element: Int) -> Int in
                 await started.increment()
-                await inOrder.finish(element)
                 return element
             }
         )
@@ -803,8 +806,9 @@ struct AsyncSequenceOrderedTests {
         let observedStarted = await started.count
         #expect(first == 1)
         #expect(second == 2)
-        // two consumed, plus at most `concurrency` running or waiting
-        #expect(observedStarted <= 5)
+        // two consumed, plus at most `concurrency` running or waiting and
+        // `bufferLimit` early results
+        #expect(observedStarted <= 2 + concurrency + bufferLimit)
     }
 
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
@@ -1180,20 +1184,5 @@ struct AsyncSequenceOrderedTests {
 
             #expect(await consumer.value == Array(0..<stopAfter))
         }
-    }
-}
-
-/// Lets the transforms of elements 1, 2, 3… finish only in that order, so no
-/// result ever finishes before an earlier element.
-private actor InSourceOrder {
-    private var next = 1
-    private var waiting: [Int: CheckedContinuation<Void, Never>] = [:]
-
-    func finish(_ element: Int) async {
-        if element != next {
-            await withCheckedContinuation { waiting[element] = $0 }
-        }
-        next = element + 1
-        waiting.removeValue(forKey: next)?.resume()
     }
 }

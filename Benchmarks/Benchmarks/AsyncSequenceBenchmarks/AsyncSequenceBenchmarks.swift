@@ -43,10 +43,14 @@ let benchmarks: @Sendable () -> Void = {
         for concurrency in [1, 8, 64] {
             let tags = ["n": "\(n)", "concurrency": "\(concurrency)"]
 
-            Benchmark(
-                "mapAsyncOrdered",
-                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
-            ) { benchmark in
+            let configuration = Benchmark.Configuration.fp(
+                tags,
+                scaling: streamScaling,
+                concurrency: concurrency,
+                elements: n
+            )
+
+            Benchmark("mapAsyncOrdered", configuration: configuration) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
                         await drain(source.mapAsyncOrdered(concurrency: concurrency) { $0 &* 2 })
@@ -58,10 +62,14 @@ let benchmarks: @Sendable () -> Void = {
         for concurrency in [1, 8] {
             let tags = ["n": "\(n)", "concurrency": "\(concurrency)"]
 
-            Benchmark(
-                "mapAsyncOrdered Result",
-                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
-            ) { benchmark in
+            let configuration = Benchmark.Configuration.fp(
+                tags,
+                scaling: streamScaling,
+                concurrency: concurrency,
+                elements: n
+            )
+
+            Benchmark("mapAsyncOrdered Result", configuration: configuration) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
                         await drain(results.mapAsyncOrdered(concurrency: concurrency) { $0 &* 2 })
@@ -69,10 +77,7 @@ let benchmarks: @Sendable () -> Void = {
                 }
             }
 
-            Benchmark(
-                "flatMapAsyncOrdered Result",
-                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
-            ) { benchmark in
+            Benchmark("flatMapAsyncOrdered Result", configuration: configuration) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
                         await drain(
@@ -85,10 +90,7 @@ let benchmarks: @Sendable () -> Void = {
             }
 
             // Every other element is dropped.
-            Benchmark(
-                "compactMapAsyncOrdered",
-                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
-            ) { benchmark in
+            Benchmark("compactMapAsyncOrdered", configuration: configuration) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
                         await drain(
@@ -108,7 +110,8 @@ let benchmarks: @Sendable () -> Void = {
             configuration: .fp(
                 ["n": "\(n)", "concurrency": "8"],
                 scaling: streamScaling,
-                workerPool: true
+                concurrency: 8,
+                elements: n
             )
         ) { benchmark in
             for _ in benchmark.scaledIterations {
@@ -155,10 +158,14 @@ let benchmarks: @Sendable () -> Void = {
         for concurrency in [1, 8, 64] {
             let tags = ["n": "\(n)", "concurrency": "\(concurrency)"]
 
-            Benchmark(
-                "mapAsyncUnordered",
-                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
-            ) { benchmark in
+            let configuration = Benchmark.Configuration.fp(
+                tags,
+                scaling: streamScaling,
+                concurrency: concurrency,
+                elements: n
+            )
+
+            Benchmark("mapAsyncUnordered", configuration: configuration) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
                         await drain(source.mapAsyncUnordered(concurrency: concurrency) { $0 &* 2 })
@@ -170,11 +177,15 @@ let benchmarks: @Sendable () -> Void = {
         for concurrency in [1, 8] {
             let tags = ["n": "\(n)", "concurrency": "\(concurrency)"]
 
+            let configuration = Benchmark.Configuration.fp(
+                tags,
+                scaling: streamScaling,
+                concurrency: concurrency,
+                elements: n
+            )
+
             // Every other element is dropped.
-            Benchmark(
-                "compactMapAsyncUnordered",
-                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
-            ) { benchmark in
+            Benchmark("compactMapAsyncUnordered", configuration: configuration) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
                         await drain(
@@ -186,10 +197,7 @@ let benchmarks: @Sendable () -> Void = {
                 }
             }
 
-            Benchmark(
-                "mapAsyncUnordered Result",
-                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
-            ) { benchmark in
+            Benchmark("mapAsyncUnordered Result", configuration: configuration) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
                         await drain(results.mapAsyncUnordered(concurrency: concurrency) { $0 &* 2 })
@@ -197,10 +205,7 @@ let benchmarks: @Sendable () -> Void = {
                 }
             }
 
-            Benchmark(
-                "flatMapAsyncUnordered Result",
-                configuration: .fp(tags, scaling: streamScaling, workerPool: concurrency > 1)
-            ) { benchmark in
+            Benchmark("flatMapAsyncUnordered Result", configuration: configuration) { benchmark in
                 for _ in benchmark.scaledIterations {
                     blackHole(
                         await drain(
@@ -218,7 +223,8 @@ let benchmarks: @Sendable () -> Void = {
             configuration: .fp(
                 ["n": "\(n)", "concurrency": "8"],
                 scaling: streamScaling,
-                workerPool: true
+                concurrency: 8,
+                elements: n
             )
         ) { benchmark in
             for _ in benchmark.scaledIterations {
