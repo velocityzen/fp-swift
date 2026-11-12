@@ -18,8 +18,15 @@ env:
   SWIFTLY_SHA256: a1b48692b00ea6902957423473c87bee7c7f3e18c015a4a09317102f6820b987
 
 jobs:
+  # When a change touches .github, zizmor audits the workflows and actions
+  # first; every other job waits for it.
+  zizmor:
+    name: zizmor
+    uses: $/.github/workflows/zizmor.yml
+
   lint:
     name: Lint
+    needs: zizmor
     runs-on: macos-26
     env:
       # swift-format comes with the toolchain, so it is pinned with it.
@@ -53,6 +60,7 @@ jobs:
 
   test-macos:
     name: Run macOS Tests
+    needs: zizmor
     runs-on: macos-26
     env:
       SWIFT_VERSION: "6.4"
@@ -86,6 +94,7 @@ jobs:
 
   test-simulators:
     name: Run ${{ matrix.platform }} Simulator Tests
+    needs: zizmor
     runs-on: macos-26
     strategy:
       fail-fast: false
@@ -134,6 +143,7 @@ jobs:
 
   test-linux:
     name: Run Linux Tests (Swift ${{ matrix.swift }})
+    needs: zizmor
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

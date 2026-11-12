@@ -17,8 +17,15 @@ env:
   SWIFT_VERSION: "6.4"
 
 jobs:
+  # When a change touches .github, zizmor audits the workflows and actions
+  # first; every other job waits for it.
+  zizmor:
+    name: zizmor
+    uses: $/.github/workflows/zizmor.yml
+
   compare:
     name: Compare Benchmarks
+    needs: zizmor
     runs-on: macos-26
     timeout-minutes: 45
 

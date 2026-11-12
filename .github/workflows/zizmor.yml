@@ -1,0 +1,53 @@
+name: zizmor
+
+# Called first by the other workflows here, whose jobs wait for it. When a
+# push or pull request changes anything in .github, zizmor audits the
+# workflows and actions, and a finding stops every other job before it runs.
+on:
+  workflow_call:
+
+# The job only reads the repository; zizmor's online audits only read public
+# data.
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The commit to compare with must be in the history.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # A pull request is compared with its base branch, a push with the
+      # commit it was pushed on top of. When that commit is unknown (a new
+      # branch, a force push), everything is audited.
+      - name: Find changes to .github
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null \
+              && git diff --quiet "$BASE_SHA" HEAD -- .github; then
+            echo "Nothing in .github changed, so there is nothing to audit."
+            echo "audit=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "audit=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run zizmor
+        if: steps.changes.outputs.audit == 'true'
+        uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+        with:
+          # Pinned like the action, so a new zizmor release cannot fail CI
+          # unnoticed.
+          version: "1.32.0"
+          # Findings go to the log and annotations and fail the job. Uploading
+          # them to code scanning would need a write token.
+          advanced-security: false
+          annotations: true
