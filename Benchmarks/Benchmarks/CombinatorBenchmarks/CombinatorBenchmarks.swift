@@ -149,8 +149,17 @@ let benchmarks: @Sendable () -> Void = {
     // MARK: withTimeout
 
     // The operation wins every time, so this is the cost of starting and
-    // cancelling the timer task.
-    Benchmark("withTimeout", configuration: .fp()) { benchmark in
+    // cancelling the timer task. Whether the timer task is already asleep
+    // when it is cancelled is a race, and asleep costs one more retain,
+    // release and malloc. On a single-thread pool it always is; the default
+    // pool mixes the two by the machine's load, which has moved the median
+    // by half a retain per call between runs of the same code on CI.
+    let timerRace: [BenchmarkMetric: Int] = [
+        .mallocCountTotal: 1,
+        .retainCount: 1,
+        .releaseCount: 1,
+    ]
+    Benchmark("withTimeout", configuration: .fp(raceSwing: timerRace)) { benchmark in
         for _ in benchmark.scaledIterations {
             blackHole(
                 await withTimeout(.seconds(60), failingWith: BenchError()) { await succeed(1) }

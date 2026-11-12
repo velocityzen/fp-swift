@@ -85,17 +85,30 @@ jobs:
         run: |
           swift package benchmark baseline read head --format markdown --no-progress >> "$GITHUB_STEP_SUMMARY"
 
+      # A step's summary holds at most 1 MiB, which every metric of every
+      # benchmark can pass, so a comparison too large for it goes to this
+      # step's log instead.
       - name: Report changes
         if: steps.commits.outputs.base != ''
         working-directory: Benchmarks
         run: |
-          {
-            echo "<details><summary>Every metric, base commit vs this commit</summary>"
-            echo
-            swift package benchmark baseline compare base head --format markdown --no-progress
-            echo
-            echo "</details>"
-          } >> "$GITHUB_STEP_SUMMARY"
+          swift package benchmark baseline compare base head --format markdown --no-progress \
+              > "$RUNNER_TEMP/compare.md"
+          size=$(wc -c < "$RUNNER_TEMP/compare.md")
+          if [ "$size" -le $((1000 * 1024)) ]; then
+            {
+              echo "<details><summary>Every metric, base commit vs this commit</summary>"
+              echo
+              cat "$RUNNER_TEMP/compare.md"
+              echo
+              echo "</details>"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Every metric, base commit vs this commit, is $((size / 1024)) KiB, too large for this summary; it is in the log of the Report changes step." >> "$GITHUB_STEP_SUMMARY"
+            echo "::group::Every metric, base commit vs this commit"
+            cat "$RUNNER_TEMP/compare.md"
+            echo "::endgroup::"
+          fi
 
       # Fails only on the metrics the benchmarks give thresholds to: malloc,
       # object-allocation, retain and release counts. Times on a shared

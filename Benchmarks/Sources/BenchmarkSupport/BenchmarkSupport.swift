@@ -78,10 +78,17 @@ func workerPoolAllowance(_ metric: BenchmarkMetric, concurrency: Int, elements: 
     }
 }
 
+/// How far, as a share of one call, a checked count of a racing benchmark
+/// may move beyond its `raceSwing` before `baseline check` reports it. In a
+/// sample of 1,000 calls half a call is far above the few allocations and
+/// retains of the benchmark harness, and half of one more per call.
+let raceCallShare = 0.5
+
 func fpThresholds(
     scaling: BenchmarkScalingFactor,
     concurrency: Int,
-    elements: Int
+    elements: Int,
+    raceSwing: [BenchmarkMetric: Int]
 ) -> [BenchmarkMetric: BenchmarkThresholds] {
     Dictionary(
         uniqueKeysWithValues: fpMetrics.map { metric in
@@ -90,7 +97,15 @@ func fpThresholds(
             }
 
             guard concurrency > 1 else {
-                return (metric, BenchmarkThresholds(relative: [.p50: checkedTolerance]))
+                guard !raceSwing.isEmpty else {
+                    return (metric, BenchmarkThresholds(relative: [.p50: checkedTolerance]))
+                }
+
+                // Absolute thresholds apply to raw samples, which cover
+                // `scaling` calls each.
+                let perCall = Double(raceSwing[metric] ?? 0) + raceCallShare
+                let allowance = Int(perCall * Double(scaling.rawValue))
+                return (metric, BenchmarkThresholds(absolute: [.p50: allowance]))
             }
 
             // Absolute thresholds apply to raw samples, which cover
@@ -115,13 +130,21 @@ public extension Benchmark.Configuration {
     /// For a concurrent map, pass its `concurrency` and the `elements` of its
     /// source. Above `concurrency: 1` its checked counts depend on how many
     /// workers its pool starts (see `workerPoolAllowance`).
+    ///
+    /// For a call that takes one of two paths by a race the benchmark cannot
+    /// control, pass `raceSwing`: per checked metric, how much more its
+    /// costlier path counts. Which path calls take moves with the machine's
+    /// load, so its checked counts may move by that much plus half a call
+    /// (`raceCallShare`) rather than by a percentage.
     static func fp(
         _ tags: [String: String] = [:],
         scaling: BenchmarkScalingFactor = .kilo,
         concurrency: Int = 1,
-        elements: Int = 0
+        elements: Int = 0,
+        raceSwing: [BenchmarkMetric: Int] = [:]
     ) -> Self {
         precondition(concurrency == 1 || elements > 0, "a concurrent map needs its elements")
+        precondition(concurrency == 1 || raceSwing.isEmpty, "a concurrent map has an allowance")
         return .init(
             metrics: fpMetrics,
             tags: tags,
@@ -129,7 +152,12 @@ public extension Benchmark.Configuration {
             scalingFactor: scaling,
             maxDuration: .seconds(1),
             maxIterations: 10_000,
-            thresholds: fpThresholds(scaling: scaling, concurrency: concurrency, elements: elements)
+            thresholds: fpThresholds(
+                scaling: scaling,
+                concurrency: concurrency,
+                elements: elements,
+                raceSwing: raceSwing
+            )
         )
     }
 }
