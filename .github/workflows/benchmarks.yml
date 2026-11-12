@@ -6,6 +6,10 @@ on:
   pull_request:
     types: [opened, reopened, synchronize]
 
+# The job only reads the repository; it needs no write token.
+permissions:
+  contents: read
+
 env:
   # Same pinned toolchain installer as tests.yml.
   SWIFTLY_VERSION: "1.2.0"
@@ -20,10 +24,11 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The commit to compare with is benchmarked too, so fetch history.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install Swift ${{ env.SWIFT_VERSION }}
         run: |
