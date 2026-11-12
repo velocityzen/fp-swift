@@ -1,0 +1,15 @@
+{
+  "originHash" : "8a50f9e1179c7c6578b56932ce7ba57caa5656586ff73331fbe9b205751ead54",
+  "pins" : [
+    {
+      "identity" : "hegel-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/velocityzen/hegel-swift",
+      "state" : {
+        "revision" : "2237c9255374fe2b01eebf919a33105d6d7cc9e1",
+        "version" : "0.51.0"
+      }
+    }
+  ],
+  "version" : 3
+}

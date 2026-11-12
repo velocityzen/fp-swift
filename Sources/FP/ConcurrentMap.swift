@@ -406,6 +406,19 @@ final class ConcurrentMapPipeline<Element: Sendable, Order: DeliveryOrder>: Send
         coordinator.cancel()
         root.cancel()
     }
+
+    /// Cancels from a task cancellation handler, in a new task.
+    ///
+    /// The runtime holds a lock on the cancelled task while its handlers run,
+    /// and resuming that task takes the same lock. The coordinator resumes
+    /// tasks under its own lock, so a handler that took the coordinator's lock
+    /// could wait for a worker that waits for the handler.
+    @inlinable
+    func cancelFromHandler() {
+        Task.detached { [self] in
+            cancel()
+        }
+    }
 }
 
 /// The state that the reader, the workers and the consumer of a
@@ -418,6 +431,10 @@ final class ConcurrentMapPipeline<Element: Sendable, Order: DeliveryOrder>: Send
 /// A parked task can be resumed before it reaches its `await`. ThreadSanitizer
 /// then sees no sync and reports a false race. So resumes happen under the
 /// lock, and a resumed task takes the lock once more.
+///
+/// Resuming a task takes the runtime's lock on that task, so this lock must
+/// never be taken while the runtime holds one: never in a task cancellation
+/// handler. Handlers call `ConcurrentMapPipeline.cancelFromHandler()`.
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 @usableFromInline
 final class ConcurrentMapCoordinator<Element: Sendable, Order: DeliveryOrder>: Sendable {

@@ -33,14 +33,13 @@ extension Duration {
     /// The wait times `2^exponent`, at most the maximum. Zero when the wait is zero or less.
     @inlinable
     func doubled(times exponent: Int) -> Duration {
-        let base = clampedToRetryDelay
-        guard base > .zero else { return .zero }
-        // Keeps `1 << exponent` inside an `Int`. After this many doublings, even a 1ns wait is
-        // years long.
-        guard exponent < Int.bitWidth - 2 else { return RetryPolicy.maximumDelay }
-        let factor = 1 << max(exponent, 0)
-        return base > RetryPolicy.maximumDelay / factor
-            ? RetryPolicy.maximumDelay
-            : base * factor
+        let base = clampedToRetryDelay.attoseconds
+        guard base > 0 else { return .zero }
+        // Doubles in attoseconds, the exact count. The maximum is under 2^113 attoseconds, so
+        // after 113 doublings even a 1-attosecond wait is past it.
+        let maximum = RetryPolicy.maximumDelay.attoseconds
+        let shift = max(exponent, 0)
+        guard shift < 113, base <= maximum >> shift else { return RetryPolicy.maximumDelay }
+        return Duration(attoseconds: base << shift)
     }
 }

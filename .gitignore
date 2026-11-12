@@ -9,3 +9,6 @@ DerivedData/
 .claude
 /Benchmarks/.build
 /Benchmarks/.benchmarkBaselines
+
+# Hegel property-test failures, replayed first on the next run
+.hegel/

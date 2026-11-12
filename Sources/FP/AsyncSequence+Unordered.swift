@@ -192,11 +192,24 @@ where Base.Element: Sendable, Base.Failure == Never {
                 return await sequential?.next(isolation: actor)
             }
 
-            return await withTaskCancellationHandler {
+            // A cancelled task ends the stream at once. The handler covers a
+            // cancel while this waits, and cannot cancel in place (see
+            // `cancelFromHandler()`), so a result that arrives meanwhile is
+            // dropped here.
+            if Task.isCancelled {
+                pipeline.cancel()
+                return nil
+            }
+            let value = await withTaskCancellationHandler {
                 await pipeline.next()
             } onCancel: {
-                pipeline.cancel()
+                pipeline.cancelFromHandler()
             }
+            if Task.isCancelled {
+                pipeline.cancel()
+                return nil
+            }
+            return value
         }
     }
 }

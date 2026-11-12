@@ -46,6 +46,18 @@ struct RetryPolicyTests {
         )
     }
 
+    @Test("exponentialBackoff keeps doubling a small delay past 62 retries")
+    func exponentialBackoffSmallBase() {
+        let policy = RetryPolicy.exponentialBackoff(.milliseconds(1))
+        #expect(policy(RetryStatus(iteration: 62)) == .milliseconds(1) * (1 << 62))
+        #expect(policy(RetryStatus(iteration: 63)) == RetryPolicy.maximumDelay)
+
+        let tiny = RetryPolicy.exponentialBackoff(Duration(attoseconds: 1))
+        #expect(tiny(RetryStatus(iteration: 62)) == Duration(attoseconds: 1 << 62))
+        #expect(tiny(RetryStatus(iteration: 112)) == Duration(attoseconds: Int128(1) << 112))
+        #expect(tiny(RetryStatus(iteration: 113)) == RetryPolicy.maximumDelay)
+    }
+
     @Test("exponentialBackoff of a delay that is not positive retries at once")
     func exponentialBackoffNonPositive() {
         #expect(delays(.exponentialBackoff(.zero), prefix: 3) == [.zero, .zero, .zero])

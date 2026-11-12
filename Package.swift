@@ -17,6 +17,11 @@ let package = Package(
             targets: ["FPRetry"]
         ),
     ],
+    dependencies: [
+        // Property-based tests. Test targets only, so FP's users never
+        // fetch it.
+        .package(url: "https://github.com/velocityzen/hegel-swift", from: "0.51.0")
+    ],
     targets: [
         .target(
             name: "FP",
@@ -39,6 +44,14 @@ let package = Package(
         .testTarget(
             name: "FPRetryTests",
             dependencies: ["FPRetry"]
+        ),
+        .testTarget(
+            name: "FPPropertyTests",
+            dependencies: [
+                "FP",
+                "FPRetry",
+                .product(name: "HegelTesting", package: "hegel-swift"),
+            ]
         ),
     ]
 )

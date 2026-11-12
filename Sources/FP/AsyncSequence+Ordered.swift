@@ -182,7 +182,7 @@ extension AsyncSequence where Self: Sendable, Failure == Never, Element: Sendabl
         )
         return AsyncStream(
             unfolding: { await pipeline.next() },
-            onCancel: { pipeline.cancel() }
+            onCancel: { pipeline.cancelFromHandler() }
         )
     }
 }

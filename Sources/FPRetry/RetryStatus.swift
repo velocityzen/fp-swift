@@ -63,8 +63,8 @@ public extension RetryStatus {
     /// Returns the next status, after asking `policy` whether to retry.
     ///
     /// The policy sees this status, with `requestedDelay` as its ``requestedDelay``. Then
-    /// ``iteration`` grows by one. If the policy retries, its wait becomes ``previousDelay``
-    /// and is added to ``cumulativeDelay``.
+    /// ``iteration`` grows by one, and stays at `Int.max` once there. If the policy retries,
+    /// its wait becomes ``previousDelay`` and is added to ``cumulativeDelay``.
     ///
     /// - Parameters:
     ///   - policy: Decides whether to retry, and how long to wait first.
@@ -80,17 +80,26 @@ public extension RetryStatus {
         )
         guard let delay = policy(current)?.clampedToRetryDelay else {
             return RetryStatus(
-                unclamped: iteration + 1,
+                unclamped: nextIteration,
                 cumulativeDelay: cumulativeDelay,
                 previousDelay: nil,
                 requestedDelay: requested
             )
         }
         return RetryStatus(
-            unclamped: iteration + 1,
+            unclamped: nextIteration,
             cumulativeDelay: cumulativeDelay.addingRetryDelay(delay),
             previousDelay: delay,
             requestedDelay: requested
         )
+    }
+}
+
+extension RetryStatus {
+    /// The next iteration. It stops at `Int.max` instead of overflowing, like the waits
+    /// stop at ``RetryPolicy/maximumDelay``.
+    @inlinable
+    var nextIteration: Int {
+        iteration == .max ? .max : iteration + 1
     }
 }
