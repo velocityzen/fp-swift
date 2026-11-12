@@ -20,7 +20,7 @@ let package = Package(
     dependencies: [
         // Property-based tests. Test targets only, so FP's users never
         // fetch it.
-        .package(url: "https://github.com/velocityzen/hegel-swift", from: "0.51.0")
+        .package(url: "https://github.com/velocityzen/hegel-swift", from: "0.51.1")
     ],
     targets: [
         .target(

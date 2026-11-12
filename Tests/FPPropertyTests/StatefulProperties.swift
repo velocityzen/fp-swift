@@ -15,21 +15,21 @@
 
     let queueMachine = StateMachine<QueueModel>()
         .rule("append", weight: 2) { s, tc in
-            let x = try tc.draw(.int(), named: "x")
+            let x = try #draw(.int(), from: tc)
             s.queue.append(x)
             s.model.append(x)
         }
         .rule("appendMany") { s, tc in
             // Enough at once to grow the ring past its capacity, often more than once.
             // Memory bounds the long branch.
-            let count = try tc.draw(.oneOf(.int(in: 0...10), .int(in: 0...5_000)), named: "count")
+            let count = try #draw(.oneOf(.int(in: 0...10), .int(in: 0...5_000)), from: tc)
             for x in 0..<count {
                 s.queue.append(x)
                 s.model.append(x)
             }
         }
         .rule("popMany") { s, tc in
-            let count = try tc.draw(.oneOf(.int(in: 0...10), .int(in: 0...5_000)), named: "count")
+            let count = try #draw(.oneOf(.int(in: 0...10), .int(in: 0...5_000)), from: tc)
             for _ in 0..<count {
                 #expect(s.queue.popFirst() == (s.model.isEmpty ? nil : s.model.removeFirst()))
             }
@@ -55,17 +55,17 @@
     let ringMachine = StateMachine<RingModel>()
         .rule("store") { s, tc in
             // The ring grows to fit the offset, so memory bounds it.
-            let offset = try tc.draw(
+            let offset = try #draw(
                 .oneOf(.int(in: 0...20), .int(in: 0...(1 << 20))),
-                named: "offset"
+                from: tc
             )
-            let x = try tc.draw(.int(), named: "x")
+            let x = try #draw(.int(), from: tc)
             s.ring.store(x, at: s.start + offset, from: s.start)
             s.model[s.start + offset] = x
         }
         .rule("take") { s, tc in
             try tc.assume(!s.ring.slots.isEmpty)
-            let offset = try tc.draw(.int(in: 0...(s.ring.slots.count - 1)), named: "offset")
+            let offset = try #draw(.int(in: 0...(s.ring.slots.count - 1)), from: tc)
             #expect(s.ring.take(s.start + offset) == s.model.removeValue(forKey: s.start + offset))
         }
         .rule("advance") { s, _ in
@@ -140,8 +140,8 @@
         }
         .rule("finish", weight: 2) { s, tc in
             try tc.assume(!s.running.isEmpty)
-            let which = try tc.draw(.int(in: 0...(s.running.count - 1)), named: "which")
-            let dropped = try tc.draw(.bool(), named: "dropped")
+            let which = try #draw(.int(in: 0...(s.running.count - 1)), from: tc)
+            let dropped = try #draw(.bool(), from: tc)
             let index = s.running.remove(at: which)
             let result: Int? = dropped ? nil : index &* 7
             s.results[index] = .some(result)
@@ -227,7 +227,7 @@
 
     let gateMachine = ConcurrentStateMachine<GateRig>(steps: 80, concurrency: 2...4)
         .rule("open") { rig, tc in
-            let x = try tc.draw(.int(), named: "x")
+            let x = try #draw(.int(), from: tc)
             rig.calls.withLock {
                 $0.values.insert(x)
                 $0.opens += 1
@@ -235,7 +235,7 @@
             rig.gate.open(with: x)
         }
         .rule("arrive", weight: 3) { rig, tc in
-            let x = try tc.draw(.int(), named: "x")
+            let x = try #draw(.int(), from: tc)
             rig.calls.withLock {
                 $0.values.insert(x)
                 $0.arrivals += 1
@@ -271,7 +271,7 @@
         @Test(.hegel(testCases: 300))
         func fifoQueue() throws {
             try property { tc in
-                let capacity = try tc.draw(Self.capacity, named: "capacity")
+                let capacity = try #draw(Self.capacity, from: tc)
                 try queueMachine.run(tc, from: QueueModel(queue: FIFOQueue(capacity: capacity)))
             }
         }
@@ -279,13 +279,13 @@
         @Test(.hegel(testCases: 300))
         func ringBuffer() throws {
             try property { tc in
-                let capacity = try tc.draw(Self.capacity, named: "capacity")
+                let capacity = try #draw(Self.capacity, from: tc)
                 // Indices count elements, so they can get large in a long
                 // stream; the ring must mask them the same way.
                 // Any start that leaves room for the offsets after it.
-                let start = try tc.draw(
+                let start = try #draw(
                     .oneOf(.just(0), .int(in: 0...(Int.max - (1 << 22)))),
-                    named: "start"
+                    from: tc
                 )
                 try ringMachine.run(
                     tc,
@@ -297,13 +297,13 @@
         @Test(.hegel(testCases: 300))
         func sourceOrder() throws {
             try property { tc in
-                let concurrency = try tc.draw(
+                let concurrency = try #draw(
                     .oneOf(.int(in: 1...4), .int(in: 1...Int.max), .just(.max)),
-                    named: "concurrency"
+                    from: tc
                 )
-                let bufferLimit = try tc.draw(
+                let bufferLimit = try #draw(
                     .oneOf(.int(in: 0...4), .int(in: 0...Int.max), .just(.max)),
-                    named: "bufferLimit"
+                    from: tc
                 )
                 try orderMachine.run(
                     tc,
@@ -317,7 +317,7 @@
             try await property { tc in
                 // No parties, or fewer than can arrive, or more; a gate with no
                 // parties, or a negative count, opens only with `open`.
-                let parties = try tc.draw(
+                let parties = try #draw(
                     .oneOf(
                         .int(in: 0...6),
                         .int(in: 7...60),
@@ -326,7 +326,7 @@
                         // `Int.min` that the arrivals cannot overflow.
                         .int(in: (Int.min + 1_000)...(-1))
                     ),
-                    named: "parties"
+                    from: tc
                 )
                 try await gateMachine.run(tc, from: GateRig(parties: parties))
             }

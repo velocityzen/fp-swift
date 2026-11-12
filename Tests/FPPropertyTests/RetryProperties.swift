@@ -288,7 +288,7 @@
         @Test(.hegel(testCases: 1_000))
         func clampingStaysInRange() throws {
             try property { tc in
-                let d = try tc.draw(RetryGen.duration, named: "d")
+                let d = try #draw(RetryGen.duration, from: tc)
                 #expect(d.clampedToRetryDelay == Exact.clampedDuration(d))
             }
         }
@@ -296,8 +296,8 @@
         @Test(.hegel(testCases: 1_000))
         func addingSaturates() throws {
             try property { tc in
-                let a = Exact.clampedDuration(try tc.draw(RetryGen.duration, named: "a"))
-                let b = Exact.clampedDuration(try tc.draw(RetryGen.duration, named: "b"))
+                let a = Exact.clampedDuration(try #draw(RetryGen.duration, from: tc))
+                let b = Exact.clampedDuration(try #draw(RetryGen.duration, from: tc))
                 #expect(a.addingRetryDelay(b) == Exact.adding(a, b))
             }
         }
@@ -305,8 +305,8 @@
         @Test(.hegel(testCases: 1_000))
         func doublingIsExactUntilTheMaximum() throws {
             try property { tc in
-                let base = try tc.draw(RetryGen.duration, named: "base")
-                let exponent = try tc.draw(.oneOf(.int(in: -2...70), .int()), named: "exponent")
+                let base = try #draw(RetryGen.duration, from: tc)
+                let exponent = try #draw(.oneOf(.int(in: -2...70), .int()), from: tc)
                 #expect(base.doubled(times: exponent) == Exact.doubled(base, times: exponent))
             }
         }
@@ -316,8 +316,8 @@
         @Test(.hegel(testCases: 1_000))
         func scalingStaysInRange() throws {
             try property { tc in
-                let base = try tc.draw(RetryGen.duration, named: "base")
-                let factor = try tc.draw(.double(), named: "factor")
+                let base = try #draw(RetryGen.duration, from: tc)
+                let factor = try #draw(.double(), from: tc)
                 let scaled = base.scaledForRetry(by: factor)
                 #expect(scaled >= .zero && scaled <= RetryGen.maximum)
                 let clampedBase = Double(Exact.clamped(base))
@@ -336,9 +336,9 @@
         @Test(.hegel(testCases: 1_000))
         func jitterStaysBetweenItsBounds() throws {
             try property { tc in
-                let delay = try tc.draw(RetryGen.duration, named: "delay")
-                let range = try tc.draw(RetryGen.jitterRange, named: "range")
-                let seed = try tc.draw(Gen<UInt64>.integer(), named: "seed")
+                let delay = try #draw(RetryGen.duration, from: tc)
+                let range = try #draw(RetryGen.jitterRange, from: tc)
+                let seed = try #draw(Gen<UInt64>.integer(), from: tc)
                 let low = delay.scaledForRetry(by: range.lowerBound)
                 let high = delay.scaledForRetry(by: range.upperBound)
                 let random = RetryPolicy.constantDelay(delay).jitter(range)
@@ -367,12 +367,12 @@
         @Test(.hegel(testCases: 1_000))
         func applyingTakesOneStep() throws {
             try property { tc in
-                let expr = try tc.draw(RetryGen.policy, named: "policy")
-                let status = try tc.draw(
+                let expr = try #draw(RetryGen.policy, from: tc)
+                let status = try #draw(
                     RetryGen.status,
-                    named: "status"
+                    from: tc
                 )
-                let requested = try tc.draw(.optional(RetryGen.duration), named: "requested")
+                let requested = try #draw(.optional(RetryGen.duration), from: tc)
                 let next = status.applying(expr.policy, requestedDelay: requested)
                 let asked = RetryStatus(
                     iteration: status.iteration,
@@ -406,10 +406,10 @@
         @Test(.hegel(testCases: 1_000))
         func policiesMatchTheModel() throws {
             try property { tc in
-                let expr = try tc.draw(RetryGen.policy, named: "policy")
+                let expr = try #draw(RetryGen.policy, from: tc)
                 let policy = expr.policy
                 for _ in 0..<4 {
-                    let status = try tc.draw(RetryGen.status, named: "status")
+                    let status = try #draw(RetryGen.status, from: tc)
                     #expect(policy(status) == expr.model(status), "\(status)")
                 }
             }
@@ -420,12 +420,12 @@
         @Test(.hegel(testCases: 1_000))
         func dryRunWalksThePolicy() throws {
             try property { tc in
-                let expr = try tc.draw(RetryGen.policy, named: "policy")
+                let expr = try #draw(RetryGen.policy, from: tc)
                 // Each retry is a step the model walks too, so the long branch
                 // stops at 1,000.
-                let limit = try tc.draw(
+                let limit = try #draw(
                     .oneOf(.int(in: 0...12), .int(in: 0...1_000)),
-                    named: "limit"
+                    from: tc
                 )
                 let bounded = PolicyExpr.and(expr, .limitRetries(limit))
                 let steps = Array(bounded.policy.dryRun().prefix(limit + 2))
@@ -456,12 +456,12 @@
         @Test(.hegel(testCases: 500))
         func withRetryFollowsThePolicy() async throws {
             try await property { tc in
-                let expr = try tc.draw(RetryGen.policy, named: "policy")
-                let limit = try tc.draw(
+                let expr = try #draw(RetryGen.policy, from: tc)
+                let limit = try #draw(
                     .oneOf(.int(in: 0...10), .int(in: 0...1_000)),
-                    named: "limit"
+                    from: tc
                 )
-                let script = try tc.draw(.array(of: RetryGen.attempt), named: "script")
+                let script = try #draw(.array(of: RetryGen.attempt), from: tc)
                 let bounded = PolicyExpr.and(expr, .limitRetries(limit))
 
                 func attempt(_ index: Int) -> Attempt {

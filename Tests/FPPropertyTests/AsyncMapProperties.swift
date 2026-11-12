@@ -15,14 +15,14 @@
         @Test(.hegel(testCases: 500))
         func orderedMapIsMap() async throws {
             try await property { tc in
-                let jobs = try tc.draw(Draw.jobs(), named: "jobs")
-                let concurrency = try tc.draw(Draw.concurrency, named: "concurrency")
-                let bufferLimit = try tc.draw(Self.bufferLimits, named: "bufferLimit")
-                let yields = try tc.draw(Draw.sourceYields, named: "sourceYields")
-                let consumer = try tc.draw(Draw.consumer, named: "consumer")
+                let jobs = try #draw(Draw.jobs(), from: tc)
+                let concurrency = try #draw(Draw.concurrency, from: tc)
+                let bufferLimit = try #draw(Self.bufferLimits, from: tc)
+                let sourceYields = try #draw(Draw.sourceYields, from: tc)
+                let consumer = try #draw(Draw.consumer, from: tc)
                 let inFlight = InFlight()
                 let results = await consumer.collect(
-                    CountingSource(elements: jobs, yields: yields).mapAsyncOrdered(
+                    CountingSource(elements: jobs, yields: sourceYields).mapAsyncOrdered(
                         concurrency: concurrency,
                         bufferLimit: bufferLimit
                     ) { job in
@@ -40,14 +40,14 @@
         @Test(.hegel(testCases: 500))
         func orderedCompactMapIsCompactMap() async throws {
             try await property { tc in
-                let jobs = try tc.draw(Draw.jobs([.keep, .drop]), named: "jobs")
-                let concurrency = try tc.draw(Draw.concurrency, named: "concurrency")
-                let bufferLimit = try tc.draw(Self.bufferLimits, named: "bufferLimit")
-                let yields = try tc.draw(Draw.sourceYields, named: "sourceYields")
-                let consumer = try tc.draw(Draw.consumer, named: "consumer")
+                let jobs = try #draw(Draw.jobs([.keep, .drop]), from: tc)
+                let concurrency = try #draw(Draw.concurrency, from: tc)
+                let bufferLimit = try #draw(Self.bufferLimits, from: tc)
+                let sourceYields = try #draw(Draw.sourceYields, from: tc)
+                let consumer = try #draw(Draw.consumer, from: tc)
                 // Even values skip the transform.
                 let results = await consumer.collect(
-                    CountingSource(elements: jobs, yields: yields).compactMapAsyncOrdered(
+                    CountingSource(elements: jobs, yields: sourceYields).compactMapAsyncOrdered(
                         concurrency: concurrency,
                         bufferLimit: bufferLimit,
                         passthrough: { $0.value.isMultiple(of: 2) ? 0 &- $0.value : nil }
@@ -67,11 +67,11 @@
         @Test(.hegel(testCases: 500))
         func orderedFlatMapKeepsFailuresInPlace() async throws {
             try await property { tc in
-                let jobs = try tc.draw(Draw.jobs([.keep, .fail]), named: "jobs")
-                let concurrency = try tc.draw(Draw.concurrency, named: "concurrency")
-                let bufferLimit = try tc.draw(Self.bufferLimits, named: "bufferLimit")
-                let yields = try tc.draw(Draw.sourceYields, named: "sourceYields")
-                let consumer = try tc.draw(Draw.consumer, named: "consumer")
+                let jobs = try #draw(Draw.jobs([.keep, .fail]), from: tc)
+                let concurrency = try #draw(Draw.concurrency, from: tc)
+                let bufferLimit = try #draw(Self.bufferLimits, from: tc)
+                let sourceYields = try #draw(Draw.sourceYields, from: tc)
+                let consumer = try #draw(Draw.consumer, from: tc)
                 // Values divisible by 5 arrive as failures; `.fail` jobs fail in
                 // the transform.
                 let source = jobs.map { job -> Result<Job, JobFailure> in
@@ -79,7 +79,7 @@
                         ? .failure(JobFailure(value: 0 &- job.value)) : .success(job)
                 }
                 let results = await consumer.collect(
-                    CountingSource(elements: source, yields: yields).flatMapAsyncOrdered(
+                    CountingSource(elements: source, yields: sourceYields).flatMapAsyncOrdered(
                         concurrency: concurrency,
                         bufferLimit: bufferLimit
                     ) { job -> Result<Int, JobFailure> in
@@ -101,11 +101,11 @@
         @Test(.hegel(testCases: 500))
         func unorderedMapIsMapInSomeOrder() async throws {
             try await property { tc in
-                let jobs = try tc.draw(Draw.jobs([.keep, .drop]), named: "jobs")
-                let concurrency = try tc.draw(Draw.concurrency, named: "concurrency")
-                let yields = try tc.draw(Draw.sourceYields, named: "sourceYields")
+                let jobs = try #draw(Draw.jobs([.keep, .drop]), from: tc)
+                let concurrency = try #draw(Draw.concurrency, from: tc)
+                let sourceYields = try #draw(Draw.sourceYields, from: tc)
                 let inFlight = InFlight()
-                let source = CountingSource(elements: jobs, yields: yields)
+                let source = CountingSource(elements: jobs, yields: sourceYields)
                 var results: [Int] = []
                 var delivered = 0
                 var mostReadAhead = 0
@@ -140,10 +140,10 @@
         @Test(.hegel(testCases: 500))
         func stoppingEarlyStopsReading() async throws {
             try await property { tc in
-                let jobs = try tc.draw(Draw.jobs(min: 1), named: "jobs")
-                let concurrency = try tc.draw(Draw.parallel, named: "concurrency")
-                let wanted = try tc.draw(.int(in: 0...(jobs.count - 1)), named: "wanted")
-                let ordered = try tc.draw(.bool(), named: "ordered")
+                let jobs = try #draw(Draw.jobs(min: 1), from: tc)
+                let concurrency = try #draw(Draw.parallel, from: tc)
+                let wanted = try #draw(.int(in: 0...(jobs.count - 1)), from: tc)
+                let ordered = try #draw(.bool(), from: tc)
                 let source = CountingSource(elements: jobs)
                 var taken = 0
                 if ordered {
@@ -184,19 +184,17 @@
         @Test(.hegel(testCases: 500))
         func stoppingCancelsRunningTransforms() async throws {
             try await property { tc in
-                let jobs = try tc.draw(Draw.jobs([.keep, .keep, .drop], min: 1), named: "jobs")
-                let concurrency = try tc.draw(Draw.parallel, named: "concurrency")
-                let ordered = try tc.draw(.bool(), named: "ordered")
-                let running = Running()
+                let jobs = try #draw(Draw.jobs([.keep, .keep, .drop], min: 1), from: tc)
+                let concurrency = try #draw(Draw.parallel, from: tc)
+                let ordered = try #draw(.bool(), from: tc)
+                let hangs = Hangs()
                 let transform: @concurrent @Sendable (Job) async -> Int = { job in
-                    await running.run {
-                        if job.outcome == .drop {
-                            await hangUntilCancelled()
-                        } else {
-                            await pause(job)
-                        }
-                        return job.value
+                    if job.outcome == .drop {
+                        await hangs.hang()
+                    } else {
+                        await pause(job)
                     }
+                    return job.value
                 }
                 // Take one result, from a job that doesn't hang, then stop. The
                 // first `concurrency` jobs are the ones that start, so one of
@@ -218,10 +216,15 @@
                         break
                     }
                 }
-                let stopped = await eventually { running.value == 0 }
+                // Releasing the iterator cancels the running transforms. The
+                // wait covers one that was given an element just before and
+                // is only now starting its hang. It waits for cancellations,
+                // not for the cancelled tasks to finish, which on a busy
+                // machine can take many seconds.
+                let cancelled = await eventually { hangs.uncancelled == 0 }
                 #expect(
-                    stopped,
-                    "\(running.value) transforms still running after the consumer stopped"
+                    cancelled,
+                    "\(hangs.uncancelled) hanging transforms not cancelled after the consumer stopped"
                 )
             }
         }

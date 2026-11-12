@@ -22,10 +22,10 @@
         @Test(.hegel(testCases: 500))
         func concurrentTraverseIsSequentialTraverse() async throws {
             try await property { tc in
-                let jobs = try tc.draw(Draw.jobs([.keep, .fail]), named: "jobs")
-                let concurrency = try tc.draw(
+                let jobs = try #draw(Draw.jobs([.keep, .fail]), from: tc)
+                let concurrency = try #draw(
                     .oneOf(.int(in: 1...4), .int(in: 1...16), Draw.concurrency),
-                    named: "concurrency"
+                    from: tc
                 )
                 let inFlight = InFlight()
                 let concurrent = await jobs.traverseAsync(concurrency: concurrency) { job in
@@ -42,8 +42,8 @@
         @Test(.hegel(testCases: 500))
         func withAnyFindsASuccessIfThereIsOne() async throws {
             try await property { tc in
-                let jobs = try tc.draw(Draw.jobs([.keep, .fail], min: 1), named: "jobs")
-                let viaArray = try tc.draw(.bool(), named: "viaArray")
+                let jobs = try #draw(Draw.jobs([.keep, .fail], min: 1), from: tc)
+                let viaArray = try #draw(.bool(), from: tc)
                 let result = viaArray ? await raceArray(jobs) : await raceArity(jobs)
                 let successes = Set(jobs.filter { $0.outcome == .keep }.map(transformed))
                 let failures = Set(
@@ -154,8 +154,10 @@
         @Test(.hegel(testCases: 500))
         func withTimeoutPicksTheFirstToFinish() async throws {
             try await property { tc in
-                let job = try tc.draw(.job(outcomes: [.keep, .fail]), named: "job")
-                let quick = await withTimeout(.seconds(10), failingWith: JobFailure(value: -1)) {
+                let job = try #draw(.job(outcomes: [.keep, .fail]), from: tc)
+                // Ends when the job does, so a long limit costs nothing, and a
+                // busy machine can stretch a job's pause to seconds.
+                let quick = await withTimeout(.seconds(60), failingWith: JobFailure(value: -1)) {
                     await Self.run(job)
                 }
                 #expect(quick == (await Self.run(job)))
@@ -171,34 +173,39 @@
         }
 
         /// After a failure, the transforms still running are cancelled: jobs
-        /// with `.drop` hang until they are, and the traversal still returns
-        /// promptly.
+        /// with `.drop` hang until they are, so the traversal never waits one
+        /// out.
         @Test(.hegel(testCases: 500))
         func traverseCancelsAfterAFailure() async throws {
             try await property { tc in
-                let jobs = try tc.draw(
+                let jobs = try #draw(
                     Draw.jobs([.keep, .drop, .fail], min: 2),
-                    named: "jobs"
+                    from: tc
                 )
-                let concurrency = try tc.draw(Draw.parallel, named: "concurrency")
+                let concurrency = try #draw(Draw.parallel, from: tc)
                 // A failure every hanging job runs alongside: the first job.
                 try tc.assume(jobs[0].outcome == .fail)
-                let start = ContinuousClock.now
+                let hangs = Hangs()
                 let result = await jobs.traverseAsync(concurrency: concurrency) {
                     job -> Result<Int, JobFailure> in
                     switch job.outcome {
                         case .keep: return .success(job.value)
                         case .drop:
-                            await hangUntilCancelled()
+                            await hangs.hang()
                             return .success(job.value)
                         case .fail:
                             await pause(job)
                             return .failure(JobFailure(value: job.value))
                     }
                 }
-                let elapsed = ContinuousClock.now - start
                 #expect(result == .failure(JobFailure(value: jobs[0].value)))
-                #expect(elapsed < .seconds(5), "took \(elapsed)")
+                // Every transform has ended, so every hang was cancelled or
+                // ran out its minute. Counted, not timed: on a busy machine
+                // the other transforms' pauses can take many seconds.
+                #expect(
+                    hangs.uncancelled == 0,
+                    "\(hangs.uncancelled) hanging transforms were never cancelled"
+                )
             }
         }
     }

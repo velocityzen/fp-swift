@@ -191,10 +191,33 @@
         }
     }
 
-    /// Runs until cancelled, for at most a minute: a transform that only a
-    /// cancellation stops.
-    func hangUntilCancelled() async {
-        try? await Task.sleep(for: .seconds(60))
+    /// Transforms that only a cancellation stops, counted so a property can
+    /// check that each one was cancelled.
+    ///
+    /// A hang counts its cancellation in a cancellation handler, which runs
+    /// when the task is cancelled. Waiting for the hanging task to finish
+    /// instead would also wait for it to be scheduled again, which can take
+    /// seconds on a busy machine.
+    final class Hangs: Sendable {
+        private let started = Atomic<Int>(0)
+        private let cancelled = Atomic<Int>(0)
+
+        /// Hangs that started and were not cancelled. Never too low: a hang
+        /// that starts and is cancelled while this reads counts here.
+        var uncancelled: Int {
+            let cancelled = cancelled.load(ordering: .sequentiallyConsistent)
+            return started.load(ordering: .sequentiallyConsistent) - cancelled
+        }
+
+        /// Runs until cancelled, for at most a minute.
+        func hang() async {
+            started.add(1, ordering: .sequentiallyConsistent)
+            await withTaskCancellationHandler {
+                try? await Task.sleep(for: .seconds(60))
+            } onCancel: {
+                cancelled.add(1, ordering: .sequentiallyConsistent)
+            }
+        }
     }
 
     /// Waits up to `limit` for `condition`, checking every millisecond.
@@ -207,18 +230,6 @@
             try? await Task.sleep(for: .milliseconds(1))
         }
         return condition()
-    }
-
-    /// Counts transforms that are running now.
-    final class Running: Sendable {
-        private let count = Atomic<Int>(0)
-        var value: Int { count.load(ordering: .sequentiallyConsistent) }
-
-        func run<T>(_ body: () async -> T) async -> T {
-            count.add(1, ordering: .sequentiallyConsistent)
-            defer { count.subtract(1, ordering: .sequentiallyConsistent) }
-            return await body()
-        }
     }
 
 #endif
