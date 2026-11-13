@@ -1,0 +1,12 @@
+# Hegel settings for the property tests in Tests/FPPropertyTests.
+#
+# The scheduled run (.github/workflows/nightly.yml) selects `nightly` with
+# HEGEL_DEFAULT_PROFILE. On a CI server it extends the shipped `ci` profile,
+# which is derandomized: every push and pull request sees the same inputs.
+# This one is not, so each night tries new ones.
+#
+# Each test sets its own number of test cases, which overrides any profile.
+# The nightly run multiplies them with FP_PROPERTY_SCALE instead (see
+# `cases(_:)` in Tests/FPPropertyTests/Support.swift).
+[profiles.nightly]
+derandomize = false

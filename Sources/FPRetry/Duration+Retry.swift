@@ -27,7 +27,9 @@ extension Duration {
         guard factor < RetryPolicy.maximumDelay / base else {
             return RetryPolicy.maximumDelay
         }
-        return base * factor
+        // The cutoff is rounded to a `Double`, so a factor just below it can still land a
+        // little past the maximum: 31 ns times the largest factor below it is 1 ms over.
+        return min(base * factor, RetryPolicy.maximumDelay)
     }
 
     /// The wait times `2^exponent`, at most the maximum. Zero when the wait is zero or less.

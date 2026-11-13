@@ -36,7 +36,7 @@
         ///
         /// Concurrency mostly stays below the element count, where a fixed set of
         /// workers claims elements; at or above it, each element gets a task.
-        @Test(.hegel(testCases: 500))
+        @Test(.hegel(testCases: cases(500)))
         func concurrentTraverseIsSequentialTraverse() async throws {
             var cases = 0
             var workerPool = 0
@@ -92,20 +92,41 @@
         }
 
         /// The race gives a success if any operation succeeds, and otherwise one
-        /// of the failures, for any number of operations and any timing.
-        @Test(.hegel(testCases: 500))
+        /// of the failures, for any number of operations and any timing. It
+        /// returns only after the operations still running were cancelled and
+        /// stopped.
+        ///
+        /// Jobs with `.drop` hang until cancelled. A hang never ends on its
+        /// own, so hangs run only beside a success.
+        @Test(.hegel(testCases: cases(500)))
         func withAnyFindsASuccessIfThereIsOne() async throws {
+            var cases = 0
+            var cancelledHangs = 0
             try await property { tc in
-                let jobs = try #draw(Draw.jobs([.keep, .fail], min: 1), from: tc)
+                let mix = try #draw(Draw.outcomes([.keep, .fail, .drop]), from: tc)
+                let jobs = try #draw(
+                    Draw.jobs(mix, min: 1).map { jobs in
+                        let succeeding = jobs.contains { $0.outcome == .keep }
+                        return jobs.map { job in
+                            var job = job
+                            if !succeeding, job.outcome == .drop {
+                                job.outcome = .fail
+                            }
+                            return job
+                        }
+                    },
+                    from: tc
+                )
                 let viaArray = try #draw(.bool(), from: tc)
                 let heartbeat = Heartbeat()
+                let hangs = Hangs()
                 let raced = await unlessStalled(heartbeat) {
                     viaArray
-                        ? await Self.raceArray(jobs, heartbeat)
-                        : await Self.raceArity(jobs, heartbeat)
+                        ? await Self.raceArray(jobs, hangs, heartbeat)
+                        : await Self.raceArity(jobs, hangs, heartbeat)
                 }
                 let result = try #require(raced, "the race stalled")
-                let successes = Set(jobs.filter { $0.outcome == .keep }.map(transformed))
+                let successes = Set(jobs.filter { $0.outcome != .fail }.map(transformed))
                 let failures = Set(
                     jobs.filter { $0.outcome == .fail }.map { JobFailure(value: $0.value) }
                 )
@@ -116,110 +137,127 @@
                         #expect(successes.isEmpty, "a failure won although an operation succeeded")
                         #expect(failures.contains(failure))
                 }
+                // Every operation has stopped, so every hang was cancelled.
+                #expect(
+                    hangs.uncancelled == 0,
+                    "\(hangs.uncancelled) hanging operations were never cancelled"
+                )
 
+                cases += 1
                 try tc.event(
                     successes.isEmpty ? "every operation failed" : "an operation succeeded"
                 )
                 if !viaArray, (2...10).contains(jobs.count) {
                     try tc.event("a fixed-arity withAny")
                 }
+                if hangs.started > 0 {
+                    cancelledHangs += 1
+                    try tc.event("a hanging operation was cancelled")
+                }
             }
+            expectReached(cancelledHangs, in: cases, "no hanging operation ran beside a success")
         }
 
         static func raceArray(
             _ jobs: [Job],
+            _ hangs: Hangs,
             _ heartbeat: Heartbeat
         ) async -> Result<Int, JobFailure> {
-            await withAny(jobs.map { job in { await Self.run(job, heartbeat) } })
+            await withAny(jobs.map { job in { await Self.runOrHang(job, hangs, heartbeat) } })
         }
 
         /// The `withAny` overload for `jobs.count` operations; the array one for
         /// a single job or more than ten.
         static func raceArity(
             _ jobs: [Job],
+            _ hangs: Hangs,
             _ heartbeat: Heartbeat
         ) async -> Result<Int, JobFailure> {
             let j = jobs
-            let h = heartbeat
+            let (s, h) = (hangs, heartbeat)
             switch j.count {
-                case 2: return await withAny(await Self.run(j[0], h), await Self.run(j[1], h))
+                case 2:
+                    return await withAny(
+                        await Self.runOrHang(j[0], s, h),
+                        await Self.runOrHang(j[1], s, h)
+                    )
                 case 3:
                     return await withAny(
-                        await Self.run(j[0], h),
-                        await Self.run(j[1], h),
-                        await Self.run(j[2], h)
+                        await Self.runOrHang(j[0], s, h),
+                        await Self.runOrHang(j[1], s, h),
+                        await Self.runOrHang(j[2], s, h)
                     )
                 case 4:
                     return await withAny(
-                        await Self.run(j[0], h),
-                        await Self.run(j[1], h),
-                        await Self.run(j[2], h),
-                        await Self.run(j[3], h)
+                        await Self.runOrHang(j[0], s, h),
+                        await Self.runOrHang(j[1], s, h),
+                        await Self.runOrHang(j[2], s, h),
+                        await Self.runOrHang(j[3], s, h)
                     )
                 case 5:
                     return await withAny(
-                        await Self.run(j[0], h),
-                        await Self.run(j[1], h),
-                        await Self.run(j[2], h),
-                        await Self.run(j[3], h),
-                        await Self.run(j[4], h)
+                        await Self.runOrHang(j[0], s, h),
+                        await Self.runOrHang(j[1], s, h),
+                        await Self.runOrHang(j[2], s, h),
+                        await Self.runOrHang(j[3], s, h),
+                        await Self.runOrHang(j[4], s, h)
                     )
                 case 6:
                     return await withAny(
-                        await Self.run(j[0], h),
-                        await Self.run(j[1], h),
-                        await Self.run(j[2], h),
-                        await Self.run(j[3], h),
-                        await Self.run(j[4], h),
-                        await Self.run(j[5], h)
+                        await Self.runOrHang(j[0], s, h),
+                        await Self.runOrHang(j[1], s, h),
+                        await Self.runOrHang(j[2], s, h),
+                        await Self.runOrHang(j[3], s, h),
+                        await Self.runOrHang(j[4], s, h),
+                        await Self.runOrHang(j[5], s, h)
                     )
                 case 7:
                     return await withAny(
-                        await Self.run(j[0], h),
-                        await Self.run(j[1], h),
-                        await Self.run(j[2], h),
-                        await Self.run(j[3], h),
-                        await Self.run(j[4], h),
-                        await Self.run(j[5], h),
-                        await Self.run(j[6], h)
+                        await Self.runOrHang(j[0], s, h),
+                        await Self.runOrHang(j[1], s, h),
+                        await Self.runOrHang(j[2], s, h),
+                        await Self.runOrHang(j[3], s, h),
+                        await Self.runOrHang(j[4], s, h),
+                        await Self.runOrHang(j[5], s, h),
+                        await Self.runOrHang(j[6], s, h)
                     )
                 case 8:
                     return await withAny(
-                        await Self.run(j[0], h),
-                        await Self.run(j[1], h),
-                        await Self.run(j[2], h),
-                        await Self.run(j[3], h),
-                        await Self.run(j[4], h),
-                        await Self.run(j[5], h),
-                        await Self.run(j[6], h),
-                        await Self.run(j[7], h)
+                        await Self.runOrHang(j[0], s, h),
+                        await Self.runOrHang(j[1], s, h),
+                        await Self.runOrHang(j[2], s, h),
+                        await Self.runOrHang(j[3], s, h),
+                        await Self.runOrHang(j[4], s, h),
+                        await Self.runOrHang(j[5], s, h),
+                        await Self.runOrHang(j[6], s, h),
+                        await Self.runOrHang(j[7], s, h)
                     )
                 case 9:
                     return await withAny(
-                        await Self.run(j[0], h),
-                        await Self.run(j[1], h),
-                        await Self.run(j[2], h),
-                        await Self.run(j[3], h),
-                        await Self.run(j[4], h),
-                        await Self.run(j[5], h),
-                        await Self.run(j[6], h),
-                        await Self.run(j[7], h),
-                        await Self.run(j[8], h)
+                        await Self.runOrHang(j[0], s, h),
+                        await Self.runOrHang(j[1], s, h),
+                        await Self.runOrHang(j[2], s, h),
+                        await Self.runOrHang(j[3], s, h),
+                        await Self.runOrHang(j[4], s, h),
+                        await Self.runOrHang(j[5], s, h),
+                        await Self.runOrHang(j[6], s, h),
+                        await Self.runOrHang(j[7], s, h),
+                        await Self.runOrHang(j[8], s, h)
                     )
                 case 10:
                     return await withAny(
-                        await Self.run(j[0], h),
-                        await Self.run(j[1], h),
-                        await Self.run(j[2], h),
-                        await Self.run(j[3], h),
-                        await Self.run(j[4], h),
-                        await Self.run(j[5], h),
-                        await Self.run(j[6], h),
-                        await Self.run(j[7], h),
-                        await Self.run(j[8], h),
-                        await Self.run(j[9], h)
+                        await Self.runOrHang(j[0], s, h),
+                        await Self.runOrHang(j[1], s, h),
+                        await Self.runOrHang(j[2], s, h),
+                        await Self.runOrHang(j[3], s, h),
+                        await Self.runOrHang(j[4], s, h),
+                        await Self.runOrHang(j[5], s, h),
+                        await Self.runOrHang(j[6], s, h),
+                        await Self.runOrHang(j[7], s, h),
+                        await Self.runOrHang(j[8], s, h),
+                        await Self.runOrHang(j[9], s, h)
                     )
-                default: return await raceArray(jobs, heartbeat)
+                default: return await raceArray(jobs, hangs, heartbeat)
             }
         }
 
@@ -229,7 +267,7 @@
         ///
         /// Jobs with `.drop` hang until cancelled. A hang never ends on its
         /// own, so hangs run only alongside a failure.
-        @Test(.hegel(testCases: 500))
+        @Test(.hegel(testCases: cases(500)))
         func withAllGivesEveryValueOrAFailure() async throws {
             var cases = 0
             var cancelledHangs = 0
@@ -372,51 +410,82 @@
             }
         }
 
-        /// A quick operation beats a long timeout, failure or not; one that
-        /// never finishes on its own loses to a short timeout.
-        @Test(.hegel(testCases: 500))
+        /// `withTimeout` gives the operation's result, failure or not, or the
+        /// timeout error, whichever comes first. A quick operation beats a long
+        /// timeout; one that never finishes on its own loses to any timeout, is
+        /// cancelled, and has stopped by the time `withTimeout` returns.
+        @Test(.hegel(testCases: cases(500)))
         func withTimeoutPicksTheFirstToFinish() async throws {
+            var cases = 0
+            var operationWon = 0
+            var timeoutWon = 0
             try await property { tc in
                 let job = try #draw(.job(outcomes: [.keep, .fail]), from: tc)
+                // Around the job's own time: 20 µs a suspension, and its sleep.
+                let limit = try #draw(
+                    .oneOf(.int(in: 0...(job.delay * 40 + 100)), .int(in: 0...100)),
+                    from: tc
+                )
                 let heartbeat = Heartbeat()
+                let hangs = Hangs()
+                // A job that fails with `.min` fails like the timeout; every
+                // check below allows either.
+                let timeout = JobFailure(value: .min)
                 let raced = await unlessStalled(heartbeat) {
-                    // Ends when the job does, so a long limit costs nothing, and a
-                    // busy machine can stretch a job's pause to seconds.
-                    let quick = await withTimeout(.seconds(60), failingWith: JobFailure(value: -1))
-                    {
+                    let close = await withTimeout(.microseconds(limit), failingWith: timeout) {
                         await Self.run(job, heartbeat)
                     }
-                    let stuck = await withTimeout(
-                        .microseconds(job.delay * 50),
-                        failingWith: JobFailure(value: -1)
-                    ) {
-                        try? await Task.sleep(for: .seconds(60))
+                    // Ends when the job does, so a long limit costs nothing, and
+                    // a busy machine can stretch a job's pause to seconds.
+                    let quick = await withTimeout(.seconds(60), failingWith: timeout) {
+                        await Self.run(job, heartbeat)
+                    }
+                    let stuck = await withTimeout(.microseconds(limit), failingWith: timeout) {
+                        await hangs.hang()
                         return await Self.run(job)
                     }
-                    return (quick: quick, stuck: stuck)
+                    return (close: close, quick: quick, stuck: stuck)
                 }
-                let (quick, stuck) = try #require(raced, "withTimeout stalled")
-                #expect(quick == (await Self.run(job)))
-                #expect(stuck == .failure(JobFailure(value: -1)))
+                let (close, quick, stuck) = try #require(raced, "withTimeout stalled")
+                let finished = await Self.run(job)
+                #expect(close == finished || close == .failure(timeout))
+                #expect(quick == finished)
+                #expect(stuck == .failure(timeout))
+                #expect(hangs.uncancelled == 0, "the stuck operation was never cancelled")
+
+                cases += 1
+                if close == .failure(timeout) {
+                    timeoutWon += 1
+                    try tc.event("the timeout beat the operation")
+                } else {
+                    operationWon += 1
+                    try tc.event("the operation beat the timeout")
+                }
             }
+            expectReached(timeoutWon, in: cases, "the timeout never beat the operation")
+            expectReached(operationWon, in: cases, "the operation never beat the timeout")
         }
 
         /// After a failure, the transforms still running are cancelled: jobs
         /// with `.drop` hang until they are, so the traversal never waits one
         /// out. No new transform starts.
-        @Test(.hegel(testCases: 500))
+        @Test(.hegel(testCases: cases(500)))
         func traverseCancelsAfterAFailure() async throws {
             var cases = 0
             var hangsRan = 0
             var elementsLeft = 0
             try await property { tc in
+                // The first job fails, so every hanging job runs beside a
+                // failure.
                 let jobs = try #draw(
-                    Draw.jobs([.keep, .drop, .fail], min: 2),
+                    Draw.jobs([.keep, .drop, .fail], min: 2).map { jobs in
+                        var jobs = jobs
+                        jobs[0].outcome = .fail
+                        return jobs
+                    },
                     from: tc
                 )
                 let concurrency = try #draw(Draw.parallel, from: tc)
-                // A failure every hanging job runs alongside: the first job.
-                try tc.assume(jobs[0].outcome == .fail)
                 let heartbeat = Heartbeat()
                 let hangs = Hangs()
                 let lateStarts = Counter()

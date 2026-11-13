@@ -1,9 +1,20 @@
 // Hegel runs on macOS and Linux only; see Package.swift.
 #if os(macOS) || os(Linux)
 
+    import Foundation
     import HegelTesting
     import Synchronization
     import Testing
+
+    /// A property's number of test cases: `base`, times `FP_PROPERTY_SCALE`
+    /// when it is set, as in the nightly run.
+    ///
+    /// A count given in Swift overrides every Hegel profile, so a deeper
+    /// profile in `hegel.toml` could not raise it.
+    func cases(_ base: Int) -> Int {
+        let scale = ProcessInfo.processInfo.environment["FP_PROPERTY_SCALE"].flatMap { Int($0) }
+        return base * max(scale ?? 1, 1)
+    }
 
     /// One element of generated async work: a value, how long its transform
     /// takes, and what the transform does with it.
@@ -69,7 +80,8 @@
         }
     }
 
-    /// An async sequence of `jobs` that counts how many elements were read.
+    /// An async sequence of `jobs` that counts how many elements were read,
+    /// and how many of its iterators were made and released.
     struct CountingSource<Element: Sendable>: AsyncSequence, Sendable {
         typealias Failure = Never
 
@@ -79,12 +91,16 @@
         /// Beaten on every read.
         var heartbeat: Heartbeat? = nil
         let reads = Counter()
+        let iterators = Counter()
+        let released = Counter()
 
         struct AsyncIterator: AsyncIteratorProtocol {
             let elements: [Element]
             let yields: Int
             let reads: Counter
             let heartbeat: Heartbeat?
+            /// Shared by the iterator's copies; counts the release of the last.
+            let lifetime: Lifetime
             var index = 0
 
             mutating func next() async -> Element? {
@@ -102,45 +118,98 @@
         }
 
         func makeAsyncIterator() -> AsyncIterator {
-            AsyncIterator(elements: elements, yields: yields, reads: reads, heartbeat: heartbeat)
+            iterators.add()
+            return AsyncIterator(
+                elements: elements,
+                yields: yields,
+                reads: reads,
+                heartbeat: heartbeat,
+                lifetime: Lifetime(released)
+            )
+        }
+    }
+
+    /// Adds to `released` when it is released.
+    final class Lifetime: Sendable {
+        let released: Counter
+        init(_ released: Counter) { self.released = released }
+        deinit { released.add() }
+    }
+
+    /// How far the reader of a concurrent map got ahead of its consumer:
+    /// elements read, less the values delivered and the elements the
+    /// transform dropped.
+    ///
+    /// It is measured each time the consumer is done with a value. The
+    /// consumer is then outside `next()`, so every result the pipeline has
+    /// counted as taken is one the test has counted as delivered.
+    final class ReadAhead: Sendable {
+        private let reads: Counter
+        /// Elements the transform dropped. The transform adds to it before it
+        /// returns nil, which can only make the measure lower.
+        let dropped = Counter()
+        private let delivered = Atomic<Int>(0)
+        private let highest = Atomic<Int>(0)
+
+        init(of reads: Counter) { self.reads = reads }
+
+        /// The most it ever was.
+        var most: Int { highest.load(ordering: .sequentiallyConsistent) }
+
+        /// Counts one value delivered, after the consumer is done with it.
+        func measure() {
+            let delivered = delivered.add(1, ordering: .sequentiallyConsistent).newValue
+            let ahead = reads.value - delivered - dropped.value
+            _ = highest.max(ahead, ordering: .sequentiallyConsistent)
         }
     }
 
     func collect<S: AsyncSequence>(
         _ sequence: S,
-        _ heartbeat: Heartbeat? = nil
+        _ heartbeat: Heartbeat? = nil,
+        _ readAhead: ReadAhead? = nil
     ) async -> [S.Element] where S.Failure == Never {
         var values: [S.Element] = []
         for await value in sequence {
             values.append(value)
             heartbeat?.beat()
+            readAhead?.measure()
         }
         return values
     }
 
     /// How the test reads a sequence: at once, slowly, or from an actor.
-    enum Consumer: Sendable, Hashable, CaseIterable {
-        case prompt, slow, onActor
+    enum Consumer: Sendable, Hashable {
+        case prompt
+        /// Suspends `yields` times after each value, so that results pile up
+        /// behind it.
+        case slow(yields: Int)
+        case onActor
 
-        /// Reads every element, and beats `heartbeat` for each one.
+        /// Reads every element. For each one, beats `heartbeat` and measures
+        /// `readAhead`.
         func collect<S: AsyncSequence & Sendable>(
             _ sequence: S,
-            _ heartbeat: Heartbeat? = nil
+            _ heartbeat: Heartbeat? = nil,
+            _ readAhead: ReadAhead? = nil
         ) async -> [S.Element]
         where S.Failure == Never, S.Element: Sendable {
             switch self {
-                case .prompt: return await FPPropertyTests.collect(sequence, heartbeat)
-                case .slow:
+                case .prompt: return await FPPropertyTests.collect(sequence, heartbeat, readAhead)
+                case .slow(let yields):
                     var values: [S.Element] = []
                     for await value in sequence {
                         values.append(value)
                         heartbeat?.beat()
-                        for _ in 0..<3 {
+                        // The reader catches up meanwhile, so the measure
+                        // comes after.
+                        for _ in 0..<yields {
                             await Task.yield()
                         }
+                        readAhead?.measure()
                     }
                     return values
-                case .onActor: return await Reader().collect(sequence, heartbeat)
+                case .onActor: return await Reader().collect(sequence, heartbeat, readAhead)
             }
         }
     }
@@ -149,13 +218,15 @@
     actor Reader {
         func collect<S: AsyncSequence & Sendable>(
             _ sequence: S,
-            _ heartbeat: Heartbeat?
+            _ heartbeat: Heartbeat?,
+            _ readAhead: ReadAhead?
         ) async -> [S.Element]
         where S.Failure == Never, S.Element: Sendable {
             var values: [S.Element] = []
             for await value in sequence {
                 values.append(value)
                 heartbeat?.beat()
+                readAhead?.measure()
             }
             return values
         }
@@ -264,7 +335,14 @@
         /// read, so the long branch stops at 1,000.
         static let sourceYields: Gen<Int> = .oneOf(.just(0), .int(in: 0...3), .int(in: 0...1_000))
 
-        static let consumer: Gen<Consumer> = .element(of: Consumer.allCases)
+        /// Prompt, from an actor, or slow: a few suspensions per value, or up
+        /// to hundreds. Each costs time on every value, so it stops at 300.
+        static let consumer: Gen<Consumer> = .oneOf(
+            .just(.prompt),
+            .just(.onActor),
+            Gen<Int>.int(in: 1...8).map { .slow(yields: $0) },
+            Gen<Int>.int(in: 0...300).map { .slow(yields: $0) }
+        )
 
         /// Jobs: usually a few, sometimes hundreds. Hegel keeps arrays short
         /// unless told otherwise, so the long ones get a minimum length.
@@ -273,6 +351,24 @@
                 .array(of: .job(outcomes: outcomes), count: min...Int.max),
                 .array(of: .job(outcomes: outcomes), count: Swift.max(min, 50)...Int.max)
             )
+        }
+
+        /// The outcomes one test case's jobs draw from, for `jobs(_:min:)`: a
+        /// few picks from `allowed`, so an outcome can be missing, rare or
+        /// in every job.
+        static func outcomes(_ allowed: [Job.Outcome]) -> Gen<[Job.Outcome]> {
+            .array(of: .element(of: allowed), count: 1...4)
+        }
+
+        /// Which jobs skip the transform: none, or those whose value is a
+        /// multiple of the drawn number. 1 passes every job through.
+        static let passEvery: Gen<Int?> = .optional(.int(in: 1...4))
+
+        /// The `passthrough` for `passEvery`, and its model: a job that skips
+        /// the transform becomes its negated value.
+        static func passthrough(_ every: Int?) -> (@Sendable (Job) -> Int?)? {
+            guard let every else { return nil }
+            return { job in job.value.isMultiple(of: every) ? 0 &- job.value : nil }
         }
     }
 

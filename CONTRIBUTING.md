@@ -26,6 +26,26 @@ swift format lint --strict --recursive Sources Tests Scripts \
 | `Scripts/` | `make-docc-articles.swift` |
 | `Benchmarks/` | the benchmark package (see [Benchmarks](#benchmarks)) |
 
+## Property tests
+
+`Tests/FPPropertyTests` checks the libraries with
+[Hegel](https://github.com/velocityzen/hegel-swift) properties, on macOS and
+Linux. A failure's report ends with a `.hegel(reproducing:)` trait that
+replays its minimal example.
+
+Every push runs them on the same inputs. The nightly workflow runs them on new
+inputs with ten times the test cases, and runs every test under
+ThreadSanitizer. To run the same locally:
+
+```sh
+HEGEL_DEFAULT_PROFILE=nightly FP_PROPERTY_SCALE=10 swift test --filter FPPropertyTests
+swift test --sanitize=thread \
+    --skip '[oO]rExit[A-Za-z]*OnFailure|applyingAtTheLastIterationDoesNotCrash'
+```
+
+Exit tests are skipped under ThreadSanitizer: their child process starts
+without the sanitizer's runtime and aborts.
+
 ## Documentation
 
 `README.md` is the source of the documentation. A script makes the DocC articles in `Sources/FP/FP.docc` and `Sources/FPRetry/FPRetry.docc` from it, and the quick start on each landing page. Don't edit those by hand. Edit `README.md`, then run:

@@ -181,6 +181,15 @@
             .element(of: [0, 0.5, 1, 2, 1e300, .infinity, -.infinity, .nan])
         )
 
+        /// Factors for `base`: any, or at the cutoff past which scaling it
+        /// gives the maximum, and the `Double`s either side of the cutoff.
+        static func factor(for base: Duration) -> Gen<Double> {
+            let clamped = Exact.clampedDuration(base)
+            guard clamped > .zero else { return factor }
+            let cutoff = maximum / clamped
+            return .oneOf(factor, .element(of: [cutoff, cutoff.nextDown, cutoff.nextUp]))
+        }
+
         static let leaf: Gen<PolicyExpr> = .oneOf(
             Gen.oneOf(.int(in: 0...10), .int(), .element(of: [.max, .min, -1]))
                 .map { PolicyExpr.limitRetries($0) },
@@ -261,12 +270,25 @@
     }
 
     extension RetryGen {
-        static let attempt: Gen<Attempt> = Hegel.zip(
-            .bool(probability: 0.2),
-            .bool(probability: 0.85),
-            .optional(duration),
-            .bool(probability: 0.05)
-        ).map { Attempt(succeeds: $0, retryable: $1, requested: $2, cancels: $3) }
+        /// How often an attempt succeeds, fails in a way that is retried, and
+        /// cancels its task, drawn once per test case.
+        static let attemptRates: Gen<(succeeds: Double, retryable: Double, cancels: Double)> =
+            Hegel.zip(
+                .element(of: [0.05, 0.2, 0.5]),
+                .element(of: [0.5, 0.85, 1]),
+                .element(of: [0, 0.05, 0.3])
+            ).map { (succeeds: $0, retryable: $1, cancels: $2) }
+
+        static func attempt(
+            _ rates: (succeeds: Double, retryable: Double, cancels: Double)
+        ) -> Gen<Attempt> {
+            Hegel.zip(
+                .bool(probability: rates.succeeds),
+                .bool(probability: rates.retryable),
+                .optional(duration),
+                .bool(probability: rates.cancels)
+            ).map { Attempt(succeeds: $0, retryable: $1, requested: $2, cancels: $3) }
+        }
     }
 
     /// SplitMix64, so seeded jitter is reproducible.
@@ -303,7 +325,9 @@
 
     @Suite("Retry properties", .hegel)
     struct RetryProperties {
-        @Test(.hegel(testCases: 1_000))
+        /// Clamping gives the wait itself when it is in range, and the nearest
+        /// end otherwise.
+        @Test(.hegel(testCases: cases(1_000)))
         func clampingStaysInRange() throws {
             try property { tc in
                 let d = try #draw(RetryGen.duration, from: tc)
@@ -317,7 +341,9 @@
             }
         }
 
-        @Test(.hegel(testCases: 1_000))
+        /// Adding two waits in range is exact, and the maximum when the sum is
+        /// past it.
+        @Test(.hegel(testCases: cases(1_000)))
         func addingSaturates() throws {
             try property { tc in
                 let a = Exact.clampedDuration(try #draw(RetryGen.duration, from: tc))
@@ -331,7 +357,7 @@
         }
 
         /// Doubling is exact while the result fits, and the maximum after.
-        @Test(.hegel(testCases: 1_000))
+        @Test(.hegel(testCases: cases(1_000)))
         func doublingIsExactUntilTheMaximum() throws {
             var cases = 0
             var exactAtTheEdge = 0
@@ -355,11 +381,19 @@
 
         /// Scaling multiplies in floating point, so only roughly; but it never
         /// leaves the range, and is zero exactly when it should be.
-        @Test(.hegel(testCases: 1_000))
+        @Test(.hegel(testCases: cases(1_000)))
         func scalingStaysInRange() throws {
-            try property { tc in
+            var cases = 0
+            var atTheCutoff = 0
+            // The largest factor below the cutoff for 31 ns once scaled it 1 ms past
+            // the maximum.
+            let pastTheCutoff: Example = [
+                "base": Duration.nanoseconds(31),
+                "factor": (RetryGen.maximum / Duration.nanoseconds(31)).nextDown,
+            ]
+            try property(examples: [pastTheCutoff]) { tc in
                 let base = try #draw(RetryGen.duration, from: tc)
-                let factor = try #draw(.double(), from: tc)
+                let factor = try #draw(RetryGen.factor(for: base), from: tc)
                 let scaled = base.scaledForRetry(by: factor)
                 #expect(scaled >= .zero && scaled <= RetryGen.maximum)
                 let clampedBase = Double(Exact.clamped(base))
@@ -371,25 +405,35 @@
                     #expect(scaled == .zero)
                 }
 
+                cases += 1
                 if scaled == RetryGen.maximum {
                     try tc.event("capped at the maximum")
                 } else if scaled == .zero {
                     try tc.event("no wait")
                 }
+                let clamped = Exact.clampedDuration(base)
+                if clamped > .zero, (RetryGen.maximum / clamped).nextDown == factor {
+                    atTheCutoff += 1
+                    try tc.event("just below the cutoff")
+                }
             }
+            expectReached(atTheCutoff, in: cases, "no factor was just below the cutoff")
         }
 
         /// A random wait lies between the waits of the range's two ends, and in
         /// range; with a seeded generator, two equal policies wait the same.
-        @Test(.hegel(testCases: 1_000))
+        ///
+        /// The generator is seeded from a draw, so a failure replays. The
+        /// policy without one uses the same arithmetic.
+        @Test(.hegel(testCases: cases(1_000)))
         func jitterStaysBetweenItsBounds() throws {
             try property { tc in
                 let delay = try #draw(RetryGen.duration, from: tc)
                 let range = try #draw(RetryGen.jitterRange, from: tc)
                 let seed = try #draw(Gen<UInt64>.integer(), from: tc)
+                let waits = try #draw(.int(in: 1...16), from: tc)
                 let low = delay.scaledForRetry(by: range.lowerBound)
                 let high = delay.scaledForRetry(by: range.upperBound)
-                let random = RetryPolicy.constantDelay(delay).jitter(range)
                 let seeded = RetryPolicy.constantDelay(delay).jitter(
                     range,
                     using: SplitMix(state: seed)
@@ -398,10 +442,9 @@
                     range,
                     using: SplitMix(state: seed)
                 )
-                let randomWaits = try (0..<8).map { _ in try #require(random(.initial)) }
-                let seededWaits = try (0..<8).map { _ in try #require(seeded(.initial)) }
-                let againWaits = try (0..<8).map { _ in try #require(again(.initial)) }
-                for wait in randomWaits + seededWaits {
+                let seededWaits = try (0..<waits).map { _ in try #require(seeded(.initial)) }
+                let againWaits = try (0..<waits).map { _ in try #require(again(.initial)) }
+                for wait in seededWaits {
                     #expect(wait >= low && wait <= high, "\(wait) is not in \(low)...\(high)")
                     #expect(wait >= .zero && wait <= RetryGen.maximum)
                 }
@@ -412,7 +455,7 @@
         /// Applying a policy to any status takes one step: the iteration grows
         /// by one (and stays at `Int.max`), and the wait the policy gives, in
         /// range, becomes the last wait and is added to the total.
-        @Test(.hegel(testCases: 1_000))
+        @Test(.hegel(testCases: cases(1_000)))
         func applyingTakesOneStep() throws {
             try property { tc in
                 let expr = try #draw(RetryGen.policy, from: tc)
@@ -449,7 +492,7 @@
 
         /// `RetryStatus` is public, so a status at the last iteration can be
         /// made by hand. Applying a policy to it must not crash.
-        @Test(.hegel(testCases: 1_000))
+        @Test
         func applyingAtTheLastIterationDoesNotCrash() async {
             await #expect(processExitsWith: .success) {
                 _ = RetryStatus(iteration: .max).applying(.limitRetries(1))
@@ -458,7 +501,7 @@
 
         /// Every combination of the built-in policies returns what its model
         /// says, on any status.
-        @Test(.hegel(testCases: 1_000))
+        @Test(.hegel(testCases: cases(1_000)))
         func policiesMatchTheModel() throws {
             try property { tc in
                 let expr = try #draw(RetryGen.policy, from: tc)
@@ -478,7 +521,7 @@
 
         /// A dry run takes one step per retry, adds up the waits without
         /// overflowing, and ends at the first step where the policy stops.
-        @Test(.hegel(testCases: 1_000))
+        @Test(.hegel(testCases: cases(1_000)))
         func dryRunWalksThePolicy() throws {
             try property { tc in
                 let expr = try #draw(RetryGen.policy, from: tc)
@@ -521,16 +564,32 @@
         /// `withRetry` against a model of it: the statuses each attempt sees, the
         /// waits it sleeps, and the result it returns, for any policy and any
         /// mix of successes, failures, requested waits and cancellations.
-        @Test(.hegel(testCases: 500))
+        @Test(.hegel(testCases: cases(500)))
         func withRetryFollowsThePolicy() async throws {
+            var cases = 0
+            var retriedOften = 0
             try await property { tc in
-                let expr = try #draw(RetryGen.policy, from: tc)
+                // Most combined policies stop within a retry or two, so some
+                // cases get one that never stops on its own.
+                let expr = try #draw(
+                    .oneOf(
+                        RetryGen.policy,
+                        RetryGen.duration.map { PolicyExpr.constantDelay($0) },
+                        RetryGen.duration.map { PolicyExpr.exponentialBackoff($0) },
+                        .just(.requestedDelay)
+                    ),
+                    from: tc
+                )
                 let limit = try #draw(
                     .oneOf(.int(in: 0...10), .int(in: 0...1_000)),
                     from: tc
                 )
-                let script = try #draw(.array(of: RetryGen.attempt), from: tc)
-                let bounded = PolicyExpr.and(expr, .limitRetries(limit))
+                let rates = try #draw(RetryGen.attemptRates, from: tc)
+                let script = try #draw(.array(of: RetryGen.attempt(rates)), from: tc)
+                // Attempts past the script succeed, so the retries end even
+                // under a policy with no limit.
+                let limited = try #draw(.bool(), from: tc)
+                let bounded = limited ? PolicyExpr.and(expr, .limitRetries(limit)) : expr
 
                 func attempt(_ index: Int) -> Attempt {
                     index < script.count ? script[index] : .success
@@ -617,9 +676,18 @@
                 #expect(clock.sleeps == expectedSleeps)
                 #expect(result == expectedResult)
 
+                cases += 1
                 try tc.event(ending)
                 try tc.event("attempts", value: Double(expectedStatuses.count))
+                if !limited {
+                    try tc.event("a policy with no added limit")
+                }
+                if expectedStatuses.count >= 4 {
+                    retriedOften += 1
+                    try tc.event("retried three times or more")
+                }
             }
+            expectReached(retriedOften, in: cases, "no case retried three times")
         }
     }
 

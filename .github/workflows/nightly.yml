@@ -1,0 +1,106 @@
+name: Nightly
+
+# Deeper and wider runs than every push can afford: the property tests with
+# new inputs and many more test cases, and every test under ThreadSanitizer.
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+
+# The jobs only read the repository; none of them needs a write token.
+permissions:
+  contents: read
+
+env:
+  # Same pinned toolchain installer as tests.yml.
+  SWIFTLY_VERSION: "1.2.0"
+  SWIFTLY_SHA256: a1b48692b00ea6902957423473c87bee7c7f3e18c015a4a09317102f6820b987
+  SWIFT_VERSION: "6.4"
+
+jobs:
+  # A scheduled run has no change to compare with, so zizmor audits every
+  # workflow first; the other jobs wait for it.
+  zizmor:
+    name: zizmor
+    uses: $/.github/workflows/zizmor.yml
+
+  properties-macos:
+    name: Deep property tests (macOS)
+    needs: zizmor
+    runs-on: macos-26
+    timeout-minutes: 120
+    env:
+      # hegel.toml: new inputs every night instead of the derandomized ones.
+      HEGEL_DEFAULT_PROFILE: nightly
+      # Each property runs ten times its usual number of test cases.
+      FP_PROPERTY_SCALE: "10"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Swift ${{ env.SWIFT_VERSION }}
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/swiftly.pkg" "https://download.swift.org/swiftly/darwin/swiftly-$SWIFTLY_VERSION.pkg"
+          echo "$SWIFTLY_SHA256  $RUNNER_TEMP/swiftly.pkg" | shasum -a 256 -c -
+          installer -pkg "$RUNNER_TEMP/swiftly.pkg" -target CurrentUserHomeDirectory
+          ~/.swiftly/bin/swiftly init --assume-yes --quiet-shell-followup --skip-install
+          . "$HOME/.swiftly/env.sh"
+          swiftly install --assume-yes --use "$SWIFT_VERSION"
+          echo "$HOME/.swiftly/bin" >> "$GITHUB_PATH"
+
+      # A failure's report ends with a `.hegel(reproducing:)` trait that
+      # replays its minimal example locally.
+      - name: Run property tests
+        run: swift test --filter FPPropertyTests
+
+  properties-linux:
+    name: Deep property tests (Linux)
+    needs: zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container:
+      image: swift:6.4
+    env:
+      HEGEL_DEFAULT_PROFILE: nightly
+      FP_PROPERTY_SCALE: "10"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run property tests
+        run: swift test --filter FPPropertyTests
+
+  thread-sanitizer:
+    name: ThreadSanitizer (macOS)
+    needs: zizmor
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Swift ${{ env.SWIFT_VERSION }}
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/swiftly.pkg" "https://download.swift.org/swiftly/darwin/swiftly-$SWIFTLY_VERSION.pkg"
+          echo "$SWIFTLY_SHA256  $RUNNER_TEMP/swiftly.pkg" | shasum -a 256 -c -
+          installer -pkg "$RUNNER_TEMP/swiftly.pkg" -target CurrentUserHomeDirectory
+          ~/.swiftly/bin/swiftly init --assume-yes --quiet-shell-followup --skip-install
+          . "$HOME/.swiftly/env.sh"
+          swiftly install --assume-yes --use "$SWIFT_VERSION"
+          echo "$HOME/.swiftly/bin" >> "$GITHUB_PATH"
+
+      # An exit test runs in a child process that the sanitizer's runtime is
+      # not loaded into, so it aborts there; those tests are skipped.
+      - name: Run tests under ThreadSanitizer
+        run: >-
+          swift test --sanitize=thread
+          --skip '[oO]rExit[A-Za-z]*OnFailure|applyingAtTheLastIterationDoesNotCrash'
