@@ -385,8 +385,10 @@
                 "factor": (RetryGen.maximum / Duration.nanoseconds(31)).nextDown,
             ]
             try property(examples: [pastTheCutoff], reaching: ["just below the cutoff"]) { tc in
-                let base = try #draw(RetryGen.duration, from: tc)
-                let factor = try #draw(RetryGen.factor(for: base), from: tc)
+                // Named by hand: the example is keyed by these names, and
+                // Swift 6.3's `#draw` can't see the binding, so it names none.
+                let base = try tc.draw(RetryGen.duration, named: "base")
+                let factor = try tc.draw(RetryGen.factor(for: base), named: "factor")
                 let scaled = base.scaledForRetry(by: factor)
                 #expect(scaled >= .zero && scaled <= RetryGen.maximum)
                 let clampedBase = Double(Exact.clamped(base))
