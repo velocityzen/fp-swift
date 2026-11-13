@@ -23,9 +23,13 @@
             // Enough at once to grow the ring past its capacity, often more than once.
             // Memory bounds the long branch.
             let count = try #draw(.oneOf(.int(in: 0...10), .int(in: 0...5_000)), from: tc)
+            let room = s.queue.ring.slots.count
             for x in 0..<count {
                 s.queue.append(x)
                 s.model.append(x)
+            }
+            if s.queue.ring.slots.count > room {
+                try tc.event("the ring grew")
             }
         }
         .rule("popMany") { s, tc in
@@ -60,8 +64,12 @@
                 from: tc
             )
             let x = try #draw(.int(), from: tc)
+            let room = s.ring.slots.count
             s.ring.store(x, at: s.start + offset, from: s.start)
             s.model[s.start + offset] = x
+            if s.ring.slots.count > room {
+                try tc.event(room == 0 ? "the empty ring grew" : "the ring grew")
+            }
         }
         .rule("take") { s, tc in
             try tc.assume(!s.ring.slots.isEmpty)
@@ -165,6 +173,9 @@
                 s.order.keep(nil, at: index)
                 s.kept.insert(index)
             }
+            if s.bufferLimit > 0, s.order.early == s.bufferLimit {
+                try tc.event("early results reached bufferLimit")
+            }
         }
         .rule("consume") { s, tc in
             try tc.assume(!s.consumerWaiting)
@@ -172,6 +183,7 @@
                 s.delivered.append(value)
             } else {
                 s.consumerWaiting = true
+                try tc.event("the consumer waited")
             }
         }
         .invariant("delivers in source order", everyStep: true) { s, _ in
@@ -242,14 +254,18 @@
             }
             rig.gate.arrive(orOpenWith: x)
         }
-        .invariant("opens once, when it should", everyStep: true) { rig, _ in
+        .invariant("opens once, when it should", everyStep: true) { rig, tc in
             let value = rig.value
             let calls = rig.calls.withLock { calls in
                 if calls.firstSeen == nil { calls.firstSeen = value }
                 return calls
             }
-            let shouldBeOpen = calls.opens > 0 || (rig.parties > 0 && calls.arrivals >= rig.parties)
-            #expect((value != nil) == shouldBeOpen)
+            let opened = calls.opens > 0
+            let arrived = rig.parties > 0 && calls.arrivals >= rig.parties
+            #expect((value != nil) == (opened || arrived))
+            if arrived, !opened {
+                try tc.event("opened by the last arrival")
+            }
             if let value {
                 #expect(calls.values.contains(value))
                 #expect(calls.firstSeen == value, "the gate's value changed")

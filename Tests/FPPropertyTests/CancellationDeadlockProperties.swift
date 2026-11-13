@@ -40,6 +40,8 @@
         /// handing over their results.
         @Test(.hegel(testCases: 2_000))
         func cancellingTheReaderEndsTheRead() async throws {
+            var cases = 0
+            var cancelled = 0
             try await property { tc in
                 let jobs = try #draw(Draw.jobs(min: 1), from: tc)
                 let concurrency = try #draw(Draw.parallel, from: tc)
@@ -78,7 +80,14 @@
                     return await value(of: reader, cancelledWithin: .seconds(5))
                 }
                 #expect(run.value != nil, "the reader was cancelled and never finished")
+
+                cases += 1
+                if run.cancelledAt != nil {
+                    cancelled += 1
+                    try tc.event("cancelled during the read")
+                }
             }
+            expectReached(cancelled, in: cases, "no case cancelled the reader")
         }
     }
 

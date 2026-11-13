@@ -155,6 +155,24 @@
             )
         }
 
+        /// Doublings: everyday counts, any count, and counts around 113, after
+        /// which even a 1-attosecond wait is past the maximum.
+        static let exponent: Gen<Int> = .oneOf(
+            .int(in: -2...70),
+            .int(in: 108...116),
+            .int()
+        )
+
+        /// Bases at the edge of saturating after `exponent` doublings: the
+        /// largest that still fits, and its neighbours. Or any wait.
+        static func doublingBase(after exponent: Int) -> Gen<Duration> {
+            let edge = Exact.maximum >> min(max(exponent, 0), 127)
+            return .oneOf(
+                Gen.element(of: [0, -1, 1]).map { Duration(attoseconds: edge + Int128($0)) },
+                duration
+            )
+        }
+
         /// Any `Double`: NaN, infinities and negatives scale to no wait or the
         /// maximum.
         static let factor: Gen<Double> = .oneOf(
@@ -290,6 +308,12 @@
             try property { tc in
                 let d = try #draw(RetryGen.duration, from: tc)
                 #expect(d.clampedToRetryDelay == Exact.clampedDuration(d))
+
+                if d < .zero {
+                    try tc.event("below zero")
+                } else if d > RetryGen.maximum {
+                    try tc.event("past the maximum")
+                }
             }
         }
 
@@ -299,16 +323,34 @@
                 let a = Exact.clampedDuration(try #draw(RetryGen.duration, from: tc))
                 let b = Exact.clampedDuration(try #draw(RetryGen.duration, from: tc))
                 #expect(a.addingRetryDelay(b) == Exact.adding(a, b))
+
+                if Exact.adding(a, b) == RetryGen.maximum {
+                    try tc.event("saturated")
+                }
             }
         }
 
+        /// Doubling is exact while the result fits, and the maximum after.
         @Test(.hegel(testCases: 1_000))
         func doublingIsExactUntilTheMaximum() throws {
+            var cases = 0
+            var exactAtTheEdge = 0
             try property { tc in
-                let base = try #draw(RetryGen.duration, from: tc)
-                let exponent = try #draw(.oneOf(.int(in: -2...70), .int()), from: tc)
-                #expect(base.doubled(times: exponent) == Exact.doubled(base, times: exponent))
+                let exponent = try #draw(RetryGen.exponent, from: tc)
+                let base = try #draw(RetryGen.doublingBase(after: exponent), from: tc)
+                let doubled = base.doubled(times: exponent)
+                #expect(doubled == Exact.doubled(base, times: exponent))
+
+                cases += 1
+                let edge = Exact.maximum >> min(max(exponent, 0), 127)
+                if doubled == RetryGen.maximum {
+                    try tc.event("saturated")
+                } else if base.attoseconds == edge, edge > 0 {
+                    exactAtTheEdge += 1
+                    try tc.event("exact, at the largest base that fits")
+                }
             }
+            expectReached(exactAtTheEdge, in: cases, "no case doubled the largest base that fits")
         }
 
         /// Scaling multiplies in floating point, so only roughly; but it never
@@ -327,6 +369,12 @@
                     #expect(error <= max(exact * 1e-9, 1), "\(scaled) for an exact \(exact) as")
                 } else {
                     #expect(scaled == .zero)
+                }
+
+                if scaled == RetryGen.maximum {
+                    try tc.event("capped at the maximum")
+                } else if scaled == .zero {
+                    try tc.event("no wait")
                 }
             }
         }
@@ -389,6 +437,13 @@
                         == (delay.map { Exact.adding(status.cumulativeDelay, $0) }
                             ?? status.cumulativeDelay)
                 )
+
+                if delay == nil {
+                    try tc.event("the policy stopped")
+                }
+                if status.iteration == .max {
+                    try tc.event("at the last iteration")
+                }
             }
         }
 
@@ -408,9 +463,15 @@
             try property { tc in
                 let expr = try #draw(RetryGen.policy, from: tc)
                 let policy = expr.policy
+                var stopped = false
                 for _ in 0..<4 {
                     let status = try #draw(RetryGen.status, from: tc)
                     #expect(policy(status) == expr.model(status), "\(status)")
+                    stopped = stopped || expr.model(status) == nil
+                }
+
+                if stopped {
+                    try tc.event("the policy stopped")
                 }
             }
         }
@@ -447,6 +508,13 @@
                 }
                 #expect(steps == expected)
                 #expect(steps.count <= limit + 1)
+
+                try tc.event(
+                    expected.count <= limit ? "the policy stopped first" : "the limit stopped it"
+                )
+                if expected.contains(where: { $0.cumulativeDelay == RetryGen.maximum }) {
+                    try tc.event("the total wait saturated")
+                }
             }
         }
 
@@ -484,13 +552,18 @@
                 var expectedStatuses: [RetryStatus] = []
                 var expectedSleeps: [Duration] = []
                 var expectedResult: Result<Int, AttemptFailure>
+                /// Why the model stopped, for the statistics.
+                var ending: String
                 var status = RetryStatus.initial
                 var index = 0
                 while true {
                     expectedStatuses.append(status)
                     let a = attempt(index)
                     expectedResult = outcome(index)
-                    guard !a.succeeds, a.retryable else { break }
+                    guard !a.succeeds, a.retryable else {
+                        ending = a.succeeds ? "succeeded" : "a failure that is not retried"
+                        break
+                    }
                     let requested = a.requested.map(Exact.clampedDuration)
                     let asked = RetryStatus(
                         iteration: status.iteration,
@@ -498,9 +571,14 @@
                         previousDelay: status.previousDelay,
                         requestedDelay: requested
                     )
-                    guard let delay = bounded.model(asked).map(Exact.clampedDuration),
-                        !a.cancels
-                    else { break }
+                    guard let delay = bounded.model(asked).map(Exact.clampedDuration) else {
+                        ending = "the policy stopped"
+                        break
+                    }
+                    guard !a.cancels else {
+                        ending = "cancelled"
+                        break
+                    }
                     if delay > .zero {
                         expectedSleeps.append(delay)
                     }
@@ -538,6 +616,9 @@
                 #expect(seen.withLock { $0 } == expectedStatuses)
                 #expect(clock.sleeps == expectedSleeps)
                 #expect(result == expectedResult)
+
+                try tc.event(ending)
+                try tc.event("attempts", value: Double(expectedStatuses.count))
             }
         }
     }
