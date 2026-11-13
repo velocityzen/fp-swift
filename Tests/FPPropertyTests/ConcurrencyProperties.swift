@@ -5,7 +5,7 @@
     import HegelTesting
     import Testing
 
-    /// Every call runs under `unlessStalled`: a lost wakeup fails the property
+    /// Every call runs under `withStallDetection`: a lost wakeup fails the property
     /// with a shrunk example instead of hanging the test run.
     @Suite("Concurrency helper properties", .hegel)
     struct ConcurrencyProperties {
@@ -19,7 +19,7 @@
         /// Like `run`, but a job with `.drop` hangs until it is cancelled.
         static func runOrHang(
             _ job: Job,
-            _ hangs: Hangs,
+            _ hangs: CancellationProbe,
             _ heartbeat: Heartbeat
         ) async -> Result<Int, JobFailure> {
             if job.outcome == .drop {
@@ -38,19 +38,15 @@
         /// workers claims elements; at or above it, each element gets a task.
         @Test(.hegel(testCases: cases(500)))
         func concurrentTraverseIsSequentialTraverse() async throws {
-            var cases = 0
-            var workerPool = 0
-            var taskPerElement = 0
-            try await property { tc in
+            try await property(reaching: ["worker pool", "task per element"]) { tc in
                 let jobs = try #draw(Draw.jobs([.keep, .fail]), from: tc)
                 let concurrency = try #draw(
                     .oneOf(.int(in: 1...4), .int(in: 1...16), Draw.concurrency),
                     from: tc
                 )
-                let heartbeat = Heartbeat()
                 let inFlight = InFlight()
                 let lateStarts = Counter()
-                let traversed = await unlessStalled(heartbeat) {
+                let concurrent = try await tc.withStallDetection(after: stallLimit) { heartbeat in
                     await jobs.traverseAsync(concurrency: concurrency) {
                         job -> Result<Int, JobFailure> in
                         if Task.isCancelled {
@@ -59,7 +55,6 @@
                         return await inFlight.run { await Self.run(job, heartbeat) }
                     }
                 }
-                let concurrent = try #require(traversed, "the traversal stalled")
                 let sequential = await jobs.traverseAsync { await Self.run($0) }
                 #expect(concurrent == sequential)
                 #expect(inFlight.peak <= concurrency)
@@ -71,13 +66,10 @@
                     "\(lateStarts.value) transforms started after the traversal was cancelled"
                 )
 
-                cases += 1
                 if concurrency > 1, jobs.count > 1 {
                     if concurrency >= jobs.count {
-                        taskPerElement += 1
                         try tc.event("task per element")
                     } else {
-                        workerPool += 1
                         try tc.event("worker pool")
                     }
                 }
@@ -87,8 +79,6 @@
                     try tc.event("failed with elements left to claim")
                 }
             }
-            expectReached(workerPool, in: cases, "no case ran the worker pool")
-            expectReached(taskPerElement, in: cases, "no case ran a task per element")
         }
 
         /// The race gives a success if any operation succeeds, and otherwise one
@@ -100,9 +90,7 @@
         /// own, so hangs run only beside a success.
         @Test(.hegel(testCases: cases(500)))
         func withAnyFindsASuccessIfThereIsOne() async throws {
-            var cases = 0
-            var cancelledHangs = 0
-            try await property { tc in
+            try await property(reaching: ["a hanging operation was cancelled"]) { tc in
                 let mix = try #draw(Draw.outcomes([.keep, .fail, .drop]), from: tc)
                 let jobs = try #draw(
                     Draw.jobs(mix, min: 1).map { jobs in
@@ -118,14 +106,12 @@
                     from: tc
                 )
                 let viaArray = try #draw(.bool(), from: tc)
-                let heartbeat = Heartbeat()
-                let hangs = Hangs()
-                let raced = await unlessStalled(heartbeat) {
+                let hangs = CancellationProbe()
+                let result = try await tc.withStallDetection(after: stallLimit) { heartbeat in
                     viaArray
                         ? await Self.raceArray(jobs, hangs, heartbeat)
                         : await Self.raceArity(jobs, hangs, heartbeat)
                 }
-                let result = try #require(raced, "the race stalled")
                 let successes = Set(jobs.filter { $0.outcome != .fail }.map(transformed))
                 let failures = Set(
                     jobs.filter { $0.outcome == .fail }.map { JobFailure(value: $0.value) }
@@ -143,7 +129,6 @@
                     "\(hangs.uncancelled) hanging operations were never cancelled"
                 )
 
-                cases += 1
                 try tc.event(
                     successes.isEmpty ? "every operation failed" : "an operation succeeded"
                 )
@@ -151,16 +136,14 @@
                     try tc.event("a fixed-arity withAny")
                 }
                 if hangs.started > 0 {
-                    cancelledHangs += 1
                     try tc.event("a hanging operation was cancelled")
                 }
             }
-            expectReached(cancelledHangs, in: cases, "no hanging operation ran beside a success")
         }
 
         static func raceArray(
             _ jobs: [Job],
-            _ hangs: Hangs,
+            _ hangs: CancellationProbe,
             _ heartbeat: Heartbeat
         ) async -> Result<Int, JobFailure> {
             await withAny(jobs.map { job in { await Self.runOrHang(job, hangs, heartbeat) } })
@@ -170,7 +153,7 @@
         /// a single job or more than ten.
         static func raceArity(
             _ jobs: [Job],
-            _ hangs: Hangs,
+            _ hangs: CancellationProbe,
             _ heartbeat: Heartbeat
         ) async -> Result<Int, JobFailure> {
             let j = jobs
@@ -269,9 +252,7 @@
         /// own, so hangs run only alongside a failure.
         @Test(.hegel(testCases: cases(500)))
         func withAllGivesEveryValueOrAFailure() async throws {
-            var cases = 0
-            var cancelledHangs = 0
-            try await property { tc in
+            try await property(reaching: ["a hanging operation was cancelled"]) { tc in
                 let drawn = try #draw(
                     .array(of: .job(outcomes: [.keep, .fail, .drop]), count: 2...10),
                     from: tc
@@ -284,12 +265,10 @@
                     }
                     return job
                 }
-                let heartbeat = Heartbeat()
-                let hangs = Hangs()
-                let combined = await unlessStalled(heartbeat) {
+                let hangs = CancellationProbe()
+                let result = try await tc.withStallDetection(after: stallLimit) { heartbeat in
                     await Self.all(jobs, hangs, heartbeat)
                 }
-                let result = try #require(combined, "withAll stalled")
                 let failures = Set(
                     jobs.filter { $0.outcome == .fail }.map { JobFailure(value: $0.value) }
                 )
@@ -306,21 +285,18 @@
                     "\(hangs.uncancelled) hanging operations were never cancelled"
                 )
 
-                cases += 1
                 try tc.event(failing ? "an operation failed" : "every operation succeeded")
                 if hangs.started > 0 {
-                    cancelledHangs += 1
                     try tc.event("a hanging operation was cancelled")
                 }
             }
-            expectReached(cancelledHangs, in: cases, "no hanging operation ran beside a failure")
         }
 
         /// The `withAll` overload for `jobs.count` operations, its tuple as an
         /// array.
         static func all(
             _ jobs: [Job],
-            _ hangs: Hangs,
+            _ hangs: CancellationProbe,
             _ heartbeat: Heartbeat
         ) async -> Result<[Int], JobFailure> {
             let j = jobs
@@ -416,22 +392,21 @@
         /// cancelled, and has stopped by the time `withTimeout` returns.
         @Test(.hegel(testCases: cases(500)))
         func withTimeoutPicksTheFirstToFinish() async throws {
-            var cases = 0
-            var operationWon = 0
-            var timeoutWon = 0
-            try await property { tc in
+            try await property(
+                reaching: ["the timeout beat the operation", "the operation beat the timeout"]
+            ) { tc in
                 let job = try #draw(.job(outcomes: [.keep, .fail]), from: tc)
                 // Around the job's own time: 20 µs a suspension, and its sleep.
                 let limit = try #draw(
                     .oneOf(.int(in: 0...(job.delay * 40 + 100)), .int(in: 0...100)),
                     from: tc
                 )
-                let heartbeat = Heartbeat()
-                let hangs = Hangs()
+                let hangs = CancellationProbe()
                 // A job that fails with `.min` fails like the timeout; every
                 // check below allows either.
                 let timeout = JobFailure(value: .min)
-                let raced = await unlessStalled(heartbeat) {
+                let (close, quick, stuck) = try await tc.withStallDetection(after: stallLimit) {
+                    heartbeat in
                     let close = await withTimeout(.microseconds(limit), failingWith: timeout) {
                         await Self.run(job, heartbeat)
                     }
@@ -446,24 +421,18 @@
                     }
                     return (close: close, quick: quick, stuck: stuck)
                 }
-                let (close, quick, stuck) = try #require(raced, "withTimeout stalled")
                 let finished = await Self.run(job)
                 #expect(close == finished || close == .failure(timeout))
                 #expect(quick == finished)
                 #expect(stuck == .failure(timeout))
                 #expect(hangs.uncancelled == 0, "the stuck operation was never cancelled")
 
-                cases += 1
                 if close == .failure(timeout) {
-                    timeoutWon += 1
                     try tc.event("the timeout beat the operation")
                 } else {
-                    operationWon += 1
                     try tc.event("the operation beat the timeout")
                 }
             }
-            expectReached(timeoutWon, in: cases, "the timeout never beat the operation")
-            expectReached(operationWon, in: cases, "the operation never beat the timeout")
         }
 
         /// After a failure, the transforms still running are cancelled: jobs
@@ -471,10 +440,12 @@
         /// out. No new transform starts.
         @Test(.hegel(testCases: cases(500)))
         func traverseCancelsAfterAFailure() async throws {
-            var cases = 0
-            var hangsRan = 0
-            var elementsLeft = 0
-            try await property { tc in
+            try await property(
+                reaching: [
+                    "a transform hung beside the failure",
+                    "elements left to claim after the failure",
+                ]
+            ) { tc in
                 // The first job fails, so every hanging job runs beside a
                 // failure.
                 let jobs = try #draw(
@@ -486,10 +457,9 @@
                     from: tc
                 )
                 let concurrency = try #draw(Draw.parallel, from: tc)
-                let heartbeat = Heartbeat()
-                let hangs = Hangs()
+                let hangs = CancellationProbe()
                 let lateStarts = Counter()
-                let traversed = await unlessStalled(heartbeat) {
+                let result = try await tc.withStallDetection(after: stallLimit) { heartbeat in
                     await jobs.traverseAsync(concurrency: concurrency) {
                         job -> Result<Int, JobFailure> in
                         if Task.isCancelled {
@@ -506,7 +476,6 @@
                         }
                     }
                 }
-                let result = try #require(traversed, "the traversal stalled")
                 #expect(result == .failure(JobFailure(value: jobs[0].value)))
                 // Every transform has ended, so every hang was cancelled or
                 // ran out its minute. Counted, not timed: on a busy machine
@@ -522,18 +491,13 @@
                     "\(lateStarts.value) transforms started after the traversal was cancelled"
                 )
 
-                cases += 1
                 if hangs.started > 0 {
-                    hangsRan += 1
                     try tc.event("a transform hung beside the failure")
                 }
                 if concurrency < jobs.count - 1 {
-                    elementsLeft += 1
                     try tc.event("elements left to claim after the failure")
                 }
             }
-            expectReached(hangsRan, in: cases, "no transform hung beside the failure")
-            expectReached(elementsLeft, in: cases, "no failure left elements to claim")
         }
     }
 

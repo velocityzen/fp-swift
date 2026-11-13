@@ -4,7 +4,6 @@
     import Foundation
     import HegelTesting
     import Synchronization
-    import Testing
 
     /// A property's number of test cases: `base`, times `FP_PROPERTY_SCALE`
     /// when it is set, as in the nightly run.
@@ -127,6 +126,15 @@
                 lifetime: Lifetime(released)
             )
         }
+
+        /// This source, beating `heartbeat` on every read. The copy shares
+        /// this one's counters, so a source made before
+        /// `withStallDetection` can be read inside it.
+        func beating(_ heartbeat: Heartbeat) -> Self {
+            var source = self
+            source.heartbeat = heartbeat
+            return source
+        }
     }
 
     /// Adds to `released` when it is released.
@@ -239,70 +247,10 @@
         func add() { count.add(1, ordering: .sequentiallyConsistent) }
     }
 
-    /// Counts steps of work: reads, finished transforms, delivered values. It
-    /// tells a slow test case, which keeps beating, from a stuck one.
-    final class Heartbeat: Sendable {
-        private let beats = Atomic<Int>(0)
-        var count: Int { beats.load(ordering: .relaxed) }
-        func beat() { beats.add(1, ordering: .relaxed) }
-    }
-
     /// How long a test case may go without a heartbeat before it counts as
-    /// stuck. Every step of the generated work takes milliseconds; this
-    /// leaves room for a busy machine.
+    /// stuck, for `withStallDetection(after:)`. Every step of the generated
+    /// work takes milliseconds; this leaves room for a busy machine.
     let stallLimit: Duration = .seconds(5)
-
-    /// Runs `body` in a task of its own and returns its value, or nil once
-    /// `heartbeat` has not beaten for `limit`. The stuck task is then
-    /// cancelled.
-    ///
-    /// A lost wakeup makes the code under test wait forever. Hegel can neither
-    /// report nor shrink a test that hangs, so this turns the hang into a
-    /// failure: `try #require(await unlessStalled(...))`.
-    func unlessStalled<T: Sendable>(
-        _ heartbeat: Heartbeat,
-        for limit: Duration = stallLimit,
-        _ body: @escaping @Sendable () async -> T
-    ) async -> T? {
-        let (outcomes, delivery) = AsyncStream.makeStream(of: T?.self)
-        let work = Task {
-            delivery.yield(await body())
-        }
-        let watchdog = Task {
-            var seen = heartbeat.count
-            var since = ContinuousClock.now
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(10))
-                let now = heartbeat.count
-                if now != seen {
-                    (seen, since) = (now, .now)
-                } else if since.duration(to: .now) >= limit {
-                    delivery.yield(nil)
-                    return
-                }
-            }
-        }
-        var iterator = outcomes.makeAsyncIterator()
-        let outcome = await iterator.next() ?? nil
-        watchdog.cancel()
-        if outcome == nil {
-            work.cancel()
-        }
-        return outcome
-    }
-
-    /// Checks a reach claim once a property has run: some test case reached
-    /// the state the property exists to test. A run of only a few cases, such
-    /// as the replay of one stored failure, can't judge it, so it is skipped.
-    func expectReached(
-        _ reached: Int,
-        in cases: Int,
-        _ claim: Comment,
-        sourceLocation: SourceLocation = #_sourceLocation
-    ) {
-        guard cases >= 50 else { return }
-        #expect(reached > 0, claim, sourceLocation: sourceLocation)
-    }
 
     /// Shared draws: mostly small values, so most cases run fast, and sometimes
     /// the extremes the API accepts.
@@ -369,38 +317,6 @@
         static func passthrough(_ every: Int?) -> (@Sendable (Job) -> Int?)? {
             guard let every else { return nil }
             return { job in job.value.isMultiple(of: every) ? 0 &- job.value : nil }
-        }
-    }
-
-    /// Transforms that only a cancellation stops, counted so a property can
-    /// check that each one was cancelled.
-    ///
-    /// A hang counts its cancellation in a cancellation handler, which runs
-    /// when the task is cancelled. Waiting for the hanging task to finish
-    /// instead would also wait for it to be scheduled again, which can take
-    /// seconds on a busy machine.
-    final class Hangs: Sendable {
-        private let starts = Atomic<Int>(0)
-        private let cancelled = Atomic<Int>(0)
-
-        /// Hangs that started.
-        var started: Int { starts.load(ordering: .sequentiallyConsistent) }
-
-        /// Hangs that started and were not cancelled. Never too low: a hang
-        /// that starts and is cancelled while this reads counts here.
-        var uncancelled: Int {
-            let cancelled = cancelled.load(ordering: .sequentiallyConsistent)
-            return starts.load(ordering: .sequentiallyConsistent) - cancelled
-        }
-
-        /// Runs until cancelled, for at most a minute.
-        func hang() async {
-            starts.add(1, ordering: .sequentiallyConsistent)
-            await withTaskCancellationHandler {
-                try? await Task.sleep(for: .seconds(60))
-            } onCancel: {
-                cancelled.add(1, ordering: .sequentiallyConsistent)
-            }
         }
     }
 

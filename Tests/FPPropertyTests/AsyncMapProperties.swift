@@ -8,7 +8,7 @@
     /// The concurrent maps over async sequences, against `Array.map` as the
     /// model, for any concurrency, buffer limit and timing.
     ///
-    /// Every stream is read under `unlessStalled`: a lost wakeup fails the
+    /// Every stream is read under `withStallDetection`: a lost wakeup fails the
     /// property with a shrunk example instead of hanging the test run.
     /// The most elements an ordered map reads ahead of its consumer:
     /// `concurrency` in flight or waiting for the consumer, and
@@ -33,25 +33,18 @@
         /// with `concurrency` 1.
         @Test(.hegel(testCases: cases(500)))
         func orderedMapIsMap() async throws {
-            var cases = 0
-            var overlapped = 0
-            try await property { tc in
+            try await property(reaching: ["transforms overlapped"]) { tc in
                 let jobs = try #draw(Draw.jobs(), from: tc)
                 let concurrency = try #draw(Draw.concurrency, from: tc)
                 let bufferLimit = try #draw(Self.bufferLimits, from: tc)
                 let sourceYields = try #draw(Draw.sourceYields, from: tc)
                 let consumer = try #draw(Draw.consumer, from: tc)
-                let heartbeat = Heartbeat()
                 let inFlight = InFlight()
-                let source = CountingSource(
-                    elements: jobs,
-                    yields: sourceYields,
-                    heartbeat: heartbeat
-                )
+                let source = CountingSource(elements: jobs, yields: sourceYields)
                 let readAhead = ReadAhead(of: source.reads)
-                let collected = await unlessStalled(heartbeat) {
+                let results = try await tc.withStallDetection(after: stallLimit) { heartbeat in
                     await consumer.collect(
-                        source.mapAsyncOrdered(
+                        source.beating(heartbeat).mapAsyncOrdered(
                             concurrency: concurrency,
                             bufferLimit: bufferLimit
                         ) { job in
@@ -64,7 +57,6 @@
                         readAhead
                     )
                 }
-                let results = try #require(collected, "the stream stalled")
                 #expect(results == jobs.map(transformed))
                 #expect(inFlight.peak <= concurrency)
                 let bound = orderedReadAheadBound(concurrency, bufferLimit)
@@ -73,7 +65,6 @@
                     #expect(readAhead.most == 0)
                 }
 
-                cases += 1
                 if concurrency > 1 {
                     try tc.event("concurrent pipeline")
                 }
@@ -81,14 +72,12 @@
                     try tc.event("bufferLimit below concurrency - 1")
                 }
                 if inFlight.peak > 1 {
-                    overlapped += 1
                     try tc.event("transforms overlapped")
                 }
                 if concurrency > 1, bound < jobs.count {
                     try tc.event("read-ahead bound below the element count")
                 }
             }
-            expectReached(overlapped, in: cases, "no case ran two transforms at once")
         }
 
         /// A slow consumer pauses the source: `mapAsyncOrdered` reads at most
@@ -98,19 +87,16 @@
         /// limits below the element count. Here they always are.
         @Test(.hegel(testCases: cases(200)))
         func orderedMapPausesTheSource() async throws {
-            var cases = 0
-            var nearBound = 0
-            try await property { tc in
+            try await property(reaching: ["read ahead to within one of the bound"]) { tc in
                 let concurrency = try #draw(.int(in: 2...8), from: tc)
                 let bufferLimit = try #draw(.int(in: 0...6), from: tc)
                 let jobs = try #draw(Draw.jobs(min: concurrency + bufferLimit + 1), from: tc)
                 let consumer = try #draw(Draw.consumer, from: tc)
-                let heartbeat = Heartbeat()
-                let source = CountingSource(elements: jobs, heartbeat: heartbeat)
+                let source = CountingSource(elements: jobs)
                 let readAhead = ReadAhead(of: source.reads)
-                let collected = await unlessStalled(heartbeat) {
+                let results = try await tc.withStallDetection(after: stallLimit) { heartbeat in
                     await consumer.collect(
-                        source.mapAsyncOrdered(
+                        source.beating(heartbeat).mapAsyncOrdered(
                             concurrency: concurrency,
                             bufferLimit: bufferLimit
                         ) { job in
@@ -121,18 +107,14 @@
                         readAhead
                     )
                 }
-                let results = try #require(collected, "the stream stalled")
                 #expect(results == jobs.map(transformed))
                 #expect(readAhead.most <= concurrency + bufferLimit)
                 tc.note("most read ahead: \(readAhead.most)")
 
-                cases += 1
                 if readAhead.most >= concurrency + bufferLimit - 1 {
-                    nearBound += 1
                     try tc.event("read ahead to within one of the bound")
                 }
             }
-            expectReached(nearBound, in: cases, "no reader got near the read-ahead bound")
         }
 
         /// `compactMapAsyncOrdered` gives `Array.compactMap`'s results, with
@@ -148,17 +130,12 @@
                 let bufferLimit = try #draw(Self.bufferLimits, from: tc)
                 let sourceYields = try #draw(Draw.sourceYields, from: tc)
                 let consumer = try #draw(Draw.consumer, from: tc)
-                let heartbeat = Heartbeat()
-                let source = CountingSource(
-                    elements: jobs,
-                    yields: sourceYields,
-                    heartbeat: heartbeat
-                )
+                let source = CountingSource(elements: jobs, yields: sourceYields)
                 let readAhead = ReadAhead(of: source.reads)
                 let passthrough = Draw.passthrough(passEvery)
-                let collected = await unlessStalled(heartbeat) {
+                let results = try await tc.withStallDetection(after: stallLimit) { heartbeat in
                     await consumer.collect(
-                        source.compactMapAsyncOrdered(
+                        source.beating(heartbeat).compactMapAsyncOrdered(
                             concurrency: concurrency,
                             bufferLimit: bufferLimit,
                             passthrough: passthrough
@@ -174,7 +151,6 @@
                         readAhead
                     )
                 }
-                let results = try #require(collected, "the stream stalled")
                 let expected = jobs.compactMap { job -> Int? in
                     if let value = passthrough?(job) { return value }
                     return job.outcome == .drop ? nil : transformed(job)
@@ -209,7 +185,6 @@
                 let bufferLimit = try #draw(Self.bufferLimits, from: tc)
                 let sourceYields = try #draw(Draw.sourceYields, from: tc)
                 let consumer = try #draw(Draw.consumer, from: tc)
-                let heartbeat = Heartbeat()
                 // Values that are a multiple of `sourceFailEvery` arrive as
                 // failures; `.fail` jobs fail in the transform.
                 let source = jobs.map { job -> Result<Job, JobFailure> in
@@ -218,15 +193,11 @@
                     }
                     return .success(job)
                 }
-                let counting = CountingSource(
-                    elements: source,
-                    yields: sourceYields,
-                    heartbeat: heartbeat
-                )
+                let counting = CountingSource(elements: source, yields: sourceYields)
                 let readAhead = ReadAhead(of: counting.reads)
-                let collected = await unlessStalled(heartbeat) {
+                let results = try await tc.withStallDetection(after: stallLimit) { heartbeat in
                     await consumer.collect(
-                        counting.flatMapAsyncOrdered(
+                        counting.beating(heartbeat).flatMapAsyncOrdered(
                             concurrency: concurrency,
                             bufferLimit: bufferLimit
                         ) { job -> Result<Int, JobFailure> in
@@ -239,7 +210,6 @@
                         readAhead
                     )
                 }
-                let results = try #require(collected, "the stream stalled")
                 let expected = source.map { element in
                     element.flatMap { job -> Result<Int, JobFailure> in
                         job.outcome == .fail
@@ -264,28 +234,22 @@
         /// with `concurrency` 1. A dropped element frees its slot.
         @Test(.hegel(testCases: cases(500)))
         func unorderedMapIsMapInSomeOrder() async throws {
-            var cases = 0
-            var boundTested = 0
-            var boundReached = 0
-            try await property { tc in
+            try await property(
+                reaching: ["read-ahead bound below the element count", "read ahead to the bound"]
+            ) { tc in
                 let mix = try #draw(Draw.outcomes([.keep, .drop]), from: tc)
                 let jobs = try #draw(Draw.jobs(mix), from: tc)
                 let passEvery = try #draw(Draw.passEvery, from: tc)
                 let concurrency = try #draw(Draw.concurrency, from: tc)
                 let sourceYields = try #draw(Draw.sourceYields, from: tc)
                 let consumer = try #draw(Draw.consumer, from: tc)
-                let heartbeat = Heartbeat()
                 let inFlight = InFlight()
-                let source = CountingSource(
-                    elements: jobs,
-                    yields: sourceYields,
-                    heartbeat: heartbeat
-                )
+                let source = CountingSource(elements: jobs, yields: sourceYields)
                 let readAhead = ReadAhead(of: source.reads)
                 let passthrough = Draw.passthrough(passEvery)
-                let collected = await unlessStalled(heartbeat) {
+                let results = try await tc.withStallDetection(after: stallLimit) { heartbeat in
                     await consumer.collect(
-                        source.compactMapAsyncUnordered(
+                        source.beating(heartbeat).compactMapAsyncUnordered(
                             concurrency: concurrency,
                             passthrough: passthrough
                         ) { job in
@@ -302,7 +266,6 @@
                         readAhead
                     )
                 }
-                let results = try #require(collected, "the stream stalled")
                 let expected = jobs.compactMap { job -> Int? in
                     if let value = passthrough?(job) { return value }
                     return job.outcome == .drop ? nil : transformed(job)
@@ -314,25 +277,20 @@
                     #expect(readAhead.most == 0)
                 }
 
-                cases += 1
                 if inFlight.peak > 1 {
                     try tc.event("transforms overlapped")
                 }
                 // The bound can only fail with more elements than workers.
                 if concurrency > 1, jobs.count > concurrency {
-                    boundTested += 1
                     try tc.event("read-ahead bound below the element count")
                 }
                 if concurrency > 1, readAhead.most == concurrency {
-                    boundReached += 1
                     try tc.event("read ahead to the bound")
                 }
                 if expected.count < jobs.count, jobs.count > concurrency {
                     try tc.event("dropped an element with more elements than workers")
                 }
             }
-            expectReached(boundTested, in: cases, "no case tested the read-ahead bound")
-            expectReached(boundReached, in: cases, "no reader got as far ahead as allowed")
         }
 
         /// When the consumer stops, reading stops: with no buffer, the reader is at
@@ -344,9 +302,9 @@
                 let concurrency = try #draw(Draw.parallel, from: tc)
                 let wanted = try #draw(.int(in: 0...(jobs.count - 1)), from: tc)
                 let ordered = try #draw(.bool(), from: tc)
-                let heartbeat = Heartbeat()
-                let source = CountingSource(elements: jobs, heartbeat: heartbeat)
-                let stopped = await unlessStalled(heartbeat) {
+                let source = CountingSource(elements: jobs)
+                try await tc.withStallDetection(after: stallLimit) { heartbeat in
+                    let source = source.beating(heartbeat)
                     var taken = 0
                     if ordered {
                         for await _ in source.mapAsyncOrdered(
@@ -372,9 +330,7 @@
                             taken += 1
                         }
                     }
-                    return taken
                 }
-                _ = try #require(stopped, "the stream stalled before the consumer stopped")
                 // Give a reader that ignored the stop time to read on.
                 try? await Task.sleep(for: .milliseconds(2))
                 let reads = source.reads.value
@@ -395,9 +351,7 @@
         /// came for and stops, every running transform is cancelled.
         @Test(.hegel(testCases: cases(500)))
         func stoppingCancelsRunningTransforms() async throws {
-            var cases = 0
-            var hangsRan = 0
-            try await property { tc in
+            try await property(reaching: ["a transform hung when the consumer stopped"]) { tc in
                 let concurrency = try #draw(Draw.parallel, from: tc)
                 let ordered = try #draw(.bool(), from: tc)
                 // The consumer takes one result, from a job that doesn't hang,
@@ -413,17 +367,16 @@
                     },
                     from: tc
                 )
-                let heartbeat = Heartbeat()
-                let hangs = Hangs()
-                let transform: @concurrent @Sendable (Job) async -> Int = { job in
-                    if job.outcome == .drop {
-                        await hangs.hang()
-                    } else {
-                        await pause(job, heartbeat)
+                let hangs = CancellationProbe()
+                try await tc.withStallDetection(after: stallLimit) { heartbeat in
+                    let transform: @concurrent @Sendable (Job) async -> Int = { job in
+                        if job.outcome == .drop {
+                            await hangs.hang()
+                        } else {
+                            await pause(job, heartbeat)
+                        }
+                        return job.value
                     }
-                    return job.value
-                }
-                let stopped = await unlessStalled(heartbeat) {
                     if ordered {
                         for await _ in CountingSource(elements: jobs).mapAsyncOrdered(
                             concurrency: concurrency,
@@ -439,9 +392,7 @@
                             break
                         }
                     }
-                    return true
                 }
-                try #require(stopped != nil, "the stream stalled before giving a result")
                 // Releasing the iterator cancels the running transforms. The
                 // wait covers one that was given an element just before and
                 // is only now starting its hang. It waits for cancellations,
@@ -453,13 +404,10 @@
                     "\(hangs.uncancelled) hanging transforms not cancelled after the consumer stopped"
                 )
 
-                cases += 1
                 if hangs.started > 0 {
-                    hangsRan += 1
                     try tc.event("a transform hung when the consumer stopped")
                 }
             }
-            expectReached(hangsRan, in: cases, "no transform was hanging when the consumer stopped")
         }
     }
 

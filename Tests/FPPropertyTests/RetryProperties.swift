@@ -359,39 +359,32 @@
         /// Doubling is exact while the result fits, and the maximum after.
         @Test(.hegel(testCases: cases(1_000)))
         func doublingIsExactUntilTheMaximum() throws {
-            var cases = 0
-            var exactAtTheEdge = 0
-            try property { tc in
+            try property(reaching: ["exact, at the largest base that fits"]) { tc in
                 let exponent = try #draw(RetryGen.exponent, from: tc)
                 let base = try #draw(RetryGen.doublingBase(after: exponent), from: tc)
                 let doubled = base.doubled(times: exponent)
                 #expect(doubled == Exact.doubled(base, times: exponent))
 
-                cases += 1
                 let edge = Exact.maximum >> min(max(exponent, 0), 127)
                 if doubled == RetryGen.maximum {
                     try tc.event("saturated")
                 } else if base.attoseconds == edge, edge > 0 {
-                    exactAtTheEdge += 1
                     try tc.event("exact, at the largest base that fits")
                 }
             }
-            expectReached(exactAtTheEdge, in: cases, "no case doubled the largest base that fits")
         }
 
         /// Scaling multiplies in floating point, so only roughly; but it never
         /// leaves the range, and is zero exactly when it should be.
         @Test(.hegel(testCases: cases(1_000)))
         func scalingStaysInRange() throws {
-            var cases = 0
-            var atTheCutoff = 0
             // The largest factor below the cutoff for 31 ns once scaled it 1 ms past
             // the maximum.
             let pastTheCutoff: Example = [
                 "base": Duration.nanoseconds(31),
                 "factor": (RetryGen.maximum / Duration.nanoseconds(31)).nextDown,
             ]
-            try property(examples: [pastTheCutoff]) { tc in
+            try property(examples: [pastTheCutoff], reaching: ["just below the cutoff"]) { tc in
                 let base = try #draw(RetryGen.duration, from: tc)
                 let factor = try #draw(RetryGen.factor(for: base), from: tc)
                 let scaled = base.scaledForRetry(by: factor)
@@ -405,7 +398,6 @@
                     #expect(scaled == .zero)
                 }
 
-                cases += 1
                 if scaled == RetryGen.maximum {
                     try tc.event("capped at the maximum")
                 } else if scaled == .zero {
@@ -413,11 +405,9 @@
                 }
                 let clamped = Exact.clampedDuration(base)
                 if clamped > .zero, (RetryGen.maximum / clamped).nextDown == factor {
-                    atTheCutoff += 1
                     try tc.event("just below the cutoff")
                 }
             }
-            expectReached(atTheCutoff, in: cases, "no factor was just below the cutoff")
         }
 
         /// A random wait lies between the waits of the range's two ends, and in
@@ -566,9 +556,7 @@
         /// mix of successes, failures, requested waits and cancellations.
         @Test(.hegel(testCases: cases(500)))
         func withRetryFollowsThePolicy() async throws {
-            var cases = 0
-            var retriedOften = 0
-            try await property { tc in
+            try await property(reaching: ["retried three times or more"]) { tc in
                 // Most combined policies stop within a retry or two, so some
                 // cases get one that never stops on its own.
                 let expr = try #draw(
@@ -676,18 +664,15 @@
                 #expect(clock.sleeps == expectedSleeps)
                 #expect(result == expectedResult)
 
-                cases += 1
                 try tc.event(ending)
                 try tc.event("attempts", value: Double(expectedStatuses.count))
                 if !limited {
                     try tc.event("a policy with no added limit")
                 }
                 if expectedStatuses.count >= 4 {
-                    retriedOften += 1
                     try tc.event("retried three times or more")
                 }
             }
-            expectReached(retriedOften, in: cases, "no case retried three times")
         }
     }
 

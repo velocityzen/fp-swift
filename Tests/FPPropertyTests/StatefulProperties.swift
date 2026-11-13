@@ -650,12 +650,15 @@
         ) async throws where Order.Value == Int {
             let machine = coordinatorMachine(order)
             let ordered = order == SourceOrder<Int>.self
-            var cases = 0
-            var readerWaited = 0
-            var consumerWaited = 0
-            var workerWaited = 0
-            var bufferFilled = 0
-            try await property { tc in
+            var claims = [
+                "the reader waited for a slot",
+                "the consumer waited",
+                "a worker waited for an element",
+            ]
+            if ordered {
+                claims.append("early results filled the buffer")
+            }
+            try await property(reaching: claims) { tc in
                 // Small limits half the time: with large ones the reader never
                 // waits for a slot.
                 let concurrency = try #draw(
@@ -708,33 +711,22 @@
                     }
                 }
 
-                cases += 1
                 if model.cancelled {
                     try tc.event("cancelled")
                 }
                 try tc.event("elements read", value: Double(model.read))
                 if model.readerWaited {
-                    readerWaited += 1
                     try tc.event("the reader waited for a slot")
                 }
                 if model.consumerWaited {
-                    consumerWaited += 1
                     try tc.event("the consumer waited")
                 }
                 if model.workerWaited {
-                    workerWaited += 1
                     try tc.event("a worker waited for an element")
                 }
                 if model.bufferFilled {
-                    bufferFilled += 1
                     try tc.event("early results filled the buffer")
                 }
-            }
-            expectReached(readerWaited, in: cases, "the reader never waited for a slot")
-            expectReached(consumerWaited, in: cases, "the consumer never waited")
-            expectReached(workerWaited, in: cases, "no worker waited for an element")
-            if ordered {
-                expectReached(bufferFilled, in: cases, "early results never filled the buffer")
             }
         }
 
@@ -763,8 +755,10 @@
                 // open it if no worker did.
                 guard let waiter = rig.waiter.withLock({ $0 }) else { return }
                 rig.gate.open(with: 0)
-                let waited = await unlessStalled(Heartbeat()) { await waiter.value }
-                let value = try #require(waited, "the waiter never returned from an open gate")
+                // Nothing beats, so this is a time limit of `stallLimit`.
+                let value = try await tc.withStallDetection(after: stallLimit) { _ in
+                    await waiter.value
+                }
                 #expect(value == rig.value)
                 if rig.waiterSawItClosed.withLock({ $0 }) {
                     try tc.event("the waiter waited on a closed gate")
@@ -777,9 +771,7 @@
         /// waiter gets whichever value came first.
         @Test(.hegel(testCases: cases(300)))
         func timedOpen() async throws {
-            var cases = 0
-            var cancelledOpens = 0
-            try await property { tc in
+            try await property(reaching: ["the cancelled timer opened it"]) { tc in
                 let delay = try #draw(.oneOf(.int(in: 0...50), .int(in: 0...5_000)), from: tc)
                 let cancelled = try #draw(.bool(), from: tc)
                 let rival = try #draw(.optional(.job()), from: tc)
@@ -798,8 +790,9 @@
                     }
                 }
                 // Nothing beats, so this is a time limit of `stallLimit`.
-                let waited = await unlessStalled(Heartbeat()) { await gate.wait() }
-                let value = try #require(waited, "the gate never opened")
+                let value = try await tc.withStallDetection(after: stallLimit) { _ in
+                    await gate.wait()
+                }
                 if let rival {
                     #expect(value == Int.min || value == rival.value)
                 } else {
@@ -807,19 +800,14 @@
                 }
                 timer.cancel()
 
-                cases += 1
                 if value == Int.min {
                     try tc.event(
                         cancelled ? "the cancelled timer opened it" : "the timer opened it"
                     )
-                    if cancelled {
-                        cancelledOpens += 1
-                    }
                 } else {
                     try tc.event("the rival opened it")
                 }
             }
-            expectReached(cancelledOpens, in: cases, "no cancelled timer opened the gate")
         }
     }
 
