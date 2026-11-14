@@ -26,4 +26,6 @@ let loaded = await ids.traverseAsync(concurrency: 4) { id in
 
 With `concurrency:`, the values keep the array order. When elements fail, it gives the failure of the first one in the array, and cancels the closures that still run.
 
+With `concurrency:` above 1, the closures run in child tasks. In Swift 6.4.2, a `withTaskCancellationShield` around the call keeps out a cancellation that came before it, but not one that comes while it runs.
+
 <!-- Made from README.md by Scripts/make-docc-articles.swift. Edit README.md, then run the script. -->

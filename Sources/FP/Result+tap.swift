@@ -359,6 +359,9 @@ public extension Result {
     }
 
     /// Async version of ``finally(_:)``.
+    ///
+    /// In a cancelled task, `action` sees the cancellation. To let a cleanup finish anyway, run
+    /// it in `withTaskCancellationShield`.
     @inlinable
     func finallyAsync(_ action: () async -> Void) async -> Result<Success, Failure> {
         await action()

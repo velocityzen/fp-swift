@@ -206,7 +206,7 @@ RetryPolicy.exponentialBackoff(.seconds(1))
 
 - `withRetry` waits on a `ContinuousClock`. To use another clock, for example a test clock that does not really wait, pass `clock:`.
 - A wait of zero does not use the clock.
-- When the task is cancelled, `withRetry` stops and returns the last failure.
+- When the task is cancelled, `withRetry` stops and returns the last failure. Inside `withTaskCancellationShield`, it keeps retrying.
 - A wait is never less than zero or more than `RetryPolicy.maximumDelay`, so a long backoff never overflows.
 - The action runs on the caller's actor, so code on `@MainActor` can use its own state in it.
 

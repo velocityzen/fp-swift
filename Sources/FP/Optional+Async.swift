@@ -92,6 +92,9 @@ public extension Optional {
     }
 
     /// Awaits `action`, and returns `self` unchanged.
+    ///
+    /// In a cancelled task, `action` sees the cancellation. To let a cleanup
+    /// finish anyway, run it in `withTaskCancellationShield`.
     @inlinable
     func finallyAsync(_ action: () async -> Void) async -> Wrapped? {
         await action()

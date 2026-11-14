@@ -243,6 +243,8 @@ let data = await Result.fromAsync {
 
 `Result.fromTask(task)` waits for a `Task` and turns its value or error into a `Result`.
 
+`finallyAsync` runs its action in a cancelled task too, and the action sees the cancellation. To let a cleanup finish anyway, for example closing a connection, run it in `withTaskCancellationShield`.
+
 ## Arrays
 
 | Method                                        | What it does                                                                |
@@ -268,6 +270,8 @@ let loaded = await ids.traverseAsync(concurrency: 4) { id in
 ```
 
 With `concurrency:`, the values keep the array order. When elements fail, it gives the failure of the first one in the array, and cancels the closures that still run.
+
+With `concurrency:` above 1, the closures run in child tasks. In Swift 6.4.2, a `withTaskCancellationShield` around the call keeps out a cancellation that came before it, but not one that comes while it runs.
 
 ## Combining results
 
@@ -311,6 +315,8 @@ let profile = await withTimeout(.seconds(5), failingWith: .timeout) {
 
 Cancellation stops only code that checks for it, like `Task.sleep` and `URLSession` calls. A long loop with no `await` runs to its end.
 
+`withAll`, `withAny` and `withTimeout` run each call in a child task. In Swift 6.4.2, `withTaskCancellationShield` covers them only in part. A task cancelled before the call runs them as if it were not cancelled. But a task cancelled while they run still cancels the child tasks, although [SE-0504](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0504-task-cancellation-shields.md) says it should not. `withTimeout` can then return its timeout failure at once.
+
 ## Async sequences of results
 
 For an `AsyncSequence` of `Result`s, fp-swift adds `successes()`, `failures()`, `map`, `mapError`, `flatMap`, `tap`, `tapError` and their `Async` versions. Each one works on one side, and the other side passes through:
@@ -348,6 +354,7 @@ Rules:
 
 - No new element is read while `concurrency` elements are being transformed or waiting for the consumer. So a slow consumer pauses the source.
 - When the consumer stops, reading stops and running transforms are cancelled.
+- Inside `withTaskCancellationShield`, cancelling the consumer's task does not stop the stream.
 - On a sequence of `Result`s, `map…` and `flatMap…` change only the successes. Failures pass through in their place.
 - `compactMap…` drops `nil` results. Its `passthrough:` gives a result without the transform, for example a cache hit.
 
@@ -595,7 +602,7 @@ RetryPolicy.exponentialBackoff(.seconds(1))
 
 - `withRetry` waits on a `ContinuousClock`. To use another clock, for example a test clock that does not really wait, pass `clock:`.
 - A wait of zero does not use the clock.
-- When the task is cancelled, `withRetry` stops and returns the last failure.
+- When the task is cancelled, `withRetry` stops and returns the last failure. Inside `withTaskCancellationShield`, it keeps retrying.
 - A wait is never less than zero or more than `RetryPolicy.maximumDelay`, so a long backoff never overflows.
 - The action runs on the caller's actor, so code on `@MainActor` can use its own state in it.
 

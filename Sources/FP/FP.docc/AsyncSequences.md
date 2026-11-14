@@ -37,6 +37,7 @@ Rules:
 
 - No new element is read while `concurrency` elements are being transformed or waiting for the consumer. So a slow consumer pauses the source.
 - When the consumer stops, reading stops and running transforms are cancelled.
+- Inside `withTaskCancellationShield`, cancelling the consumer's task does not stop the stream.
 - On a sequence of `Result`s, `map…` and `flatMap…` change only the successes. Failures pass through in their place.
 - `compactMap…` drops `nil` results. Its `passthrough:` gives a result without the transform, for example a cache hit.
 

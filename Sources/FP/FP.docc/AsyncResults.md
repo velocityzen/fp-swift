@@ -22,6 +22,8 @@ let data = await Result.fromAsync {
 
 `Result.fromTask(task)` waits for a `Task` and turns its value or error into a `Result`.
 
+`finallyAsync` runs its action in a cancelled task too, and the action sees the cancellation. To let a cleanup finish anyway, for example closing a connection, run it in `withTaskCancellationShield`.
+
 ## Combining results
 
 `flatten` combines up to 10 results into one result of a tuple. It gives the first failure, if there is one:
@@ -63,5 +65,7 @@ let profile = await withTimeout(.seconds(5), failingWith: .timeout) {
 ```
 
 Cancellation stops only code that checks for it, like `Task.sleep` and `URLSession` calls. A long loop with no `await` runs to its end.
+
+`withAll`, `withAny` and `withTimeout` run each call in a child task. In Swift 6.4.2, `withTaskCancellationShield` covers them only in part. A task cancelled before the call runs them as if it were not cancelled. But a task cancelled while they run still cancels the child tasks, although [SE-0504](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0504-task-cancellation-shields.md) says it should not. `withTimeout` can then return its timeout failure at once.
 
 <!-- Made from README.md by Scripts/make-docc-articles.swift. Edit README.md, then run the script. -->
