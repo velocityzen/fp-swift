@@ -776,9 +776,9 @@
                 let cancelled = try #draw(.bool(), from: tc)
                 let rival = try #draw(.optional(.job()), from: tc)
                 let gate = Gate<Int>()
-                // A cancelled timer would wait a minute, so it must open the
-                // gate when cancelled, not when its time is up.
-                let duration: Duration = cancelled ? .seconds(60) : .microseconds(delay)
+                // A cancelled timer would wait far past the stall limit, so it
+                // must open the gate when cancelled, not when its time is up.
+                let duration: Duration = cancelled ? stallLimit * 12 : .microseconds(delay)
                 let timer = Task { await gate.open(after: duration, with: Int.min) }
                 if cancelled {
                     timer.cancel()

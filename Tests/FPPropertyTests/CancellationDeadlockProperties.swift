@@ -26,9 +26,9 @@
                 let bufferLimit = try #draw(Draw.bufferLimit, from: tc)
                 let source = CountingSource(elements: jobs)
                 let passthrough = Draw.passthrough(passEvery)
-                // Once cancelled, the read has 5 seconds to end: a deadlock
-                // fails the property instead of hanging it.
-                let run = try await tc.withRandomCancellation(endsWithin: .seconds(5)) {
+                // Once cancelled, the read has `stallLimit` to end: a
+                // deadlock fails the property instead of hanging it.
+                let run = try await tc.withRandomCancellation(endsWithin: stallLimit) {
                     cancellation in
                     let transform: @concurrent @Sendable (Job) async -> Int? = { job in
                         cancellation.checkpoint("transform \(job) starts")
@@ -61,7 +61,7 @@
                 }
                 // Running transforms ignore cancellation for up to 20 ms; the
                 // reader lets go of the iterator once they are done.
-                let released = await eventually(within: .seconds(5)) {
+                let released = await eventually(within: stallLimit) {
                     source.released.value == source.iterators.value
                 }
                 #expect(

@@ -250,7 +250,26 @@
     /// How long a test case may go without a heartbeat before it counts as
     /// stuck, for `withStallDetection(after:)`. Every step of the generated
     /// work takes milliseconds; this leaves room for a busy machine.
-    let stallLimit: Duration = .seconds(5)
+    ///
+    /// ThreadSanitizer slows every task switch, and the properties run side
+    /// by side, so on a CI machine with few cores a pause of a few hundred
+    /// suspensions can wait more than 5 seconds for a thread. Under it the
+    /// limit is a minute: that run looks for races, and the other runs still
+    /// catch hangs at 5 seconds.
+    let stallLimit: Duration = .seconds(underThreadSanitizer ? 60 : 5)
+
+    /// Whether ThreadSanitizer's runtime is loaded, which defines
+    /// `__tsan_init`.
+    let underThreadSanitizer: Bool = {
+        // RTLD_DEFAULT, which Swift does not import: a lookup in every
+        // loaded image.
+        #if canImport(Darwin)
+            let everyImage = UnsafeMutableRawPointer(bitPattern: -2)
+        #else
+            let everyImage: UnsafeMutableRawPointer? = nil
+        #endif
+        return dlsym(everyImage, "__tsan_init") != nil
+    }()
 
     /// Shared draws: mostly small values, so most cases run fast, and sometimes
     /// the extremes the API accepts.

@@ -411,8 +411,9 @@
                         await Self.run(job, heartbeat)
                     }
                     // Ends when the job does, so a long limit costs nothing, and
-                    // a busy machine can stretch a job's pause to seconds.
-                    let quick = await withTimeout(.seconds(60), failingWith: timeout) {
+                    // a busy machine can stretch a job's pause to seconds. Far
+                    // past the stall limit, so a job that slow stalls instead.
+                    let quick = await withTimeout(stallLimit * 12, failingWith: timeout) {
                         await Self.run(job, heartbeat)
                     }
                     let stuck = await withTimeout(.microseconds(limit), failingWith: timeout) {
