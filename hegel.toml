@@ -5,8 +5,8 @@
 # which is derandomized: every push and pull request sees the same inputs.
 # This one is not, so each night tries new ones.
 #
-# Each test sets its own number of test cases, which overrides any profile.
-# The nightly run multiplies them with FP_PROPERTY_SCALE instead (see
-# `cases(_:)` in Tests/FPPropertyTests/Support.swift).
+# Each test sets its own number of test cases, which overrides a profile's
+# test_cases. The nightly run multiplies them with HEGEL_TEST_CASES_SCALE
+# instead.
 [profiles.nightly]
 derandomize = false

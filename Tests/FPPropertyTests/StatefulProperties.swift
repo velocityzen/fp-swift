@@ -601,7 +601,7 @@
 
         /// `FIFOQueue` gives back its elements in the order they went in, from any
         /// starting capacity, and keeps none it gave out.
-        @Test(.hegel(testCases: cases(300)))
+        @Test(.hegel(testCases: 300))
         func fifoQueue() throws {
             try property { tc in
                 let capacity = try #draw(Self.capacity, from: tc)
@@ -611,7 +611,7 @@
 
         /// `RingBuffer` holds what a dictionary by index would, from any starting
         /// capacity and index.
-        @Test(.hegel(testCases: cases(300)))
+        @Test(.hegel(testCases: 300))
         func ringBuffer() throws {
             try property { tc in
                 let capacity = try #draw(Self.capacity, from: tc)
@@ -632,7 +632,7 @@
         /// The coordinator in source order: values in index order, no task
         /// left waiting for what is there, and every task returns once the
         /// stream ends.
-        @Test(.hegel(testCases: cases(200)))
+        @Test(.hegel(testCases: 200))
         func coordinatorInSourceOrder() async throws {
             try await Self.runCoordinator(SourceOrder<Int>.self)
         }
@@ -640,7 +640,7 @@
         /// The coordinator in completion order: each value once, no task
         /// left waiting for what is there, and every task returns once the
         /// stream ends.
-        @Test(.hegel(testCases: cases(200)))
+        @Test(.hegel(testCases: 200))
         func coordinatorInCompletionOrder() async throws {
             try await Self.runCoordinator(CompletionOrder<Int>.self)
         }
@@ -732,7 +732,7 @@
 
         /// A gate opens once, with the first value given or at the last arrival,
         /// and its waiter gets that value, whatever the workers do at once.
-        @Test(.hegel(Settings(testCases: cases(200), nondeterminism: .warn)))
+        @Test(.hegel(Settings(testCases: 200, nondeterminism: .warn)))
         func gateUnderConcurrentUse() async throws {
             try await property { tc in
                 // No parties, or fewer than can arrive, or more; a gate with no
@@ -769,7 +769,7 @@
         /// `open(after:with:)` opens the gate when its time is up, or at once
         /// when its task is cancelled, unless a rival opened it first. The
         /// waiter gets whichever value came first.
-        @Test(.hegel(testCases: cases(300)))
+        @Test(.hegel(testCases: 300))
         func timedOpen() async throws {
             try await property(reaching: ["the cancelled timer opened it"]) { tc in
                 let delay = try #draw(.oneOf(.int(in: 0...50), .int(in: 0...5_000)), from: tc)

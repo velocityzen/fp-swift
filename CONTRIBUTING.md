@@ -38,7 +38,7 @@ inputs with ten times the test cases, and runs every test under
 ThreadSanitizer. To run the same locally:
 
 ```sh
-HEGEL_DEFAULT_PROFILE=nightly FP_PROPERTY_SCALE=10 swift test --filter FPPropertyTests
+HEGEL_DEFAULT_PROFILE=nightly HEGEL_TEST_CASES_SCALE=10 swift test --filter FPPropertyTests
 swift test --sanitize=thread \
     --skip '[oO]rExit[A-Za-z]*OnFailure|applyingAtTheLastIterationDoesNotCrash'
 ```

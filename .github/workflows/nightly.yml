@@ -33,7 +33,7 @@ jobs:
       # hegel.toml: new inputs every night instead of the derandomized ones.
       HEGEL_DEFAULT_PROFILE: nightly
       # Each property runs ten times its usual number of test cases.
-      FP_PROPERTY_SCALE: "10"
+      HEGEL_TEST_CASES_SCALE: "10"
 
     steps:
       - name: Checkout code
@@ -65,7 +65,7 @@ jobs:
       image: swift:6.4
     env:
       HEGEL_DEFAULT_PROFILE: nightly
-      FP_PROPERTY_SCALE: "10"
+      HEGEL_TEST_CASES_SCALE: "10"
 
     steps:
       - name: Checkout code

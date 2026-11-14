@@ -31,7 +31,7 @@
         /// `concurrency` transforms at once, and reads at most
         /// `concurrency + bufferLimit` elements ahead of the consumer, none
         /// with `concurrency` 1.
-        @Test(.hegel(testCases: cases(500)))
+        @Test(.hegel(testCases: 500))
         func orderedMapIsMap() async throws {
             try await property(reaching: ["transforms overlapped"]) { tc in
                 let jobs = try #draw(Draw.jobs(), from: tc)
@@ -85,7 +85,7 @@
         ///
         /// `orderedMapIsMap` checks this for any limits, and rarely draws
         /// limits below the element count. Here they always are.
-        @Test(.hegel(testCases: cases(200)))
+        @Test(.hegel(testCases: 200))
         func orderedMapPausesTheSource() async throws {
             try await property(reaching: ["read ahead to within one of the bound"]) { tc in
                 let concurrency = try #draw(.int(in: 2...8), from: tc)
@@ -120,7 +120,7 @@
         /// `compactMapAsyncOrdered` gives `Array.compactMap`'s results, with
         /// `passthrough` values in place, and its read-ahead bound counts
         /// dropped elements as delivered.
-        @Test(.hegel(testCases: cases(500)))
+        @Test(.hegel(testCases: 500))
         func orderedCompactMapIsCompactMap() async throws {
             try await property { tc in
                 let mix = try #draw(Draw.outcomes([.keep, .drop]), from: tc)
@@ -175,7 +175,7 @@
 
         /// `flatMapAsyncOrdered` gives each source failure and each transform
         /// failure in its element's place.
-        @Test(.hegel(testCases: cases(500)))
+        @Test(.hegel(testCases: 500))
         func orderedFlatMapKeepsFailuresInPlace() async throws {
             try await property { tc in
                 let mix = try #draw(Draw.outcomes([.keep, .fail]), from: tc)
@@ -232,7 +232,7 @@
         /// some order, runs at most `concurrency` transforms at once, and
         /// reads at most `concurrency` elements ahead of the consumer, none
         /// with `concurrency` 1. A dropped element frees its slot.
-        @Test(.hegel(testCases: cases(500)))
+        @Test(.hegel(testCases: 500))
         func unorderedMapIsMapInSomeOrder() async throws {
             try await property(
                 reaching: ["read-ahead bound below the element count", "read ahead to the bound"]
@@ -295,7 +295,7 @@
 
         /// When the consumer stops, reading stops: with no buffer, the reader is at
         /// most `concurrency` elements past the last one taken.
-        @Test(.hegel(testCases: cases(500)))
+        @Test(.hegel(testCases: 500))
         func stoppingEarlyStopsReading() async throws {
             try await property { tc in
                 let jobs = try #draw(Draw.jobs(min: 1), from: tc)
@@ -349,7 +349,7 @@
 
         /// Jobs with `.drop` hang until cancelled. Once the consumer has what it
         /// came for and stops, every running transform is cancelled.
-        @Test(.hegel(testCases: cases(500)))
+        @Test(.hegel(testCases: 500))
         func stoppingCancelsRunningTransforms() async throws {
             try await property(reaching: ["a transform hung when the consumer stopped"]) { tc in
                 let concurrency = try #draw(Draw.parallel, from: tc)

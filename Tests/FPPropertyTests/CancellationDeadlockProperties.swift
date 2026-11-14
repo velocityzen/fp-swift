@@ -15,7 +15,7 @@
         /// ending, or the reader getting a value. A worker that ends its
         /// transform cancels the reader while the other workers may be
         /// handing over their results.
-        @Test(.hegel(testCases: cases(2_000)))
+        @Test(.hegel(testCases: 2_000))
         func cancellingTheReaderEndsTheRead() async throws {
             try await property(reaching: ["cancelled during the read"]) { tc in
                 let mix = try #draw(Draw.outcomes([.keep, .drop]), from: tc)

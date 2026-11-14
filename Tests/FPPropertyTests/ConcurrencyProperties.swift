@@ -36,7 +36,7 @@
         ///
         /// Concurrency mostly stays below the element count, where a fixed set of
         /// workers claims elements; at or above it, each element gets a task.
-        @Test(.hegel(testCases: cases(500)))
+        @Test(.hegel(testCases: 500))
         func concurrentTraverseIsSequentialTraverse() async throws {
             try await property(reaching: ["worker pool", "task per element"]) { tc in
                 let jobs = try #draw(Draw.jobs([.keep, .fail]), from: tc)
@@ -88,7 +88,7 @@
         ///
         /// Jobs with `.drop` hang until cancelled. A hang never ends on its
         /// own, so hangs run only beside a success.
-        @Test(.hegel(testCases: cases(500)))
+        @Test(.hegel(testCases: 500))
         func withAnyFindsASuccessIfThereIsOne() async throws {
             try await property(reaching: ["a hanging operation was cancelled"]) { tc in
                 let mix = try #draw(Draw.outcomes([.keep, .fail, .drop]), from: tc)
@@ -250,7 +250,7 @@
         ///
         /// Jobs with `.drop` hang until cancelled. A hang never ends on its
         /// own, so hangs run only alongside a failure.
-        @Test(.hegel(testCases: cases(500)))
+        @Test(.hegel(testCases: 500))
         func withAllGivesEveryValueOrAFailure() async throws {
             try await property(reaching: ["a hanging operation was cancelled"]) { tc in
                 let drawn = try #draw(
@@ -390,7 +390,7 @@
         /// timeout error, whichever comes first. A quick operation beats a long
         /// timeout; one that never finishes on its own loses to any timeout, is
         /// cancelled, and has stopped by the time `withTimeout` returns.
-        @Test(.hegel(testCases: cases(500)))
+        @Test(.hegel(testCases: 500))
         func withTimeoutPicksTheFirstToFinish() async throws {
             try await property(
                 reaching: ["the timeout beat the operation", "the operation beat the timeout"]
@@ -439,7 +439,7 @@
         /// After a failure, the transforms still running are cancelled: jobs
         /// with `.drop` hang until they are, so the traversal never waits one
         /// out. No new transform starts.
-        @Test(.hegel(testCases: cases(500)))
+        @Test(.hegel(testCases: 500))
         func traverseCancelsAfterAFailure() async throws {
             try await property(
                 reaching: [

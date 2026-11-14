@@ -5,16 +5,6 @@
     import HegelTesting
     import Synchronization
 
-    /// A property's number of test cases: `base`, times `FP_PROPERTY_SCALE`
-    /// when it is set, as in the nightly run.
-    ///
-    /// A count given in Swift overrides every Hegel profile, so a deeper
-    /// profile in `hegel.toml` could not raise it.
-    func cases(_ base: Int) -> Int {
-        let scale = ProcessInfo.processInfo.environment["FP_PROPERTY_SCALE"].flatMap { Int($0) }
-        return base * max(scale ?? 1, 1)
-    }
-
     /// One element of generated async work: a value, how long its transform
     /// takes, and what the transform does with it.
     struct Job: Sendable, Hashable, CustomStringConvertible {

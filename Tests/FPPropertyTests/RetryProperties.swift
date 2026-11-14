@@ -327,7 +327,7 @@
     struct RetryProperties {
         /// Clamping gives the wait itself when it is in range, and the nearest
         /// end otherwise.
-        @Test(.hegel(testCases: cases(1_000)))
+        @Test(.hegel(testCases: 1_000))
         func clampingStaysInRange() throws {
             try property { tc in
                 let d = try #draw(RetryGen.duration, from: tc)
@@ -343,7 +343,7 @@
 
         /// Adding two waits in range is exact, and the maximum when the sum is
         /// past it.
-        @Test(.hegel(testCases: cases(1_000)))
+        @Test(.hegel(testCases: 1_000))
         func addingSaturates() throws {
             try property { tc in
                 let a = Exact.clampedDuration(try #draw(RetryGen.duration, from: tc))
@@ -357,7 +357,7 @@
         }
 
         /// Doubling is exact while the result fits, and the maximum after.
-        @Test(.hegel(testCases: cases(1_000)))
+        @Test(.hegel(testCases: 1_000))
         func doublingIsExactUntilTheMaximum() throws {
             try property(reaching: ["exact, at the largest base that fits"]) { tc in
                 let exponent = try #draw(RetryGen.exponent, from: tc)
@@ -376,7 +376,7 @@
 
         /// Scaling multiplies in floating point, so only roughly; but it never
         /// leaves the range, and is zero exactly when it should be.
-        @Test(.hegel(testCases: cases(1_000)))
+        @Test(.hegel(testCases: 1_000))
         func scalingStaysInRange() throws {
             // The largest factor below the cutoff for 31 ns once scaled it 1 ms past
             // the maximum.
@@ -417,7 +417,7 @@
         ///
         /// The generator is seeded from a draw, so a failure replays. The
         /// policy without one uses the same arithmetic.
-        @Test(.hegel(testCases: cases(1_000)))
+        @Test(.hegel(testCases: 1_000))
         func jitterStaysBetweenItsBounds() throws {
             try property { tc in
                 let delay = try #draw(RetryGen.duration, from: tc)
@@ -447,7 +447,7 @@
         /// Applying a policy to any status takes one step: the iteration grows
         /// by one (and stays at `Int.max`), and the wait the policy gives, in
         /// range, becomes the last wait and is added to the total.
-        @Test(.hegel(testCases: cases(1_000)))
+        @Test(.hegel(testCases: 1_000))
         func applyingTakesOneStep() throws {
             try property { tc in
                 let expr = try #draw(RetryGen.policy, from: tc)
@@ -493,7 +493,7 @@
 
         /// Every combination of the built-in policies returns what its model
         /// says, on any status.
-        @Test(.hegel(testCases: cases(1_000)))
+        @Test(.hegel(testCases: 1_000))
         func policiesMatchTheModel() throws {
             try property { tc in
                 let expr = try #draw(RetryGen.policy, from: tc)
@@ -513,7 +513,7 @@
 
         /// A dry run takes one step per retry, adds up the waits without
         /// overflowing, and ends at the first step where the policy stops.
-        @Test(.hegel(testCases: cases(1_000)))
+        @Test(.hegel(testCases: 1_000))
         func dryRunWalksThePolicy() throws {
             try property { tc in
                 let expr = try #draw(RetryGen.policy, from: tc)
@@ -556,7 +556,7 @@
         /// `withRetry` against a model of it: the statuses each attempt sees, the
         /// waits it sleeps, and the result it returns, for any policy and any
         /// mix of successes, failures, requested waits and cancellations.
-        @Test(.hegel(testCases: cases(500)))
+        @Test(.hegel(testCases: 500))
         func withRetryFollowsThePolicy() async throws {
             try await property(reaching: ["retried three times or more"]) { tc in
                 // Most combined policies stop within a retry or two, so some
