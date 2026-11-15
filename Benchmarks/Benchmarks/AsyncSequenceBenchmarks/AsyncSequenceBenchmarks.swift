@@ -294,5 +294,37 @@ let benchmarks: @Sendable () -> Void = {
                 blackHole(await drain(results.successes()))
             }
         }
+
+        // MARK: withRepeat
+
+        // `n` pulls of an operation that only returns a number. With an
+        // interval of zero the sequence never reads the clock, so the gap to
+        // the baseline, which calls the operation in a loop, is the
+        // sequence's own cost per pull.
+
+        Benchmark("repeat loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                let operation: @Sendable () async -> Int = { n }
+                var sum = 0
+                for _ in 0..<n {
+                    guard !Task.isCancelled else { break }
+                    sum &+= await operation()
+                }
+                blackHole(sum)
+            }
+        }
+
+        Benchmark("withRepeat", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                var sum = 0
+                var count = 0
+                for await value in withRepeat(interval: .zero, { n }) {
+                    sum &+= value
+                    count += 1
+                    if count == n { break }
+                }
+                blackHole(sum)
+            }
+        }
     }
 }

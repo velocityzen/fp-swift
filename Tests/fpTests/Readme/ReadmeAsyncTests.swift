@@ -1,5 +1,6 @@
 // Examples from "Async results", "Arrays", "Combining results", "Racing and
-// timeouts", "Async sequences of results" and "Concurrent mapping" in README.md.
+// timeouts", "Async sequences of results", "Concurrent mapping" and "Repeating"
+// in README.md.
 // The DocC articles are made from README.md. Keep the code here the same.
 
 import FP
@@ -93,6 +94,8 @@ private func download(from url: String) async -> Result<String, AppError> {
 }
 
 private func loadName(_ id: Int) async -> String { "name \(id)" }
+
+private func fetchStatus() async -> String { "ok" }
 
 private func stream<T: Sendable>(_ values: [T]) -> AsyncStream<T> {
     AsyncStream { continuation in
@@ -244,5 +247,58 @@ struct ReadmeAsyncTests {
         }
 
         #expect(gallery == Set((1...6).map { "thumb \($0)" }))
+    }
+
+    // A repeating sequence never ends by itself. Each example's `show` cancels
+    // its own task, which ends the loop after the first element. That one
+    // comes at once, so the test does not wait the interval.
+
+    @Test
+    func repeating() async {
+        let shown = await Task {
+            var shown: [String] = []
+            func show(_ status: String) {
+                shown.append(status)
+                withUnsafeCurrentTask { $0?.cancel() }
+            }
+
+            let statuses = withRepeat(interval: .seconds(5)) {
+                await fetchStatus()
+            }
+
+            for await status in statuses {
+                show(status)
+            }
+            return shown
+        }.value
+
+        #expect(shown == ["ok"])
+    }
+
+    @Test
+    func repeatingResults() async {
+        let log = Recorder<AppError>()
+
+        let shown = await Task {
+            var shown: [User] = []
+            func show(_ user: User) {
+                shown.append(user)
+                withUnsafeCurrentTask { $0?.cancel() }
+            }
+
+            let users = withRepeat(interval: .seconds(30)) {
+                await loadUser(id: 1)
+            }
+            .tapError { error in log(error) }
+            .successes()
+
+            for await user in users {
+                show(user)
+            }
+            return shown
+        }.value
+
+        #expect(shown == [User(id: 1)])
+        #expect(log.all.isEmpty)
     }
 }

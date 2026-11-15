@@ -115,8 +115,11 @@ let articles = [
         catalog: fp,
         file: "AsyncSequences",
         title: "Async Sequences",
-        abstract: "Work with async sequences of results, and map async sequences concurrently.",
-        sections: [("Async sequences of results", nil), ("Concurrent mapping", 2)]
+        abstract:
+            "Work with async sequences of results, map them concurrently, and repeat an operation.",
+        sections: [
+            ("Async sequences of results", nil), ("Concurrent mapping", 2), ("Repeating", 2),
+        ]
     ),
     Article(
         catalog: fp,

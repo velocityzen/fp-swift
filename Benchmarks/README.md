@@ -9,7 +9,7 @@ Every benchmark records wall clock and CPU time, instructions, malloc count and 
 | Target | Covers |
 | --- | --- |
 | `ArrayBenchmarks` | `traverse`, sequential and concurrent `traverseAsync`, `mapAsync`, `compactMapAsync`, `flatMapAsync`, `separate`, `successes`, `failures` |
-| `AsyncSequenceBenchmarks` | `mapAsyncOrdered`, `compactMapAsyncOrdered`, `mapAsyncUnordered`, `compactMapAsyncUnordered` and their `Result` variants at several concurrency levels, early termination, and the `Result` operators on async sequences |
+| `AsyncSequenceBenchmarks` | `mapAsyncOrdered`, `compactMapAsyncOrdered`, `mapAsyncUnordered`, `compactMapAsyncUnordered` and their `Result` variants at several concurrency levels, early termination, the `Result` operators on async sequences, and `withRepeat` |
 | `CombinatorBenchmarks` | `withAll`, `withAny`, `withTimeout` |
 | `RetryBenchmarks` | `withRetry` with a first-attempt success, with every attempt failing, with a composed policy, and with failures that ask for a wait, all with `.zero` delays |
 

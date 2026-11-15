@@ -1,6 +1,6 @@
 # Async Sequences
 
-Work with async sequences of results, and map async sequences concurrently.
+Work with async sequences of results, map them concurrently, and repeat an operation.
 
 For an `AsyncSequence` of `Result`s, fp-swift adds `successes()`, `failures()`, `map`, `mapError`, `flatMap`, `tap`, `tapError` and their `Async` versions. Each one works on one side, and the other side passes through:
 
@@ -78,5 +78,42 @@ for await thumb in thumbs {
     gallery.insert(thumb)
 }
 ```
+
+## Repeating
+
+`withRepeat` runs an operation again and again, and gives its results as an async sequence. The first one comes at once:
+
+```swift
+let statuses = withRepeat(interval: .seconds(5)) {
+    await fetchStatus()
+}
+
+for await status in statuses {
+    show(status)
+}
+```
+
+Each later call starts once 5 seconds have passed since the one before it started, or at once if they have passed when the loop asks for the next status. Nothing runs until the loop asks, so a slow loop or a slow call never makes calls pile up.
+
+The operation can be sync or async, and it runs on the loop's actor. It can't throw. To go on after a failure, return a `Result`, and use `successes()`, `tapError` and the other operators for sequences of results:
+
+```swift
+let users = withRepeat(interval: .seconds(30)) {
+    await loadUser(id: 1)
+}
+.tapError { error in log(error) }
+.successes()
+
+for await user in users {
+    show(user)
+}
+```
+
+Rules:
+
+- The sequence never ends by itself. Cancelling the loop's task ends it, and stops a wait at once. A running call sees the cancellation only if it checks for it, and its element still comes out.
+- Inside `withTaskCancellationShield`, cancelling the loop's task does not stop the sequence.
+- Each `for await` loop over the sequence makes its own calls, and its first element comes at once.
+- `withRepeat` waits on a `ContinuousClock`. To test code that repeats without waiting, pass a clock that does not really wait as `clock:`.
 
 <!-- Made from README.md by Scripts/make-docc-articles.swift. Edit README.md, then run the script. -->

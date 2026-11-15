@@ -322,4 +322,22 @@ struct AsyncIsolationTests {
             ]
         )
     }
+
+    @Test("withRepeat runs its operation on the iterating actor")
+    func withRepeatOperation() async {
+        let log = SendableLog()
+        // A real wait between the calls, which must come back to the actor.
+        let sequence = withRepeat(interval: .milliseconds(1)) {
+            log.record("repeat")
+            return 1
+        }
+
+        var count = 0
+        for await _ in sequence {
+            count += 1
+            if count == 2 { break }
+        }
+
+        #expect(log.entries.withLock { $0 } == ["repeat", "repeat"])
+    }
 }

@@ -32,6 +32,7 @@ Functions:
 | `withAll`     | The same for async calls, run at the same time.               |
 | `withAny`     | The first success of async calls, run at the same time.       |
 | `withTimeout` | The result of an async call, or a failure when time runs out. |
+| `withRepeat`  | Repeats a call, and gives its results as an async sequence.   |
 
 `Optional`:
 
