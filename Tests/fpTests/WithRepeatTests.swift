@@ -315,8 +315,11 @@ struct WithRepeatTests {
         #expect(elements == [1, nil])
     }
 
-    #if compiler(>=6.4)
-        @available(macOS 27.0, iOS 27.0, tvOS 27.0, watchOS 27.0, visionOS 27.0, *)
+    // Linux only. On Apple platforms `withTaskCancellationShield` is emitted
+    // into the caller and links the runtime's shield entry points strongly,
+    // so before macOS 27 the whole test bundle fails to load, and
+    // `@available` can't prevent that.
+    #if compiler(>=6.4) && os(Linux)
         @Test("Inside a cancellation shield, the sequence goes on", .hangGuard)
         func cancellationShield() async {
             let calls = Calls()
