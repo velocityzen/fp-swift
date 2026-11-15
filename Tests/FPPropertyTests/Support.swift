@@ -38,10 +38,17 @@
     }
 
     /// Spends `job.delay` suspensions, ignoring cancellation, so a result never
-    /// depends on when a task was cancelled. Beats `heartbeat` when done.
+    /// depends on when a task was cancelled. Beats `heartbeat` after each
+    /// suspension and when done.
+    ///
+    /// Each suspension is progress. On a busy machine every task waits its
+    /// turn behind all the others, so a thousand suspensions can take
+    /// seconds while nothing is stuck; one beat at the end would count
+    /// that as a stall.
     func pause(_ job: Job, _ heartbeat: Heartbeat? = nil) async {
         for _ in 0..<job.delay {
             await Task.yield()
+            heartbeat?.beat()
         }
         if job.delay > 4 {
             // Not `try?`-ignored cancellation: a cancelled sleep returns early,
@@ -77,7 +84,7 @@
         let elements: [Element]
         /// How many times each read suspends first, like a slow source.
         var yields = 0
-        /// Beaten on every read.
+        /// Beaten on every read, and after each suspension before one.
         var heartbeat: Heartbeat? = nil
         let reads = Counter()
         let iterators = Counter()
@@ -95,6 +102,7 @@
             mutating func next() async -> Element? {
                 for _ in 0..<yields {
                     await Task.yield()
+                    heartbeat?.beat()
                 }
                 guard index < elements.count else {
                     return nil
@@ -185,7 +193,7 @@
         case onActor
 
         /// Reads every element. For each one, beats `heartbeat` and measures
-        /// `readAhead`.
+        /// `readAhead`; a slow consumer also beats after each suspension.
         func collect<S: AsyncSequence & Sendable>(
             _ sequence: S,
             _ heartbeat: Heartbeat? = nil,
@@ -203,6 +211,7 @@
                         // comes after.
                         for _ in 0..<yields {
                             await Task.yield()
+                            heartbeat?.beat()
                         }
                         readAhead?.measure()
                     }
@@ -239,7 +248,8 @@
 
     /// How long a test case may go without a heartbeat before it counts as
     /// stuck, for `withStallDetection(after:)`. Every step of the generated
-    /// work takes milliseconds; this leaves room for a busy machine.
+    /// work takes milliseconds, and each suspension in it beats: a busy
+    /// machine slows the steps, but only a stuck case stops them.
     ///
     /// ThreadSanitizer slows every task switch, and the properties run side
     /// by side, so on a CI machine with few cores a pause of a few hundred

@@ -412,7 +412,8 @@
                     }
                     // Ends when the job does, so a long limit costs nothing, and
                     // a busy machine can stretch a job's pause to seconds. Far
-                    // past the stall limit, so a job that slow stalls instead.
+                    // past the stall limit: a job that stops moving stalls
+                    // first, and one still moving is done long before.
                     let quick = await withTimeout(stallLimit * 12, failingWith: timeout) {
                         await Self.run(job, heartbeat)
                     }
