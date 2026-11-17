@@ -265,6 +265,36 @@ struct ReadmeAsyncTests {
     }
 
     @Test
+    func stoppingAtAFailureOrASuccess() async {
+        var shown: [User] = []
+        var reported: AppError?
+        do throws(AppError) {
+            for try await user in stream([1, 0, 2]).mapAsyncOrdered(
+                concurrency: 8,
+                { id in
+                    await loadUser(id: id)
+                }
+            ).get() {
+                shown.append(user)
+            }
+        } catch {
+            reported = error
+        }
+        #expect(shown == [User(id: 1)])
+        #expect(reported == .notFound)
+
+        let checks = Mutex(0)
+        let status = await withRepeat(interval: .zero) { () -> Result<String, AppError> in
+            checks.withLock {
+                $0 += 1; return $0 < 3 ? .failure(.timeout) : .success("done")
+            }
+        }
+        .untilSuccess()
+        .last()
+        #expect(status == .success("done"))
+    }
+
+    @Test
     func inACancelledTask() async {
         let users =
             await stream([1, 2, 3])

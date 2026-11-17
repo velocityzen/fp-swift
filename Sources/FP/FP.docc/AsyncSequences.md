@@ -63,6 +63,35 @@ Rules:
 - The ones that stop at the end never return for a sequence that never ends, like `withRepeat`.
 - They throw only what the sequence throws. A sequence that can't throw needs no `try`.
 
+## Stopping at a failure or a success
+
+`get()` reads a sequence of results the way `Result.get()` reads one result: it gives the values, and throws the first failure with its own error type. It is there for sequences that don't throw themselves:
+
+```swift
+do throws(AppError) {
+    let users = ids.mapAsyncOrdered(concurrency: 8) { id in
+        await loadUser(id: id)
+    }
+    for try await user in users.get() {
+        show(user)
+    }
+} catch {
+    report(error)  // the first failure; reading stops there
+}
+```
+
+`untilFailure()` and `untilSuccess()` keep the results, and end after the first failure or the first success, including it:
+
+```swift
+let status = await withRepeat(interval: .seconds(1)) {
+    await checkJob()
+}
+.untilSuccess()
+.last()  // the first success, or the last failure if it stopped
+```
+
+After the element they stop at, these three read the sequence no more, so a concurrent map before them stops too.
+
 ## In a cancelled task
 
 In a cancelled task, many sequences end early instead of throwing: `AsyncStream`, `withRepeat` and the concurrent maps all stop. A sink that reads to the end then returns what it read so far, and that looks like a complete result. This is Swift's convention: the standard library's `reduce` and `contains` do the same.

@@ -111,6 +111,55 @@ func reduceIntoByHand(_ sequence: SuccessSequence) async -> Result<[Int], BenchE
 
 /// `asResults().toResult()` written by hand: every value, or the error the
 /// sequence throws.
+/// `for try await value in sequence.get()` written by hand: every value,
+/// or the first failure.
+func getByHand(_ sequence: SuccessSequence) async -> Result<[Int], BenchError> {
+    var values: [Int] = []
+    for await element in sequence {
+        switch element {
+            case .success(let value): values.append(value)
+            case .failure(let error): return .failure(error)
+        }
+    }
+    return .success(values)
+}
+
+/// `get()` read the way a caller would: values in a loop, the failure in
+/// `catch`.
+func getWithOperator(_ sequence: SuccessSequence) async -> Result<[Int], BenchError> {
+    var values: [Int] = []
+    do throws(BenchError) {
+        for try await value in sequence.get() {
+            values.append(value)
+        }
+    } catch {
+        return .failure(error)
+    }
+    return .success(values)
+}
+
+/// `untilFailure()` written by hand: sums the values, and stops after the
+/// first failure.
+func untilFailureByHand(_ sequence: SuccessSequence) async -> Int {
+    var sum = 0
+    for await element in sequence {
+        switch element {
+            case .success(let value): sum &+= value
+            case .failure: return sum
+        }
+    }
+    return sum
+}
+
+/// The same sum read through `untilFailure()`.
+func untilFailureWithOperator(_ sequence: SuccessSequence) async -> Int {
+    var sum = 0
+    for await element in sequence.untilFailure() {
+        if case .success(let value) = element { sum &+= value }
+    }
+    return sum
+}
+
 func asResultsToResultByHand(
     _ sequence: ThrowingCountingSequence
 ) async -> Result<[Int], BenchError> {
@@ -501,6 +550,32 @@ let benchmarks: @Sendable () -> Void = {
         Benchmark("Result reduce into", configuration: .fp(tags)) { benchmark in
             for _ in benchmark.scaledIterations {
                 blackHole(await successes.reduce(into: [Int]()) { $0.append($1 &* 2) })
+            }
+        }
+
+        // MARK: get and untilFailure
+
+        Benchmark("get loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await getByHand(successes))
+            }
+        }
+
+        Benchmark("Result get", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await getWithOperator(successes))
+            }
+        }
+
+        Benchmark("untilFailure loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await untilFailureByHand(successes))
+            }
+        }
+
+        Benchmark("Result untilFailure", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await untilFailureWithOperator(successes))
             }
         }
 

@@ -207,6 +207,126 @@
             }
         }
 
+        /// `get()` gives the success values up to the first failure, then
+        /// throws that failure, and reads nothing after it. A reader that
+        /// breaks early reads only as far as it went.
+        @Test(.hegel(testCases: 1_000))
+        func getThrowsTheFirstFailure() async throws {
+            try await property(
+                reaching: ["threw a failure", "read every value", "broke early"]
+            ) { tc in
+                let mix = try #draw(.array(of: .bool(), count: 1...4), from: tc)
+                let elements = try #draw(Self.results(mix), from: tc)
+                let limit = try #draw(.optional(.int(in: 0...60)), from: tc)
+                let yields = try #draw(.oneOf(.just(0), .int(in: 0...3)), from: tc)
+                let source = ResultSource(elements: elements, yields: yields)
+
+                var values: [Int] = []
+                var thrown: JobFailure?
+                var iterator = source.get().makeAsyncIterator()
+                do throws(JobFailure) {
+                    while let value = try await iterator.next() {
+                        if let limit, values.count == limit { break }
+                        values.append(value)
+                    }
+                } catch {
+                    thrown = error
+                    // After the failure, it ends without reading again.
+                    #expect((try? await iterator.next()) == .some(nil))
+                }
+
+                let firstFailure = elements.firstIndex { !$0.isSuccess }
+                let readable = elements.prefix(firstFailure.map { $0 + 1 } ?? elements.count)
+                let modelValues = readable.compactMap { try? $0.get() }
+                if let limit, limit < modelValues.count {
+                    #expect(values == Array(modelValues.prefix(limit)))
+                    #expect(thrown == nil)
+                    #expect(source.reads.value == limit + 1)
+                    try tc.event("broke early")
+                } else {
+                    #expect(values == modelValues)
+                    #expect(source.reads.value == readable.count)
+                    if let firstFailure, case .failure(let error) = elements[firstFailure] {
+                        #expect(thrown == error)
+                        try tc.event("threw a failure")
+                    } else {
+                        #expect(thrown == nil)
+                        try tc.event("read every value")
+                    }
+                }
+            }
+        }
+
+        /// `asResults()` then `get()` gives back the source's values and the
+        /// error it throws, and reads it once.
+        @Test(.hegel(testCases: 500))
+        func getUndoesAsResults() async throws {
+            try await property(reaching: ["threw the source's error"]) { tc in
+                let values = try #draw(.array(of: .int(), count: 0...200), from: tc)
+                let thrown = try #draw(.optional(.int()), from: tc).map(JobFailure.init(value:))
+                let source = ValueSource(values: values, thrown: thrown, yields: 0)
+
+                var seen: [Int] = []
+                var caught: JobFailure?
+                do throws(JobFailure) {
+                    for try await value in source.asResults().get() { seen.append(value) }
+                } catch {
+                    caught = error
+                }
+
+                #expect(seen == values)
+                #expect(caught == thrown)
+                #expect(source.reads.value == values.count)
+                if thrown != nil { try tc.event("threw the source's error") }
+            }
+        }
+
+        /// `untilFailure()` and `untilSuccess()` give the elements up to and
+        /// including the first failure or success. Any sink after them gives
+        /// its model's value over that prefix, the source is read no further
+        /// than the sink reads, and the source's own error comes through only
+        /// when no element stopped it.
+        @Test(.hegel(testCases: 1_000))
+        func untilMatchesItsModel() async throws {
+            try await property(
+                reaching: ["stopped at the element", "threw the sequence's error"]
+            ) { tc in
+                let sink = try #draw(.element(of: Sink.allCases), from: tc)
+                let stopsOnSuccess = try #draw(.bool(), from: tc)
+                let mix = try #draw(.array(of: .bool(), count: 1...4), from: tc)
+                let elements = try #draw(Self.results(mix), from: tc)
+                let throwsAtEnd = try #draw(.bool(), from: tc)
+                let yields = try #draw(.oneOf(.just(0), .int(in: 0...3)), from: tc)
+                let source = ThrowingSource(
+                    elements: elements,
+                    throwsAtEnd: throwsAtEnd,
+                    yields: yields
+                )
+
+                let outcome: Result<SinkOutput, SequenceEnded>
+                do throws(SequenceEnded) {
+                    let until = stopsOnSuccess ? source.untilSuccess() : source.untilFailure()
+                    outcome = .success(try await sink.read(until))
+                } catch {
+                    outcome = .failure(error)
+                }
+
+                let stop = elements.firstIndex { $0.isSuccess == stopsOnSuccess }
+                let prefix = Array(elements.prefix(stop.map { $0 + 1 } ?? elements.count))
+                let model = sink.model(prefix)
+                #expect(source.reads.value == min(model.reads, prefix.count))
+                if stop == nil, model.readsToEnd, throwsAtEnd {
+                    #expect(outcome == .failure(SequenceEnded()))
+                    try tc.event("threw the sequence's error")
+                } else {
+                    #expect(outcome == .success(model.output))
+                }
+                if stop != nil, model.readsToEnd {
+                    try tc.event("stopped at the element")
+                }
+            }
+        }
+
         /// Results from a per-test-case mix: `true` is a success. Usually a
         /// few, sometimes hundreds.
         static func results(_ mix: [Bool]) -> Gen<[Element]> {
@@ -426,6 +546,35 @@
                 if !source.endsOnCancellation, index + 1 == source.cancelAt {
                     withUnsafeCurrentTask { $0?.cancel() }
                 }
+                return source.elements[index]
+            }
+        }
+
+        func makeAsyncIterator() -> AsyncIterator {
+            AsyncIterator(source: self)
+        }
+    }
+
+    /// A sequence of `elements` that can't throw, and counts reads.
+    struct ResultSource: AsyncSequence, Sendable {
+        typealias Failure = Never
+
+        let elements: [Element]
+        /// How many times each read suspends first.
+        let yields: Int
+        let reads = Counter()
+
+        struct AsyncIterator: AsyncIteratorProtocol {
+            let source: ResultSource
+            var index = 0
+
+            mutating func next() async -> Element? {
+                for _ in 0..<source.yields {
+                    await Task.yield()
+                }
+                guard index < source.elements.count else { return nil }
+                source.reads.add()
+                defer { index += 1 }
                 return source.elements[index]
             }
         }

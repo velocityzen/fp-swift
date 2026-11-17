@@ -61,6 +61,8 @@ Functions:
 | `toResult`, `toArray`, `separate`, `reduce`, `first…`, `last…`             | Read a sequence of results into one value.   |
 | `failOnCancellation(with:)`                                                | End with a failure if the task is cancelled. |
 | `asResults()`                                                              | Turn a sequence that throws into results.    |
+| `get()`                                                                    | Values, or throw the first failure.          |
+| `untilFailure()`, `untilSuccess()`                                         | End after the first failure or success.      |
 | `map`, `mapError`, `flatMap`, `tap`, `tapError` and their `Async` versions | Work on one side. The other passes through.  |
 | `mapAsyncOrdered`, `flatMapAsyncOrdered`, `compactMapAsyncOrdered`         | Concurrent, in source order.                 |
 | `mapAsyncUnordered`, `flatMapAsyncUnordered`, `compactMapAsyncUnordered`   | Concurrent, in the order they finish.        |

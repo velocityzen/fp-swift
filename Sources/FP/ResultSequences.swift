@@ -290,3 +290,126 @@ public struct ResultsSequence<Base: AsyncSequence>: AsyncSequence {
 
 extension ResultsSequence: Sendable where Base: Sendable {}
 extension ResultsSequence.Iterator: Sendable where Base.AsyncIterator: Sendable {}
+
+/// An async sequence of the values of `Base`'s `Result` elements, which throws the first failure.
+///
+/// `get()` on an async sequence of `Result`s that can't throw returns it. After the failure, it
+/// ends and does not read `Base` again.
+@frozen
+public struct GetSequence<Base: AsyncSequence, Success, Failure: Error>: AsyncSequence
+where Base.Element == Result<Success, Failure>, Base.Failure == Never {
+    public typealias Element = Success
+
+    @usableFromInline let base: Base
+
+    @inlinable
+    init(_ base: Base) {
+        self.base = base
+    }
+
+    @inlinable
+    public func makeAsyncIterator() -> Iterator {
+        Iterator(base.makeAsyncIterator())
+    }
+
+    @frozen
+    public struct Iterator: AsyncIteratorProtocol {
+        @usableFromInline var base: Base.AsyncIterator
+        @usableFromInline var finished = false
+
+        @inlinable
+        init(_ base: Base.AsyncIterator) {
+            self.base = base
+        }
+
+        @inlinable
+        public mutating func next() async throws(Failure) -> Success? {
+            try await next(isolation: #isolation)
+        }
+
+        @inlinable
+        public mutating func next(
+            isolation actor: isolated (any Actor)?
+        ) async throws(Failure) -> Success? {
+            guard !finished, let element = await base.next(isolation: actor) else {
+                finished = true
+                return nil
+            }
+            switch element {
+                case .success(let value):
+                    return value
+                case .failure(let error):
+                    finished = true
+                    throw error
+            }
+        }
+    }
+}
+
+extension GetSequence: Sendable where Base: Sendable {}
+extension GetSequence.Iterator: Sendable where Base.AsyncIterator: Sendable {}
+
+/// An async sequence of `Base`'s `Result` elements up to and including the first failure, or the
+/// first success.
+///
+/// `untilFailure()` and `untilSuccess()` on an async sequence of `Result`s return it. After that
+/// element, it ends and does not read `Base` again. It throws only what `Base` throws.
+@frozen
+public struct UntilSequence<Base: AsyncSequence, Success, ElementFailure: Error>: AsyncSequence
+where Base.Element == Result<Success, ElementFailure> {
+    public typealias Element = Base.Element
+    public typealias Failure = Base.Failure
+
+    @usableFromInline let base: Base
+    @usableFromInline let stopsOnSuccess: Bool
+
+    @inlinable
+    init(_ base: Base, stopsOnSuccess: Bool) {
+        self.base = base
+        self.stopsOnSuccess = stopsOnSuccess
+    }
+
+    @inlinable
+    public func makeAsyncIterator() -> Iterator {
+        Iterator(base.makeAsyncIterator(), stopsOnSuccess: stopsOnSuccess)
+    }
+
+    @frozen
+    public struct Iterator: AsyncIteratorProtocol {
+        @usableFromInline var base: Base.AsyncIterator
+        @usableFromInline let stopsOnSuccess: Bool
+        @usableFromInline var finished = false
+
+        @inlinable
+        init(_ base: Base.AsyncIterator, stopsOnSuccess: Bool) {
+            self.base = base
+            self.stopsOnSuccess = stopsOnSuccess
+        }
+
+        @inlinable
+        public mutating func next() async throws(Base.Failure) -> Base.Element? {
+            try await next(isolation: #isolation)
+        }
+
+        @inlinable
+        public mutating func next(
+            isolation actor: isolated (any Actor)?
+        ) async throws(Base.Failure) -> Base.Element? {
+            guard !finished else { return nil }
+            guard let element = try await base.next(isolation: actor) else {
+                finished = true
+                return nil
+            }
+            switch element {
+                case .success:
+                    if stopsOnSuccess { finished = true }
+                case .failure:
+                    if !stopsOnSuccess { finished = true }
+            }
+            return element
+        }
+    }
+}
+
+extension UntilSequence: Sendable where Base: Sendable {}
+extension UntilSequence.Iterator: Sendable where Base.AsyncIterator: Sendable {}

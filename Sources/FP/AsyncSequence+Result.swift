@@ -41,6 +41,50 @@ public extension AsyncSequence {
         }
     }
 
+    /// The values, as a sequence that throws the first failure.
+    ///
+    /// It gives each `.success` value as it comes. At the first `.failure`, it throws that error
+    /// and ends, and does not read the sequence again. It is the inverse of `asResults()`.
+    ///
+    /// ```swift
+    /// for try await user in ids.mapAsyncOrdered(concurrency: 8) { await loadUser(id: $0) }.get() {
+    ///     show(user)
+    /// }
+    /// ```
+    @inlinable
+    func get<Success, Failure>() -> GetSequence<Self, Success, Failure>
+    where Element == Result<Success, Failure>, Self.Failure == Never {
+        GetSequence(self)
+    }
+
+    /// The elements up to and including the first failure.
+    ///
+    /// After the failure, it ends and does not read the sequence again. Use it to read an
+    /// endless sequence, like `withRepeat`, until something fails.
+    @inlinable
+    func untilFailure<Success, Failure>() -> UntilSequence<Self, Success, Failure>
+    where Element == Result<Success, Failure> {
+        UntilSequence(self, stopsOnSuccess: false)
+    }
+
+    /// The elements up to and including the first success.
+    ///
+    /// After the success, it ends and does not read the sequence again. Use it to poll with
+    /// `withRepeat` until a call succeeds.
+    ///
+    /// ```swift
+    /// for await status in withRepeat(interval: .seconds(5)) { await checkJob(id) }
+    ///     .untilSuccess()
+    /// {
+    ///     show(status)
+    /// }
+    /// ```
+    @inlinable
+    func untilSuccess<Success, Failure>() -> UntilSequence<Self, Success, Failure>
+    where Element == Result<Success, Failure> {
+        UntilSequence(self, stopsOnSuccess: true)
+    }
+
     // MARK: Map
 
     /// Transforms each success value, and passes failures through unchanged.
