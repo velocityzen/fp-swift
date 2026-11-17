@@ -126,7 +126,7 @@ struct AsyncSequenceSinkTests {
     func stopsReading() async {
         let elements: [Element] = [.success(1), .failure(.failed), .success(2)]
         let source = Source(elements)
-        _ = await source.toResult()
+        await source.toResult()
         #expect(source.reads.value == 2)
 
         let another = Source(elements)

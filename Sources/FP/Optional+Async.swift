@@ -85,6 +85,7 @@ public extension Optional {
 
     /// Runs `action` whether or not `self` has a value, and returns `self`
     /// unchanged.
+    @discardableResult
     @inlinable
     func finally(_ action: () -> Void) -> Wrapped? {
         action()
@@ -95,6 +96,7 @@ public extension Optional {
     ///
     /// In a cancelled task, `action` sees the cancellation. To let a cleanup
     /// finish anyway, run it in `withTaskCancellationShield`.
+    @discardableResult
     @inlinable
     func finallyAsync(_ action: () async -> Void) async -> Wrapped? {
         await action()

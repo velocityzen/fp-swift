@@ -346,4 +346,18 @@ struct OptionalAsyncTests {
         #expect(count == 1)
         #expect(returned == nil)
     }
+
+    @Test("finally and finallyAsync can end a chain without using the optional")
+    func finallyEndsAChain() async {
+        var ran = false
+        let counter = AsyncCounter()
+        let some: Int? = 42
+
+        some.finally { ran = true }
+        await some.finallyAsync { await counter.increment() }
+
+        let count = await counter.count
+        #expect(ran)
+        #expect(count == 1)
+    }
 }

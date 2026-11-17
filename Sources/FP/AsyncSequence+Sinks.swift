@@ -43,6 +43,10 @@ public extension AsyncSequence {
     /// }
     /// .toResult()  // Result<[User], AppError>
     /// ```
+    ///
+    /// Its result can be dropped, to run a sequence only for what its stages do. Reading
+    /// still stops at the first failure.
+    @discardableResult
     @inlinable
     func toResult<Success, E>() async throws(Failure) -> Result<[Success], E>
     where Element == Result<Success, E> {

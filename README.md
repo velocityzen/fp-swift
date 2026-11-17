@@ -157,6 +157,17 @@ let greeting = fetchUser(id: 1)
 
 `tap` and `tapError` also take a closure that throws, or one that returns a `Result`. Then an error from the closure becomes the failure.
 
+A chain can end with `tap`, `tapError` or `finally` and not use the result:
+
+```swift
+fetchUser(id: 1)
+    .tap { user in cache.save(user) }
+    .tapError { error in log(error) }
+    .finally { spinner.stop() }
+```
+
+The versions whose closure throws or returns a `Result` can't end a chain this way. Their result may hold the closure's failure, so Swift warns when it is not used.
+
 ## Recovering from failures
 
 | Method                       | Gives                                                                     |
@@ -391,6 +402,7 @@ Rules:
 - When one of them stops reading, the stages before it stop too. A concurrent map stops reading its source and cancels the transforms still running. It does not wait for them to stop.
 - The ones that stop at the end never return for a sequence that never ends, like `withRepeat`.
 - They throw only what the sequence throws. A sequence that can't throw needs no `try`.
+- `toResult()` can run a sequence only for what its stages do, like a `tap`, without using its result. It still stops at the first failure.
 
 ### Stopping at a failure or a success
 

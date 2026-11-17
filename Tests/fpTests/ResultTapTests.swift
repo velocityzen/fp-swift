@@ -713,8 +713,7 @@ struct ResultTapTests {
         var events: [String] = []
         let result: Result<Int, TestError> = .success(42)
 
-        let _ =
-            result
+        result
             .tap { _ in events.append("tap") }
             .tapError { _ in events.append("tapError") }
             .finally { events.append("finally") }
@@ -727,8 +726,7 @@ struct ResultTapTests {
         var events: [String] = []
         let result: Result<Int, TestError> = .failure(.failed)
 
-        let _ =
-            result
+        result
             .tap { _ in events.append("tap") }
             .tapError { _ in events.append("tapError") }
             .finally { events.append("finally") }

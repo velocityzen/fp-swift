@@ -62,6 +62,7 @@ Rules:
 - When one of them stops reading, the stages before it stop too. A concurrent map stops reading its source and cancels the transforms still running. It does not wait for them to stop.
 - The ones that stop at the end never return for a sequence that never ends, like `withRepeat`.
 - They throw only what the sequence throws. A sequence that can't throw needs no `try`.
+- `toResult()` can run a sequence only for what its stages do, like a `tap`, without using its result. It still stops at the first failure.
 
 ## Stopping at a failure or a success
 

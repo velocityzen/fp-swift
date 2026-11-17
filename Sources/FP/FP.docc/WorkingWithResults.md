@@ -28,6 +28,17 @@ let greeting = fetchUser(id: 1)
 
 `tap` and `tapError` also take a closure that throws, or one that returns a `Result`. Then an error from the closure becomes the failure.
 
+A chain can end with `tap`, `tapError` or `finally` and not use the result:
+
+```swift
+fetchUser(id: 1)
+    .tap { user in cache.save(user) }
+    .tapError { error in log(error) }
+    .finally { spinner.stop() }
+```
+
+The versions whose closure throws or returns a `Result` can't end a chain this way. Their result may hold the closure's failure, so Swift warns when it is not used.
+
 ## Recovering from failures
 
 | Method                       | Gives                                                                     |

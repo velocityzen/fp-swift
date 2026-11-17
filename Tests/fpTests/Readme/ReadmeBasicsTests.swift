@@ -33,6 +33,14 @@ private struct Config: Equatable {
     let port: Int
 }
 
+private final class Spinner {
+    private(set) var stopped = false
+
+    func stop() {
+        stopped = true
+    }
+}
+
 private final class Cache {
     var saved: [User] = []
 
@@ -136,6 +144,16 @@ struct ReadmeBasicsTests {
         #expect(greeting == "Hello, Ann")
         #expect(cache.saved.map(\.name) == ["Ann"])
         #expect(logged.isEmpty)
+
+        let spinner = Spinner()
+
+        fetchUser(id: 1)
+            .tap { user in cache.save(user) }
+            .tapError { error in log(error) }
+            .finally { spinner.stop() }
+
+        #expect(cache.saved.map(\.name) == ["Ann", "Ann"])
+        #expect(spinner.stopped)
     }
 
     @Test

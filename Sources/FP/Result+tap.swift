@@ -10,12 +10,17 @@
  *
  * If the action throws or returns a failure, that error becomes the new failure. Throwing
  * actions change the failure type to `Error`.
+ *
+ * The taps that return the Result unchanged, and `finally`, can end a chain without `_ =`.
+ * The ones whose action throws or returns a Result can't: the Result they return may hold
+ * the action's failure, and dropping it would hide that failure.
  */
 public extension Result {
 
     // MARK: Sync taps
 
     /// Runs `action` on success. Returns the result unchanged.
+    @discardableResult
     @inlinable
     func tap(
         _ action: (Success) -> Void
@@ -27,6 +32,7 @@ public extension Result {
     }
 
     /// Runs `action` on success and ignores what it returns.
+    @discardableResult
     @inlinable
     func tap<T>(
         _ action: (Success) -> T
@@ -104,6 +110,7 @@ public extension Result {
     // MARK: Async taps
 
     /// Runs an async `action` on success. Returns the result unchanged.
+    @discardableResult
     @inlinable
     func tapAsync(
         _ action: (Success) async -> Void
@@ -115,6 +122,7 @@ public extension Result {
     }
 
     /// Runs an async `action` on success and ignores what it returns.
+    @discardableResult
     @inlinable
     func tapAsync<T>(
         _ action: (Success) async -> T
@@ -192,6 +200,7 @@ public extension Result {
     // MARK: Sync tapError
 
     /// Runs `action` on failure. Returns the result unchanged.
+    @discardableResult
     @inlinable
     func tapError(
         _ action: (Failure) -> Void
@@ -203,6 +212,7 @@ public extension Result {
     }
 
     /// Runs `action` on failure and ignores what it returns.
+    @discardableResult
     @inlinable
     func tapError<T>(
         _ action: (Failure) -> T
@@ -268,6 +278,7 @@ public extension Result {
     // MARK: Async tapError
 
     /// Runs an async `action` on failure. Returns the result unchanged.
+    @discardableResult
     @inlinable
     func tapErrorAsync(
         _ action: (Failure) async -> Void
@@ -279,6 +290,7 @@ public extension Result {
     }
 
     /// Runs an async `action` on failure and ignores what it returns.
+    @discardableResult
     @inlinable
     func tapErrorAsync<T>(
         _ action: (Failure) async -> T
@@ -352,6 +364,7 @@ public extension Result {
     ///     .tapError { error in logger.error("\(error)") }
     ///     .finally { metrics.record(.requestComplete) }
     /// ```
+    @discardableResult
     @inlinable
     func finally(_ action: () -> Void) -> Result<Success, Failure> {
         action()
@@ -362,6 +375,7 @@ public extension Result {
     ///
     /// In a cancelled task, `action` sees the cancellation. To let a cleanup finish anyway, run
     /// it in `withTaskCancellationShield`.
+    @discardableResult
     @inlinable
     func finallyAsync(_ action: () async -> Void) async -> Result<Success, Failure> {
         await action()
