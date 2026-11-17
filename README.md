@@ -21,6 +21,8 @@ fp-swift adds functional helpers to Swift's own `Result`, `Optional` and `Array`
 - [Combining results](#combining-results)
 - [Racing and timeouts](#racing-and-timeouts)
 - [Async sequences of results](#async-sequences-of-results)
+  - [Reading a sequence into one value](#reading-a-sequence-into-one-value)
+  - [In a cancelled task](#in-a-cancelled-task)
 - [Concurrent mapping](#concurrent-mapping)
   - [Keeping the source order](#keeping-the-source-order)
   - [In the order they finish](#in-the-order-they-finish)
@@ -306,6 +308,15 @@ let data = await withAny(
 
 For a number of calls known only at run time, pass an array of closures. It must not be empty.
 
+To take the first call to finish, even when it fails, wrap each result in a success and `get()` the one that wins:
+
+```swift
+let first = await withAny(
+    Result<_, Never>.success(await download(from: primary)),
+    Result<_, Never>.success(await download(from: backup))
+).get()
+```
+
 `withTimeout` gives the result of an async call, or a failure when the time runs out. Then it cancels the call. A failure that comes in time is returned as it is.
 
 ```swift
@@ -341,6 +352,63 @@ let stream = AsyncStream<Result<Int, AppError>> { continuation in
     continuation.finishWithFailure(.timeout)
 }
 ```
+
+`asResults()` turns a sequence that throws into a sequence of results. Each element becomes a success, and the error that ends the sequence becomes a last failure, with the same error type. The new sequence does not throw, so reading it needs no `try`:
+
+```swift
+let lines = await url.lines.asResults().toResult()
+// Result<[String], any Error>: every line, or the error it threw
+```
+
+### Reading a sequence into one value
+
+These read a sequence of results and return one value. Each one stops reading where the table says:
+
+| Method                          | Returns                                                              | Stops reading           |
+| ------------------------------- | -------------------------------------------------------------------- | ----------------------- |
+| `toResult()`                    | `Result<[Success], Failure>`: all values, or the first failure       | at the first failure    |
+| `toArray()`                     | `[Result<Success, Failure>]`: every element                          | at the end              |
+| `separate()`                    | `([Success], [Failure])`: every value and every error                | at the end              |
+| `reduce(initial, combine)`      | `Result<U, Failure>`: all values combined into one                   | at the first failure    |
+| `reduce(into: initial, update)` | `Result<U, Failure>`: all values added into one value, in place      | at the first failure    |
+| `first()`                       | `Result<Success, Failure>?`: the first element                       | after the first element |
+| `firstSuccess()`                | `Success?`: the first value                                          | at the first success    |
+| `firstError()`                  | `Failure?`: the first error                                          | at the first failure    |
+| `firstSuccessOrLastError()`     | `Result<Success, Failure>?`: the first value, or else the last error | at the first success    |
+| `last()`                        | `Result<Success, Failure>?`: the last element                        | at the end              |
+| `lastSuccess()`                 | `Success?`: the last value                                           | at the end              |
+| `lastError()`                   | `Failure?`: the last error                                           | at the end              |
+
+```swift
+let users = await ids
+    .mapAsyncOrdered(concurrency: 8) { id in await loadUser(id: id) }
+    .toResult()
+```
+
+Rules:
+
+- `firstSuccessOrLastError()` follows the rule of `withAny`: the first success wins, and when nothing succeeds, the last failure is the result.
+- When one of them stops reading, the stages before it stop too. A concurrent map stops reading its source and cancels the transforms still running. It does not wait for them to stop.
+- The ones that stop at the end never return for a sequence that never ends, like `withRepeat`.
+- They throw only what the sequence throws. A sequence that can't throw needs no `try`.
+
+### In a cancelled task
+
+In a cancelled task, many sequences end early instead of throwing: `AsyncStream`, `withRepeat` and the concurrent maps all stop. A sink that reads to the end then returns what it read so far, and that looks like a complete result. This is Swift's convention: the standard library's `reduce` and `contains` do the same.
+
+To get a failure instead, put `failOnCancellation(with:)` before the sink:
+
+```swift
+let users = await ids
+    .mapAsyncOrdered(concurrency: 8) { id in await loadUser(id: id) }
+    .failOnCancellation(with: .cancelled)
+    .toResult()  // .failure(.cancelled) in a cancelled task
+```
+
+- It checks for cancellation before each read and when the sequence ends. If the task is cancelled, it gives `.failure(error)` and ends, and does not read the sequence again.
+- The failure is an element of the sequence's own error type, so the sinks need no `try`, and they treat it like any other failure: `toResult` and `reduce` return it, and `toArray` and `last` end with it. The ones that skip failures, like `lastSuccess`, still return what they read.
+- It can't tell a sequence that ended because of the cancellation from one that ended just before it, so it gives the failure in both cases.
+- Inside `withTaskCancellationShield`, the task does not look cancelled, so every element passes through.
 
 ## Concurrent mapping
 
@@ -699,14 +767,17 @@ Functions:
 
 `AsyncSequence` and `AsyncStream`:
 
-| Method                                                                     | What it does                                |
-| -------------------------------------------------------------------------- | ------------------------------------------- |
-| `successes`, `failures`                                                    | One side of a sequence of results.          |
-| `map`, `mapError`, `flatMap`, `tap`, `tapError` and their `Async` versions | Work on one side. The other passes through. |
-| `mapAsyncOrdered`, `flatMapAsyncOrdered`, `compactMapAsyncOrdered`         | Concurrent, in source order.                |
-| `mapAsyncUnordered`, `flatMapAsyncUnordered`, `compactMapAsyncUnordered`   | Concurrent, in the order they finish.       |
-| `AsyncStream.success`, `AsyncStream.failure`                               | A stream of one result.                     |
-| `success`, `failure`, `finishWithSuccess`, `finishWithFailure`             | Add a result on a continuation.             |
+| Method                                                                     | What it does                                 |
+| -------------------------------------------------------------------------- | -------------------------------------------- |
+| `successes`, `failures`                                                    | One side of a sequence of results.           |
+| `toResult`, `toArray`, `separate`, `reduce`, `first…`, `last…`             | Read a sequence of results into one value.   |
+| `failOnCancellation(with:)`                                                | End with a failure if the task is cancelled. |
+| `asResults()`                                                              | Turn a sequence that throws into results.    |
+| `map`, `mapError`, `flatMap`, `tap`, `tapError` and their `Async` versions | Work on one side. The other passes through.  |
+| `mapAsyncOrdered`, `flatMapAsyncOrdered`, `compactMapAsyncOrdered`         | Concurrent, in source order.                 |
+| `mapAsyncUnordered`, `flatMapAsyncUnordered`, `compactMapAsyncUnordered`   | Concurrent, in the order they finish.        |
+| `AsyncStream.success`, `AsyncStream.failure`                               | A stream of one result.                      |
+| `success`, `failure`, `finishWithSuccess`, `finishWithFailure`             | Add a result on a continuation.              |
 
 ## Benchmarks
 

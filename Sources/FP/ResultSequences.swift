@@ -175,3 +175,118 @@ public struct ResultCompactMapSequence<Base: AsyncSequence, Transformed>: AsyncS
 
 extension ResultCompactMapSequence: Sendable where Base: Sendable {}
 extension ResultCompactMapSequence.Iterator: Sendable where Base.AsyncIterator: Sendable {}
+
+/// An async sequence that passes the elements of `Base` through, and ends with one failure
+/// element when the task that reads it is cancelled.
+///
+/// `failOnCancellation(with:)` on an async sequence of `Result`s returns it. It throws only what
+/// `Base` throws.
+@frozen
+public struct FailOnCancellationSequence<Base: AsyncSequence>: AsyncSequence {
+    public typealias Element = Base.Element
+    public typealias Failure = Base.Failure
+
+    @usableFromInline let base: Base
+    @usableFromInline let failure: Base.Element
+
+    @inlinable
+    init(_ base: Base, failure: Base.Element) {
+        self.base = base
+        self.failure = failure
+    }
+
+    @inlinable
+    public func makeAsyncIterator() -> Iterator {
+        Iterator(base.makeAsyncIterator(), failure: failure)
+    }
+
+    @frozen
+    public struct Iterator: AsyncIteratorProtocol {
+        @usableFromInline var base: Base.AsyncIterator
+        @usableFromInline let failure: Base.Element
+        @usableFromInline var finished = false
+
+        @inlinable
+        init(_ base: Base.AsyncIterator, failure: Base.Element) {
+            self.base = base
+            self.failure = failure
+        }
+
+        @inlinable
+        public mutating func next() async throws(Base.Failure) -> Base.Element? {
+            try await next(isolation: #isolation)
+        }
+
+        @inlinable
+        public mutating func next(
+            isolation actor: isolated (any Actor)?
+        ) async throws(Base.Failure) -> Base.Element? {
+            guard !finished else { return nil }
+            if !Task.isCancelled, let element = try await base.next(isolation: actor) {
+                return element
+            }
+            finished = true
+            return Task.isCancelled ? failure : nil
+        }
+    }
+}
+
+extension FailOnCancellationSequence: Sendable where Base: Sendable, Base.Element: Sendable {}
+extension FailOnCancellationSequence.Iterator: Sendable
+where Base.AsyncIterator: Sendable, Base.Element: Sendable {}
+
+/// An async sequence that wraps each element of `Base` in `.success`, and gives the error that
+/// `Base` throws as its last element, a `.failure`.
+///
+/// `asResults()` on an async sequence returns it. It never throws.
+@frozen
+public struct ResultsSequence<Base: AsyncSequence>: AsyncSequence {
+    public typealias Element = Result<Base.Element, Base.Failure>
+    public typealias Failure = Never
+
+    @usableFromInline let base: Base
+
+    @inlinable
+    init(_ base: Base) {
+        self.base = base
+    }
+
+    @inlinable
+    public func makeAsyncIterator() -> Iterator {
+        Iterator(base.makeAsyncIterator())
+    }
+
+    @frozen
+    public struct Iterator: AsyncIteratorProtocol {
+        @usableFromInline var base: Base.AsyncIterator
+        @usableFromInline var finished = false
+
+        @inlinable
+        init(_ base: Base.AsyncIterator) {
+            self.base = base
+        }
+
+        @inlinable
+        public mutating func next() async -> Element? {
+            await next(isolation: #isolation)
+        }
+
+        @inlinable
+        public mutating func next(isolation actor: isolated (any Actor)?) async -> Element? {
+            guard !finished else { return nil }
+            do throws(Base.Failure) {
+                if let element = try await base.next(isolation: actor) {
+                    return .success(element)
+                }
+            } catch {
+                finished = true
+                return .failure(error)
+            }
+            finished = true
+            return nil
+        }
+    }
+}
+
+extension ResultsSequence: Sendable where Base: Sendable {}
+extension ResultsSequence.Iterator: Sendable where Base.AsyncIterator: Sendable {}

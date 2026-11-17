@@ -10,6 +10,7 @@ import Testing
 private enum AppError: Error, Equatable {
     case notFound
     case timeout
+    case cancelled
 }
 
 private struct User: Equatable, Sendable {
@@ -93,6 +94,25 @@ private func download(from url: String) async -> Result<String, AppError> {
     url == "backup" ? .success("data from backup") : .failure(.timeout)
 }
 
+/// A download that finishes only when it's cancelled.
+private func slowDownload() async -> Result<String, AppError> {
+    try? await Task.sleep(for: .seconds(60))
+    return .success("late")
+}
+
+/// Stands in for a `URL`: `lines` gives `text`, then throws `failure` if there is one.
+private struct TextURL {
+    let text: [String]
+    var failure: (any Error)? = nil
+
+    var lines: AsyncThrowingStream<String, any Error> {
+        AsyncThrowingStream { continuation in
+            for line in text { continuation.yield(line) }
+            continuation.finish(throwing: failure)
+        }
+    }
+}
+
 private func loadName(_ id: Int) async -> String { "name \(id)" }
 
 private func fetchStatus() async -> String { "ok" }
@@ -167,6 +187,19 @@ struct ReadmeAsyncTests {
         )
         #expect(data == .success("data from backup"))
 
+        let first = await withAny(
+            Result<_, Never>.success(await download(from: primary)),
+            Result<_, Never>.success(await download(from: backup))
+        ).get()
+        #expect(first == .failure(.timeout) || first == .success("data from backup"))
+
+        // A failure wins too: the other call is still running when it comes.
+        let failedFirst = await withAny(
+            Result<_, Never>.success(await download(from: primary)),
+            Result<_, Never>.success(await slowDownload())
+        ).get()
+        #expect(failedFirst == .failure(.timeout))
+
         let profile = await withTimeout(.seconds(5), failingWith: .timeout) {
             await loadProfile(id: 1)
         }
@@ -203,6 +236,51 @@ struct ReadmeAsyncTests {
         var results: [Result<Int, AppError>] = []
         for await result in stream { results.append(result) }
         #expect(results == [.success(1), .failure(.timeout)])
+
+        let url = TextURL(text: ["a", "b"])
+        let lines = await url.lines.asResults().toResult()
+        // Result<[String], any Error>: every line, or the error it threw
+        #expect((try? lines.get()) == ["a", "b"])
+
+        let broken = TextURL(text: ["a"], failure: LoadError())
+        let partial = await broken.lines.asResults().toResult()
+        #expect(throws: LoadError.self) { try partial.get() }
+    }
+
+    @Test
+    func readingASequenceIntoOneValue() async {
+        let ids = stream([1, 2, 3])
+
+        let users =
+            await ids
+            .mapAsyncOrdered(concurrency: 8) { id in await loadUser(id: id) }
+            .toResult()
+
+        #expect(users == .success([User(id: 1), User(id: 2), User(id: 3)]))
+
+        let withMissing = await stream([1, 0, 2])
+            .mapAsyncOrdered(concurrency: 8) { id in await loadUser(id: id) }
+            .toResult()
+        #expect(withMissing == .failure(.notFound))
+    }
+
+    @Test
+    func inACancelledTask() async {
+        let users =
+            await stream([1, 2, 3])
+            .mapAsyncOrdered(concurrency: 8) { id in await loadUser(id: id) }
+            .failOnCancellation(with: .cancelled)
+            .toResult()
+        #expect(users == .success([User(id: 1), User(id: 2), User(id: 3)]))
+
+        let cancelled = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await stream([1, 2, 3])
+                .mapAsyncOrdered(concurrency: 8) { id in await loadUser(id: id) }
+                .failOnCancellation(with: .cancelled)
+                .toResult()
+        }.value
+        #expect(cancelled == .failure(.cancelled))
     }
 
     @Test

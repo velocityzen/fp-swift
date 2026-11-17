@@ -9,13 +9,13 @@ Every benchmark records wall clock and CPU time, instructions, malloc count and 
 | Target | Covers |
 | --- | --- |
 | `ArrayBenchmarks` | `traverse`, sequential and concurrent `traverseAsync`, `mapAsync`, `compactMapAsync`, `flatMapAsync`, `separate`, `successes`, `failures` |
-| `AsyncSequenceBenchmarks` | `mapAsyncOrdered`, `compactMapAsyncOrdered`, `mapAsyncUnordered`, `compactMapAsyncUnordered` and their `Result` variants at several concurrency levels, early termination, the `Result` operators on async sequences, and `withRepeat` |
+| `AsyncSequenceBenchmarks` | `mapAsyncOrdered`, `compactMapAsyncOrdered`, `mapAsyncUnordered`, `compactMapAsyncUnordered` and their `Result` variants at several concurrency levels, early termination, the `Result` operators and sinks on async sequences, and `withRepeat` |
 | `CombinatorBenchmarks` | `withAll`, `withAny`, `withTimeout` |
 | `RetryBenchmarks` | `withRetry` with a first-attempt success, with every attempt failing, with a composed policy, and with failures that ask for a wait, all with `.zero` delays |
 
 Most benchmarks run at `n: 16` and `n: 1024` elements, to separate the fixed cost of a call from its cost per element, and the concurrent ones at several `concurrency` levels. Transforms are trivial (`$0 &* 2`), so the numbers are the operator's own overhead rather than the work it runs.
 
-Entries marked `(baseline)` are the hand-written floor for the same job (`Array.map`, a plain `for await`, the standard library's async `map` and `compactMap`, a raw `withTaskGroup`, `async let`). The gap between a baseline and the FP operator next to it is what an optimization can win back.
+Entries marked `(baseline)` are the hand-written floor for the same job (`Array.map`, a plain `for await`, the same loop written by hand, the standard library's async `map` and `compactMap`, a raw `withTaskGroup`, `async let`). The gap between a baseline and the FP operator next to it is what an optimization can win back.
 
 ## Running
 

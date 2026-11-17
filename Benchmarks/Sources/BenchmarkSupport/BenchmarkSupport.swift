@@ -241,3 +241,100 @@ public struct ResultSequence: AsyncSequence, Sendable {
         }
     }
 }
+
+/// An async sequence of `0..<count` that throws `BenchError` where it would
+/// end. It never suspends or allocates.
+///
+/// Its iterator implements `next(isolation:)`, as the standard library's
+/// sequences do, so a read doesn't go through the default implementation,
+/// which reaches a typed-throwing `next()` through the protocol and casts
+/// the error it throws.
+public struct ThrowingCountingSequence: AsyncSequence, Sendable {
+    public typealias Element = Int
+    public typealias Failure = BenchError
+
+    public let count: Int
+
+    public init(_ count: Int) {
+        self.count = count
+    }
+
+    public func makeAsyncIterator() -> Iterator {
+        Iterator(count: count)
+    }
+
+    public struct Iterator: AsyncIteratorProtocol {
+        public typealias Failure = BenchError
+
+        let count: Int
+        var current = 0
+
+        public mutating func next(
+            isolation actor: isolated (any Actor)?
+        ) async throws(BenchError) -> Int? {
+            guard current < count else { throw BenchError() }
+            defer { current += 1 }
+            return current
+        }
+
+        public mutating func next() async throws(BenchError) -> Int? {
+            try await next(isolation: nil)
+        }
+    }
+}
+
+/// An async sequence of `count` successes that never suspends or allocates.
+/// The sinks that stop at the first failure read all of it.
+public struct SuccessSequence: AsyncSequence, Sendable {
+    public typealias Element = IntResult
+    public typealias Failure = Never
+
+    public let count: Int
+
+    public init(_ count: Int) {
+        self.count = count
+    }
+
+    public func makeAsyncIterator() -> Iterator {
+        Iterator(count: count)
+    }
+
+    public struct Iterator: AsyncIteratorProtocol {
+        let count: Int
+        var current = 0
+
+        public mutating func next() async -> IntResult? {
+            guard current < count else { return nil }
+            defer { current += 1 }
+            return .success(current)
+        }
+    }
+}
+
+/// An async sequence of `count` failures that never suspends or allocates.
+/// The sinks that stop at the first success read all of it.
+public struct FailureSequence: AsyncSequence, Sendable {
+    public typealias Element = IntResult
+    public typealias Failure = Never
+
+    public let count: Int
+
+    public init(_ count: Int) {
+        self.count = count
+    }
+
+    public func makeAsyncIterator() -> Iterator {
+        Iterator(count: count)
+    }
+
+    public struct Iterator: AsyncIteratorProtocol {
+        let count: Int
+        var current = 0
+
+        public mutating func next() async -> IntResult? {
+            guard current < count else { return nil }
+            current += 1
+            return .failure(BenchError())
+        }
+    }
+}

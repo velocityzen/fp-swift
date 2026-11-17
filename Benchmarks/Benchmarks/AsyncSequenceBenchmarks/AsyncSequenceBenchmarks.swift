@@ -15,6 +15,116 @@ func drain<S: AsyncSequence>(_ sequence: S) async -> Int where S.Failure == Neve
     return count
 }
 
+/// `toResult()` written by hand.
+func toResultByHand(_ sequence: SuccessSequence) async -> Result<[Int], BenchError> {
+    var values: [Int] = []
+    for await element in sequence {
+        switch element {
+            case .success(let value): values.append(value)
+            case .failure(let error): return .failure(error)
+        }
+    }
+    return .success(values)
+}
+
+/// `toArray()` written by hand.
+func toArrayByHand(_ sequence: SuccessSequence) async -> [IntResult] {
+    var elements: [IntResult] = []
+    for await element in sequence {
+        elements.append(element)
+    }
+    return elements
+}
+
+/// `reduce(0, &+)` written by hand.
+func sumByHand(_ sequence: SuccessSequence) async -> IntResult {
+    var sum = 0
+    for await element in sequence {
+        switch element {
+            case .success(let value): sum &+= value
+            case .failure(let error): return .failure(error)
+        }
+    }
+    return .success(sum)
+}
+
+/// `separate()` written by hand.
+func separateByHand(_ sequence: ResultSequence) async -> ([Int], [BenchError]) {
+    var successes: [Int] = []
+    var failures: [BenchError] = []
+    for await element in sequence {
+        switch element {
+            case .success(let value): successes.append(value)
+            case .failure(let error): failures.append(error)
+        }
+    }
+    return (successes, failures)
+}
+
+/// `lastSuccess()` written by hand.
+func lastSuccessByHand(_ sequence: ResultSequence) async -> Int? {
+    var last: Int?
+    for await element in sequence {
+        if case .success(let value) = element { last = value }
+    }
+    return last
+}
+
+/// `firstSuccessOrLastError()` written by hand.
+func firstSuccessOrLastErrorByHand(_ sequence: FailureSequence) async -> IntResult? {
+    var lastFailure: IntResult?
+    for await element in sequence {
+        if case .success = element { return element }
+        lastFailure = element
+    }
+    return lastFailure
+}
+
+/// `failOnCancellation(with:)` and then `toResult()`, written by hand: check for cancellation
+/// before each read and when the sequence ends. It reads with the caller's isolation, like
+/// `for await` and the sinks do.
+func failOnCancellationToResultByHand(
+    _ sequence: SuccessSequence
+) async -> Result<[Int], BenchError> {
+    var values: [Int] = []
+    var iterator = sequence.makeAsyncIterator()
+    while !Task.isCancelled, let element = await iterator.next(isolation: #isolation) {
+        switch element {
+            case .success(let value): values.append(value)
+            case .failure(let error): return .failure(error)
+        }
+    }
+    return Task.isCancelled ? .failure(BenchError()) : .success(values)
+}
+
+/// `reduce(into: []) { $0.append($1 &* 2) }` written by hand.
+func reduceIntoByHand(_ sequence: SuccessSequence) async -> Result<[Int], BenchError> {
+    var values: [Int] = []
+    for await element in sequence {
+        switch element {
+            case .success(let value): values.append(value &* 2)
+            case .failure(let error): return .failure(error)
+        }
+    }
+    return .success(values)
+}
+
+/// `asResults().toResult()` written by hand: every value, or the error the
+/// sequence throws.
+func asResultsToResultByHand(
+    _ sequence: ThrowingCountingSequence
+) async -> Result<[Int], BenchError> {
+    var values: [Int] = []
+    do throws(BenchError) {
+        for try await value in sequence {
+            values.append(value)
+        }
+    } catch {
+        return .failure(error)
+    }
+    return .success(values)
+}
+
 let benchmarks: @Sendable () -> Void = {
     for n in [16, 1024] {
         let tags = ["n": "\(n)"]
@@ -292,6 +402,150 @@ let benchmarks: @Sendable () -> Void = {
         Benchmark("Result successes", configuration: .fp(tags)) { benchmark in
             for _ in benchmark.scaledIterations {
                 blackHole(await drain(results.successes()))
+            }
+        }
+
+        // MARK: Sinks
+
+        // Reading a sequence of results into one value, against the same
+        // loop written by hand. The source has no failures, so the sinks
+        // that stop at the first failure read all of it.
+
+        let successes = SuccessSequence(n)
+
+        Benchmark("toResult loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await toResultByHand(successes))
+            }
+        }
+
+        Benchmark("Result toResult", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await successes.toResult())
+            }
+        }
+
+        Benchmark("toArray loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await toArrayByHand(successes))
+            }
+        }
+
+        Benchmark("Result toArray", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await successes.toArray())
+            }
+        }
+
+        Benchmark("reduce loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await sumByHand(successes))
+            }
+        }
+
+        Benchmark("Result reduce", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await successes.reduce(0, &+))
+            }
+        }
+
+        // These read to the end, so they read the source with failures in it.
+
+        Benchmark("separate loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await separateByHand(results))
+            }
+        }
+
+        Benchmark("Result separate", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await results.separate())
+            }
+        }
+
+        Benchmark("lastSuccess loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await lastSuccessByHand(results))
+            }
+        }
+
+        Benchmark("Result lastSuccess", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await results.lastSuccess())
+            }
+        }
+
+        // With no success, it reads to the end and keeps the last failure.
+
+        let failures = FailureSequence(n)
+
+        Benchmark("firstSuccessOrLastError loop (baseline)", configuration: .fp(tags)) {
+            benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await firstSuccessOrLastErrorByHand(failures))
+            }
+        }
+
+        Benchmark("Result firstSuccessOrLastError", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await failures.firstSuccessOrLastError())
+            }
+        }
+
+        Benchmark("reduce into loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await reduceIntoByHand(successes))
+            }
+        }
+
+        Benchmark("Result reduce into", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await successes.reduce(into: [Int]()) { $0.append($1 &* 2) })
+            }
+        }
+
+        // MARK: asResults
+
+        // Every value, then the error the sequence throws where it would end.
+        //
+        // The operator comes out ahead: its loop inlines the source's
+        // `next(isolation:)`, while the hand-written loop makes an async call
+        // per read. Over typed-throwing sources both sides are sensitive to how
+        // the source is declared and where it lives; this one implements
+        // `next(isolation:)` itself, as the standard library's sequences do.
+
+        let throwing = ThrowingCountingSequence(n)
+
+        Benchmark("asResults toResult loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await asResultsToResultByHand(throwing))
+            }
+        }
+
+        Benchmark("Result asResults toResult", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await throwing.asResults().toResult())
+            }
+        }
+
+        // MARK: failOnCancellation
+
+        // One cancellation check before each read and one at the end, in a
+        // task that is not cancelled. The check is an opaque runtime call
+        // inside the operator's `next(isolation:)`. The sinks read through a
+        // loop with an explicit isolation parameter, so the compiler can
+        // remove the operator's hop to the caller's actor; without that, it
+        // costs one more executor switch per element.
+
+        Benchmark("failOnCancellation loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await failOnCancellationToResultByHand(successes))
+            }
+        }
+
+        Benchmark("Result failOnCancellation toResult", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(await successes.failOnCancellation(with: BenchError()).toResult())
             }
         }
 

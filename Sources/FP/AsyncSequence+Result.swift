@@ -1,6 +1,24 @@
 // MARK: - AsyncSequence Extensions for Result
 
 public extension AsyncSequence {
+    /// Turns the sequence into a sequence of results that never throws.
+    ///
+    /// Each element becomes `.success(element)`, and the error the sequence throws becomes the
+    /// last element, `.failure(error)`. After it, the sequence ends and does not read the base
+    /// again. The sinks then read it without `try`, and the error keeps its type.
+    ///
+    /// ```swift
+    /// let lines = await file.lines
+    ///     .asResults()
+    ///     .toResult()  // Result<[String], any Error>
+    /// ```
+    @inlinable
+    func asResults() -> ResultsSequence<Self> {
+        ResultsSequence(self)
+    }
+}
+
+public extension AsyncSequence {
     /// Returns an async sequence of only the success values.
     @inlinable
     func successes<Success, Failure>()
@@ -145,5 +163,37 @@ public extension AsyncSequence {
         ResultMapAsyncSequence(self) { element in
             await element.tapErrorAsync(action)
         }
+    }
+
+    // MARK: Cancellation
+
+    /// Ends the sequence with one `.failure(error)` when the task that reads it is cancelled.
+    ///
+    /// In a cancelled task, many sequences end early instead of throwing: `AsyncStream` and the
+    /// concurrent maps return `nil`. A sink that reads to the end, like `toResult()`, then gives
+    /// a partial result that looks complete. Put this before the sink to get a failure instead.
+    ///
+    /// It checks for cancellation before each read and when `Base` ends. If the task is
+    /// cancelled, it gives `.failure(error)` and ends, and does not read `Base` again. Otherwise
+    /// it passes every element through.
+    ///
+    /// It can't tell a sequence that ended because of the cancellation from one that ended
+    /// just before it, so it gives the failure in both cases. Inside
+    /// `withTaskCancellationShield`, the task does not look cancelled, so it passes every
+    /// element through.
+    ///
+    /// ```swift
+    /// let users = await ids.mapAsyncOrdered(concurrency: 8) { id in
+    ///     await loadUser(id)
+    /// }
+    /// .failOnCancellation(with: .cancelled)
+    /// .toResult()  // .failure(.cancelled) in a cancelled task
+    /// ```
+    @inlinable
+    func failOnCancellation<Success, Failure>(
+        with error: Failure
+    ) -> FailOnCancellationSequence<Self>
+    where Element == Result<Success, Failure> {
+        FailOnCancellationSequence(self, failure: .failure(error))
     }
 }

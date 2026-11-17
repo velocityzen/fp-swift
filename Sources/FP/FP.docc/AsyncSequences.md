@@ -24,6 +24,63 @@ let stream = AsyncStream<Result<Int, AppError>> { continuation in
 }
 ```
 
+`asResults()` turns a sequence that throws into a sequence of results. Each element becomes a success, and the error that ends the sequence becomes a last failure, with the same error type. The new sequence does not throw, so reading it needs no `try`:
+
+```swift
+let lines = await url.lines.asResults().toResult()
+// Result<[String], any Error>: every line, or the error it threw
+```
+
+## Reading a sequence into one value
+
+These read a sequence of results and return one value. Each one stops reading where the table says:
+
+| Method                          | Returns                                                              | Stops reading           |
+| ------------------------------- | -------------------------------------------------------------------- | ----------------------- |
+| `toResult()`                    | `Result<[Success], Failure>`: all values, or the first failure       | at the first failure    |
+| `toArray()`                     | `[Result<Success, Failure>]`: every element                          | at the end              |
+| `separate()`                    | `([Success], [Failure])`: every value and every error                | at the end              |
+| `reduce(initial, combine)`      | `Result<U, Failure>`: all values combined into one                   | at the first failure    |
+| `reduce(into: initial, update)` | `Result<U, Failure>`: all values added into one value, in place      | at the first failure    |
+| `first()`                       | `Result<Success, Failure>?`: the first element                       | after the first element |
+| `firstSuccess()`                | `Success?`: the first value                                          | at the first success    |
+| `firstError()`                  | `Failure?`: the first error                                          | at the first failure    |
+| `firstSuccessOrLastError()`     | `Result<Success, Failure>?`: the first value, or else the last error | at the first success    |
+| `last()`                        | `Result<Success, Failure>?`: the last element                        | at the end              |
+| `lastSuccess()`                 | `Success?`: the last value                                           | at the end              |
+| `lastError()`                   | `Failure?`: the last error                                           | at the end              |
+
+```swift
+let users = await ids
+    .mapAsyncOrdered(concurrency: 8) { id in await loadUser(id: id) }
+    .toResult()
+```
+
+Rules:
+
+- `firstSuccessOrLastError()` follows the rule of `withAny`: the first success wins, and when nothing succeeds, the last failure is the result.
+- When one of them stops reading, the stages before it stop too. A concurrent map stops reading its source and cancels the transforms still running. It does not wait for them to stop.
+- The ones that stop at the end never return for a sequence that never ends, like `withRepeat`.
+- They throw only what the sequence throws. A sequence that can't throw needs no `try`.
+
+## In a cancelled task
+
+In a cancelled task, many sequences end early instead of throwing: `AsyncStream`, `withRepeat` and the concurrent maps all stop. A sink that reads to the end then returns what it read so far, and that looks like a complete result. This is Swift's convention: the standard library's `reduce` and `contains` do the same.
+
+To get a failure instead, put `failOnCancellation(with:)` before the sink:
+
+```swift
+let users = await ids
+    .mapAsyncOrdered(concurrency: 8) { id in await loadUser(id: id) }
+    .failOnCancellation(with: .cancelled)
+    .toResult()  // .failure(.cancelled) in a cancelled task
+```
+
+- It checks for cancellation before each read and when the sequence ends. If the task is cancelled, it gives `.failure(error)` and ends, and does not read the sequence again.
+- The failure is an element of the sequence's own error type, so the sinks need no `try`, and they treat it like any other failure: `toResult` and `reduce` return it, and `toArray` and `last` end with it. The ones that skip failures, like `lastSuccess`, still return what they read.
+- It can't tell a sequence that ended because of the cancellation from one that ended just before it, so it gives the failure in both cases.
+- Inside `withTaskCancellationShield`, the task does not look cancelled, so every element passes through.
+
 ## Concurrent mapping
 
 These map an async sequence with an async transform. Up to `concurrency` transforms run at the same time. The default is 1: one at a time.

@@ -55,13 +55,16 @@ Functions:
 
 `AsyncSequence` and `AsyncStream`:
 
-| Method                                                                     | What it does                                |
-| -------------------------------------------------------------------------- | ------------------------------------------- |
-| `successes`, `failures`                                                    | One side of a sequence of results.          |
-| `map`, `mapError`, `flatMap`, `tap`, `tapError` and their `Async` versions | Work on one side. The other passes through. |
-| `mapAsyncOrdered`, `flatMapAsyncOrdered`, `compactMapAsyncOrdered`         | Concurrent, in source order.                |
-| `mapAsyncUnordered`, `flatMapAsyncUnordered`, `compactMapAsyncUnordered`   | Concurrent, in the order they finish.       |
-| `AsyncStream.success`, `AsyncStream.failure`                               | A stream of one result.                     |
-| `success`, `failure`, `finishWithSuccess`, `finishWithFailure`             | Add a result on a continuation.             |
+| Method                                                                     | What it does                                 |
+| -------------------------------------------------------------------------- | -------------------------------------------- |
+| `successes`, `failures`                                                    | One side of a sequence of results.           |
+| `toResult`, `toArray`, `separate`, `reduce`, `first…`, `last…`             | Read a sequence of results into one value.   |
+| `failOnCancellation(with:)`                                                | End with a failure if the task is cancelled. |
+| `asResults()`                                                              | Turn a sequence that throws into results.    |
+| `map`, `mapError`, `flatMap`, `tap`, `tapError` and their `Async` versions | Work on one side. The other passes through.  |
+| `mapAsyncOrdered`, `flatMapAsyncOrdered`, `compactMapAsyncOrdered`         | Concurrent, in source order.                 |
+| `mapAsyncUnordered`, `flatMapAsyncUnordered`, `compactMapAsyncUnordered`   | Concurrent, in the order they finish.        |
+| `AsyncStream.success`, `AsyncStream.failure`                               | A stream of one result.                      |
+| `success`, `failure`, `finishWithSuccess`, `finishWithFailure`             | Add a result on a continuation.              |
 
 <!-- Made from README.md by Scripts/make-docc-articles.swift. Edit README.md, then run the script. -->

@@ -56,6 +56,15 @@ let data = await withAny(
 
 For a number of calls known only at run time, pass an array of closures. It must not be empty.
 
+To take the first call to finish, even when it fails, wrap each result in a success and `get()` the one that wins:
+
+```swift
+let first = await withAny(
+    Result<_, Never>.success(await download(from: primary)),
+    Result<_, Never>.success(await download(from: backup))
+).get()
+```
+
 `withTimeout` gives the result of an async call, or a failure when the time runs out. Then it cancels the call. A failure that comes in time is returned as it is.
 
 ```swift
