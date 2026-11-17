@@ -206,11 +206,50 @@ struct WithRepeatTests {
         #expect(clock.sleeps == [.seconds(1), .seconds(1)])
     }
 
-    @Test("An interval of zero runs a call each time the reader asks, and does not use the clock")
-    func zeroInterval() async {
+    @Test("Counting from the finish, a slow call adds to the interval")
+    func slowCallFromFinish() async {
         let clock = ManualClock()
         let calls = Calls(clock)
-        var iterator = withRepeat(interval: .zero, clock: clock) {
+        var iterator = withRepeat(interval: .seconds(1), from: .finish, clock: clock) {
+            let call = calls.record()
+            clock.advance(by: .milliseconds(300))
+            return call
+        }.makeAsyncIterator()
+
+        _ = await iterator.take(3)
+
+        #expect(calls.all == [.zero, .milliseconds(1300), .milliseconds(2600)])
+        #expect(clock.sleeps == [.seconds(1), .seconds(1)])
+    }
+
+    @Test("Counting from the finish, a reader waits only for what is left of the interval")
+    func readerFromFinish() async {
+        let clock = ManualClock()
+        let calls = Calls(clock)
+        var iterator = withRepeat(interval: .seconds(1), from: .finish, clock: clock) {
+            let call = calls.record()
+            clock.advance(by: .milliseconds(300))
+            return call
+        }.makeAsyncIterator()
+
+        _ = await iterator.next()
+        clock.advance(by: .milliseconds(400))
+        _ = await iterator.next()
+        clock.advance(by: .seconds(2))
+        _ = await iterator.next()
+
+        #expect(calls.all == [.zero, .milliseconds(1300), .milliseconds(3600)])
+        #expect(clock.sleeps == [.milliseconds(600)])
+    }
+
+    @Test(
+        "An interval of zero runs a call each time the reader asks, and does not use the clock",
+        arguments: [RepeatAnchor.start, .finish]
+    )
+    func zeroInterval(from anchor: RepeatAnchor) async {
+        let clock = ManualClock()
+        let calls = Calls(clock)
+        var iterator = withRepeat(interval: .zero, from: anchor, clock: clock) {
             calls.record()
         }.makeAsyncIterator()
 
@@ -255,10 +294,14 @@ struct WithRepeatTests {
         #expect(values == [1, 3, 5])
     }
 
-    @Test("Cancelling the reader's task ends a wait at once", .hangGuard)
-    func cancellingEndsWait() async {
+    @Test(
+        "Cancelling the reader's task ends a wait at once",
+        .hangGuard,
+        arguments: [RepeatAnchor.start, .finish]
+    )
+    func cancellingEndsWait(from anchor: RepeatAnchor) async {
         let calls = Calls()
-        let sequence = withRepeat(interval: .seconds(3600)) {
+        let sequence = withRepeat(interval: .seconds(3600), from: anchor) {
             calls.record()
         }
         let (received, signal) = AsyncStream.makeStream(of: Void.self)

@@ -384,6 +384,28 @@ struct ReadmeAsyncTests {
     }
 
     @Test
+    func repeatingFromTheFinish() async {
+        let shown = await Task {
+            var shown: [String] = []
+            func show(_ status: String) {
+                shown.append(status)
+                withUnsafeCurrentTask { $0?.cancel() }
+            }
+
+            let statuses = withRepeat(interval: .seconds(5), from: .finish) {
+                await fetchStatus()
+            }
+
+            for await status in statuses {
+                show(status)
+            }
+            return shown
+        }.value
+
+        #expect(shown == ["ok"])
+    }
+
+    @Test
     func repeatingResults() async {
         let log = Recorder<AppError>()
 

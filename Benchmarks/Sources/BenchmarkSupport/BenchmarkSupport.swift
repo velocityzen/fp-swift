@@ -162,6 +162,26 @@ public extension Benchmark.Configuration {
     }
 }
 
+/// A clock whose sleeps return at once, on the time of `ContinuousClock`. A
+/// benchmark of a sequence that waits on it measures how the sequence keeps
+/// its deadlines, not the waits.
+///
+/// Its `sleep` is `@concurrent`, like those of the system clocks and the
+/// `Clock` requirement, so a caller on an actor hops off it for the sleep
+/// and back, as it would with `ContinuousClock`.
+public struct ImmediateClock: Clock, Sendable {
+    public typealias Instant = ContinuousClock.Instant
+
+    public init() {}
+
+    public var now: Instant { .now }
+
+    public var minimumResolution: Duration { .zero }
+
+    @concurrent
+    public func sleep(until deadline: Instant, tolerance: Duration?) async throws {}
+}
+
 /// The failure every failing benchmark transform returns.
 public struct BenchError: Error, Equatable, Sendable {
     public init() {}

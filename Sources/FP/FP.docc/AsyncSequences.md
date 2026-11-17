@@ -182,6 +182,14 @@ for await status in statuses {
 
 Each later call starts once 5 seconds have passed since the one before it started, or at once if they have passed when the loop asks for the next status. Nothing runs until the loop asks, so a slow loop or a slow call never makes calls pile up.
 
+To count the 5 seconds from when a call finishes instead, pass `from: .finish`. Then there are at least 5 seconds between the end of one call and the start of the next, however long the calls take:
+
+```swift
+let statuses = withRepeat(interval: .seconds(5), from: .finish) {
+    await fetchStatus()
+}
+```
+
 The operation can be sync or async, and it runs on the loop's actor. It can't throw. To go on after a failure, return a `Result`, and use `successes()`, `tapError` and the other operators for sequences of results:
 
 ```swift

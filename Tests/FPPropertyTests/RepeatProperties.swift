@@ -102,6 +102,9 @@
     }
 
     enum RepeatGen {
+        /// Where the interval counts from.
+        static let anchor: Gen<RepeatAnchor> = .element(of: [.start, .finish])
+
         /// None, the smallest, everyday ones, and long ones.
         static let interval: Gen<Duration> = .oneOf(
             .just(.zero),
@@ -112,8 +115,9 @@
 
         /// Times around `interval`: just before it, at it and just after it,
         /// half and twice it; or none, or an everyday time. A call is due
-        /// `interval` after the one before it started, so a reader or a call
-        /// that takes about that long lands near the deadline.
+        /// `interval` after the one before it started or finished, so a
+        /// reader or a call that takes about that long lands near the
+        /// deadline.
         static func around(_ interval: Duration) -> Gen<Duration> {
             let tick = Duration(attoseconds: 1)
             let near = [interval - tick, interval, interval + tick, interval / 2, interval * 2]
@@ -159,19 +163,22 @@
         /// Each pull starts one call and gives its element; nothing runs
         /// ahead of the reader. The first call starts when the reader first
         /// asks. Each later one starts once `interval` has passed since the
-        /// one before it started, or at once if it has passed when the reader
-        /// asks; a late wakeup delays it by that much. So calls are never
-        /// closer than `interval`, and an interval of zero never reads the
-        /// clock.
+        /// one before it started, or with `from: .finish` since it finished,
+        /// or at once if it has passed when the reader asks; a late wakeup
+        /// delays it by that much. So calls never start closer than
+        /// `interval` after the start, or the finish, of the one before, and
+        /// an interval of zero never reads the clock.
         @Test(.hegel(testCases: 1_000))
         func callsFollowTheSchedule() async throws {
             try await property(
                 reaching: [
                     "waited for the interval", "asked after the interval",
                     "asked right at the deadline", "woke late",
+                    "waited longer after a slow call",
                 ]
             ) { tc in
                 let interval = try #draw(RepeatGen.interval, from: tc)
+                let anchor = try #draw(RepeatGen.anchor, from: tc)
                 let slowCalls = try #draw(.bool(), from: tc)
                 let lateWakeups = try #draw(.bool(), from: tc)
                 let steps = try #draw(
@@ -181,7 +188,7 @@
 
                 let clock = ScriptedClock()
                 let calls = RepeatCalls()
-                let sequence = withRepeat(interval: interval, clock: clock) {
+                let sequence = withRepeat(interval: interval, from: anchor, clock: clock) {
                     let index = calls.record(start: clock.elapsed)
                     clock.advance(by: index < steps.count ? steps[index].call : .zero)
                     return index + 1
@@ -190,6 +197,9 @@
                 var iterator = sequence.makeAsyncIterator()
                 // The model: when the next call is due. Nil before the first.
                 var due: Duration?
+                // Where the interval of the next call counts from: the start
+                // or the finish of the call before it.
+                var anchorTime: Duration?
                 for (index, step) in steps.enumerated() {
                     clock.advance(by: step.gap)
                     clock.wakeLate(by: step.late)
@@ -212,11 +222,8 @@
                     let waits = due.map { asked < $0 } ?? false
                     let expectedStart = waits ? due! + step.late : asked
                     #expect(started[index] == expectedStart, "call \(index + 1)")
-                    if index > 0 {
-                        #expect(
-                            started[index] - started[index - 1] >= interval,
-                            "call \(index + 1)"
-                        )
+                    if let anchorTime {
+                        #expect(started[index] - anchorTime >= interval, "call \(index + 1)")
                     }
                     let expectedSleeps = waits ? [due! - asked] : []
                     #expect(
@@ -229,25 +236,32 @@
                         if step.late > .zero {
                             try tc.event("woke late")
                         }
+                        if anchor == .finish, steps[index - 1].call > .zero {
+                            try tc.event("waited longer after a slow call")
+                        }
                     } else if let due, interval > .zero {
                         try tc.event(
                             asked == due
                                 ? "asked right at the deadline" : "asked after the interval"
                         )
                     }
-                    due = started[index] + interval
+                    let finished = started[index] + step.call
+                    anchorTime = anchor == .finish ? finished : started[index]
+                    due = anchorTime! + interval
                 }
                 if interval == .zero {
                     #expect(clock.reads == 0)
                     try tc.event("interval of zero")
                 }
+                try tc.event(anchor == .finish ? "from the finish" : "from the start")
                 try tc.event("pulls", value: Double(steps.count))
             }
         }
 
         /// Cancelling the reader's task ends the sequence, wherever the cancel
-        /// lands: no call starts after it, every call that started gives its
-        /// element, and once the sequence gives nil it stays ended.
+        /// lands and wherever the interval counts from: no call starts after
+        /// it, every call that started gives its element, and once the
+        /// sequence gives nil it stays ended.
         @Test(.hegel(testCases: 1_000))
         func cancellingTheReaderEndsTheSequence() async throws {
             try await property(
@@ -257,6 +271,7 @@
                 ]
             ) { tc in
                 let interval = try #draw(RepeatGen.interval, from: tc)
+                let anchor = try #draw(RepeatGen.anchor, from: tc)
                 let slowCalls = try #draw(.bool(), from: tc)
                 let lateWakeups = try #draw(.bool(), from: tc)
                 let steps = try #draw(
@@ -272,7 +287,7 @@
                     checkpoints: 0...(3 * steps.count),
                     endsWithin: stallLimit
                 ) { cancellation in
-                    let sequence = withRepeat(interval: interval, clock: clock) {
+                    let sequence = withRepeat(interval: interval, from: anchor, clock: clock) {
                         let index = calls.record(start: clock.elapsed)
                         cancellation.checkpoint("call \(index + 1) starts")
                         clock.advance(by: index < steps.count ? steps[index].call : .zero)

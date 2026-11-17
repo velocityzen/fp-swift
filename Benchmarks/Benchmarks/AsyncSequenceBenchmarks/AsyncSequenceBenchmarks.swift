@@ -655,5 +655,93 @@ let benchmarks: @Sendable () -> Void = {
                 blackHole(sum)
             }
         }
+
+        // The same pulls with an interval long enough that every call after
+        // the first is due later, on a clock whose sleeps return at once. So
+        // each pull reads the clock, sleeps and sets the next deadline, from
+        // the start of the call or from its finish. The baselines keep the
+        // deadline the same way by hand.
+
+        let waitInterval = Duration.seconds(3600)
+
+        Benchmark("repeat waits loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                let operation: @Sendable () async -> Int = { n }
+                let clock = ImmediateClock()
+                var deadline: ImmediateClock.Instant?
+                var sum = 0
+                for _ in 0..<n {
+                    guard !Task.isCancelled else { break }
+                    let now = clock.now
+                    if let due = deadline, now < due {
+                        do {
+                            try await clock.sleep(until: due, tolerance: nil)
+                        } catch {
+                            break
+                        }
+                        deadline = clock.now.advanced(by: waitInterval)
+                    } else {
+                        deadline = now.advanced(by: waitInterval)
+                    }
+                    sum &+= await operation()
+                }
+                blackHole(sum)
+            }
+        }
+
+        Benchmark("withRepeat waits", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                var sum = 0
+                var count = 0
+                let sequence = withRepeat(interval: waitInterval, clock: ImmediateClock(), { n })
+                for await value in sequence {
+                    sum &+= value
+                    count += 1
+                    if count == n { break }
+                }
+                blackHole(sum)
+            }
+        }
+
+        Benchmark("repeat from finish loop (baseline)", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                let operation: @Sendable () async -> Int = { n }
+                let clock = ImmediateClock()
+                var deadline: ImmediateClock.Instant?
+                var sum = 0
+                for _ in 0..<n {
+                    guard !Task.isCancelled else { break }
+                    if let due = deadline, clock.now < due {
+                        do {
+                            try await clock.sleep(until: due, tolerance: nil)
+                        } catch {
+                            break
+                        }
+                    }
+                    sum &+= await operation()
+                    deadline = clock.now.advanced(by: waitInterval)
+                }
+                blackHole(sum)
+            }
+        }
+
+        Benchmark("withRepeat from finish", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                var sum = 0
+                var count = 0
+                let sequence = withRepeat(
+                    interval: waitInterval,
+                    from: .finish,
+                    clock: ImmediateClock(),
+                    { n }
+                )
+                for await value in sequence {
+                    sum &+= value
+                    count += 1
+                    if count == n { break }
+                }
+                blackHole(sum)
+            }
+        }
     }
 }
