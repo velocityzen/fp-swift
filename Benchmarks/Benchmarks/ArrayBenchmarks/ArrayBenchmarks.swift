@@ -3,9 +3,10 @@ import BenchmarkSupport
 import FP
 
 // Array traversals: the synchronous and sequential forms, and the
-// concurrent `traverseAsync(concurrency:)`. Transforms are trivial so the
-// numbers are the traversal's own overhead; "(baseline)" entries are the
-// hand-written floor to compare with.
+// concurrent `traverseAsync(concurrency:)`, then the helpers that split or
+// unwrap an array. Transforms are trivial so the numbers are the helper's
+// own overhead; "(baseline)" entries are the hand-written floor to compare
+// with.
 
 let benchmarks: @Sendable () -> Void = {
     for n in [16, 1024] {
@@ -33,6 +34,16 @@ let benchmarks: @Sendable () -> Void = {
         Benchmark("traverse Result", configuration: .fp(tags)) { benchmark in
             for _ in benchmark.scaledIterations {
                 blackHole(input.traverse { IntResult.success($0 &* 2) })
+            }
+        }
+
+        Benchmark("traverse Result failing at n/2", configuration: .fp(tags)) { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(
+                    input.traverse { (value: Int) -> IntResult in
+                        value == failAt ? .failure(BenchError()) : .success(value)
+                    }
+                )
             }
         }
 
@@ -139,25 +150,61 @@ let benchmarks: @Sendable () -> Void = {
 
         // MARK: Splitting Results
 
-        let results = input.map { value in
-            value.isMultiple(of: 3) ? IntResult.failure(BenchError()) : .success(value)
-        }
+        // Every third element fails, a pattern the branch predictor learns,
+        // and half fail at random positions, where a branch per element
+        // mispredicts about half the time.
+        let resultPatterns: [(label: String, results: [IntResult])] = [
+            ("", input.map { $0.isMultiple(of: 3) ? .failure(BenchError()) : .success($0) }),
+            (" random", input.map { coinFlip($0) ? .failure(BenchError()) : .success($0) }),
+        ]
 
-        Benchmark("separate", configuration: .fp(tags)) { benchmark in
-            for _ in benchmark.scaledIterations {
-                blackHole(results.separate())
+        for (label, results) in resultPatterns {
+            Benchmark("separate\(label)", configuration: .fp(tags)) { benchmark in
+                for _ in benchmark.scaledIterations {
+                    blackHole(results.separate())
+                }
+            }
+
+            Benchmark("successes\(label)", configuration: .fp(tags)) { benchmark in
+                for _ in benchmark.scaledIterations {
+                    blackHole(results.successes())
+                }
+            }
+
+            Benchmark("failures\(label)", configuration: .fp(tags)) { benchmark in
+                for _ in benchmark.scaledIterations {
+                    blackHole(results.failures())
+                }
             }
         }
 
-        Benchmark("successes", configuration: .fp(tags)) { benchmark in
-            for _ in benchmark.scaledIterations {
-                blackHole(results.successes())
+        // MARK: Optionals
+
+        let optionalPatterns: [(label: String, values: [Int?])] = [
+            ("", input.map { $0.isMultiple(of: 3) ? nil : $0 }),
+            (" random", input.map { coinFlip($0) ? nil : $0 }),
+        ]
+
+        for (label, values) in optionalPatterns {
+            Benchmark("compactMap (baseline)\(label)", configuration: .fp(tags)) { benchmark in
+                for _ in benchmark.scaledIterations {
+                    blackHole(values.compactMap { $0 })
+                }
+            }
+
+            Benchmark("compact\(label)", configuration: .fp(tags)) { benchmark in
+                for _ in benchmark.scaledIterations {
+                    blackHole(values.compact())
+                }
             }
         }
 
-        Benchmark("failures", configuration: .fp(tags)) { benchmark in
+        // `sequence()` reads every element only when none is `nil`.
+        let present = input.map { Optional($0) }
+
+        Benchmark("sequence", configuration: .fp(tags)) { benchmark in
             for _ in benchmark.scaledIterations {
-                blackHole(results.failures())
+                blackHole(present.sequence())
             }
         }
     }

@@ -77,4 +77,32 @@ struct ArrayOptionalTests {
 
         #expect(xs.sequence() == [])
     }
+
+    // MARK: - Long arrays
+
+    // From 64 elements both write into the new array's buffer, and `compact()` skips `nil`s
+    // without a branch when its values are trivial.
+
+    @Test("compact keeps every value in order at every size", arguments: [63, 64, 65, 1_000])
+    func compactLongArrays(count: Int) {
+        let ints = (0..<count).map { $0.isMultiple(of: 3) ? nil : $0 }
+        let bools = ints.map { $0.map { $0.isMultiple(of: 2) } }
+        let strings = ints.map { $0.map { "\($0)" } }
+
+        #expect(ints.compact() == ints.compactMap { $0 })
+        #expect(bools.compact() == bools.compactMap { $0 })
+        #expect(strings.compact() == strings.compactMap { $0 })
+        let nils = [Int?](repeating: nil, count: count)
+        #expect(nils.compact().isEmpty)
+    }
+
+    @Test("sequence finds a nil anywhere in a long array", arguments: [0, 63, 64, 999])
+    func sequenceLongArrayWithANil(at index: Int) {
+        var xs: [Int?] = Array(0..<1_000)
+        let all: [Int]? = Array(0..<1_000)
+        #expect(xs.sequence() == all)
+
+        xs[index] = nil
+        #expect(xs.sequence() == nil)
+    }
 }

@@ -9,14 +9,24 @@ public extension Array {
     func traverse<Success>(
         _ transform: (Element) -> Success
     ) -> Result<[Success], Never> {
-        var results: [Success] = []
-        results.reserveCapacity(count)
+        guard count >= DirectFill.minimumCount else {
+            var results: [Success] = []
+            results.reserveCapacity(count)
 
-        for element in self {
-            results.append(transform(element))
+            for element in self {
+                results.append(transform(element))
+            }
+
+            return .success(results)
         }
 
-        return .success(results)
+        return .success(
+            [Success](capacity: count) { (output: inout OutputSpan<Success>) in
+                for element in self {
+                    output.append(transform(element))
+                }
+            }
+        )
     }
 
     /// Transforms each element with a transform that can fail.
@@ -27,19 +37,35 @@ public extension Array {
     func traverse<Success, Failure: Error>(
         _ transform: (Element) -> Result<Success, Failure>
     ) -> Result<[Success], Failure> {
-        var results: [Success] = []
-        results.reserveCapacity(count)
+        guard count >= DirectFill.minimumCount else {
+            var results: [Success] = []
+            results.reserveCapacity(count)
 
-        for element in self {
-            switch transform(element) {
-                case .success(let value):
-                    results.append(value)
-                case .failure(let error):
-                    return .failure(error)
+            for element in self {
+                switch transform(element) {
+                    case .success(let value):
+                        results.append(value)
+                    case .failure(let error):
+                        return .failure(error)
+                }
             }
+
+            return .success(results)
         }
 
-        return .success(results)
+        // A failure throws out of the initializer, which releases the values written so far.
+        do throws(Failure) {
+            return .success(
+                try [Success](capacity: count) {
+                    (output: inout OutputSpan<Success>) throws(Failure) in
+                    for element in self {
+                        output.append(try transform(element).get())
+                    }
+                }
+            )
+        } catch {
+            return .failure(error)
+        }
     }
 
     /// Transforms each element with an async transform, one at a time.
@@ -135,6 +161,19 @@ public extension Array {
     @inlinable
     func separate<Success, Failure>() -> (successes: [Success], failures: [Failure])
     where Element == Result<Success, Failure> {
+        // Two passes without a branch per element beat one pass with a branch that
+        // mispredicts, but they need trivial values. Each pass allocates its own array.
+        if count >= 2 * DirectFill.minimumCount, _isPOD(Success.self), _isPOD(Failure.self) {
+            return (
+                successes: trivialValues { result in
+                    if case .success(let value) = result { value } else { nil }
+                },
+                failures: trivialValues { result in
+                    if case .failure(let error) = result { error } else { nil }
+                }
+            )
+        }
+
         var successes: [Success] = []
         var failures: [Failure] = []
         successes.reserveCapacity(count)
@@ -156,6 +195,12 @@ public extension Array {
     @inlinable
     func successes<Success, Failure>() -> [Success]
     where Element == Result<Success, Failure> {
+        if count >= DirectFill.minimumCount, _isPOD(Success.self) {
+            return trivialValues { result in
+                if case .success(let value) = result { value } else { nil }
+            }
+        }
+
         var values: [Success] = []
         values.reserveCapacity(count)
         for result in self {
@@ -170,8 +215,23 @@ public extension Array {
     @inlinable
     func failures<Success, Failure>() -> [Failure]
     where Element == Result<Success, Failure> {
+        if count >= DirectFill.minimumCount, _isPOD(Failure.self) {
+            return trivialValues { result in
+                if case .failure(let error) = result { error } else { nil }
+            }
+        }
+
+        // Room for every element from the first failure on, as `successes()` reserves for
+        // all of them, so the array never grows. Without a failure it allocates nothing.
+        guard
+            let first = firstIndex(where: { result in
+                if case .failure = result { true } else { false }
+            })
+        else { return [] }
+
         var errors: [Failure] = []
-        for result in self {
+        errors.reserveCapacity(count - first)
+        for result in self[first...] {
             if case .failure(let error) = result {
                 errors.append(error)
             }

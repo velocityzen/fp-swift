@@ -4,6 +4,10 @@ public extension Array {
     /// Same as `compactMap { $0 }`.
     @inlinable
     func compact<T>() -> [T] where Element == T? {
+        if count >= DirectFill.minimumCount, _isPOD(T.self) {
+            return trivialValues { $0 }
+        }
+
         var values: [T] = []
         values.reserveCapacity(count)
         for element in self {
@@ -24,12 +28,26 @@ public extension Array {
     /// ```
     @inlinable
     func sequence<T>() -> [T]? where Element == T? {
-        var values: [T] = []
-        values.reserveCapacity(count)
-        for element in self {
-            guard let value = element else { return nil }
-            values.append(value)
+        guard count >= DirectFill.minimumCount else {
+            var values: [T] = []
+            values.reserveCapacity(count)
+            for element in self {
+                guard let value = element else { return nil }
+                values.append(value)
+            }
+            return values
         }
-        return values
+
+        var sawNil = false
+        let values = [T](capacity: count) { (output: inout OutputSpan<T>) in
+            for element in self {
+                guard let value = element else {
+                    sawNil = true
+                    return
+                }
+                output.append(value)
+            }
+        }
+        return sawNil ? nil : values
     }
 }

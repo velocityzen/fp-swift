@@ -189,6 +189,18 @@ public struct BenchError: Error, Equatable, Sendable {
 
 public typealias IntResult = Result<Int, BenchError>
 
+/// A fair coin flip for `index`, the same on every run: the top bit of
+/// SplitMix64's finalizer. Inputs built from it put their failures or `nil`s
+/// at positions a branch predictor can't learn, so a branch on each element
+/// mispredicts about half the time, where a regular pattern such as every
+/// third element is predicted almost always.
+public func coinFlip(_ index: Int) -> Bool {
+    var z = UInt64(truncatingIfNeeded: index) &+ 0x9E37_79B9_7F4A_7C15
+    z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+    z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+    return (z ^ (z >> 31)) >> 63 == 1
+}
+
 /// A value too wide for an existential's inline buffer (three words), so
 /// wrapping it in `any Sendable` allocates a box.
 public struct Wide: Sendable {

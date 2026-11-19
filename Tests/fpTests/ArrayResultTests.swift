@@ -514,4 +514,85 @@ struct ArrayResultTests {
         #expect(result == .success(["v1", "v2", "v3", "v4"]))
     }
 
+    // MARK: - Long arrays
+
+    // From 64 elements (128 for `separate`) the synchronous helpers write into the new array's
+    // buffer, and skip elements without a branch when their values are trivial.
+
+    /// A trivial error, so trivial results take the branchless path.
+    enum Code: Error, Equatable {
+        case even, odd
+    }
+
+    @Test(
+        "successes, failures and separate keep every value in order at every size",
+        arguments: [63, 64, 65, 127, 128, 129, 1_000]
+    )
+    func splittingLongArrays(count: Int) {
+        let indices = 0..<count
+        let failing = { (index: Int) in index.isMultiple(of: 3) }
+        let codes = indices.map { index -> Result<Int, Code> in
+            failing(index) ? .failure(index.isMultiple(of: 2) ? .even : .odd) : .success(index)
+        }
+        let strings = indices.map { index -> Result<String, TestError> in
+            failing(index) ? .failure(.parseError("\(index)")) : .success("\(index)")
+        }
+        let successes = indices.filter { !failing($0) }
+        let failures = indices.filter(failing)
+
+        #expect(codes.successes() == successes)
+        #expect(codes.failures() == failures.map { $0.isMultiple(of: 2) ? .even : .odd })
+        #expect(codes.separate().successes == codes.successes())
+        #expect(codes.separate().failures == codes.failures())
+
+        #expect(strings.successes() == successes.map { "\($0)" })
+        #expect(strings.failures() == failures.map { .parseError("\($0)") })
+        #expect(strings.separate().successes == strings.successes())
+        #expect(strings.separate().failures == strings.failures())
+    }
+
+    @Test("successes and failures of a long array with nothing on that side are empty")
+    func splittingLongArraysWithOneSide() {
+        let successes = [Result<Int, Code>](repeating: .success(1), count: 200)
+        let failures = [Result<Int, Code>](repeating: .failure(.odd), count: 200)
+
+        #expect(successes.failures().isEmpty)
+        #expect(failures.successes().isEmpty)
+        #expect(successes.separate().failures.isEmpty)
+        #expect(failures.separate().successes.isEmpty)
+    }
+
+    @Test("traverse stops at a failure past 64 elements and releases the values made before it")
+    func traverseLongArrayReleasesValuesBeforeAFailure() {
+        final class Tracked {
+            nonisolated(unsafe) static var live = 0
+            init() { Self.live += 1 }
+            deinit { Self.live -= 1 }
+        }
+
+        var calls = 0
+        let result = Array(0..<200).traverse { index -> Result<Tracked, Code> in
+            calls += 1
+            return index == 150 ? .failure(.even) : .success(Tracked())
+        }
+
+        #expect(result.map(\.count) == .failure(.even))
+        #expect(calls == 151)
+        #expect(Tracked.live == 0)
+    }
+
+    @Test("traverse keeps every value in order at every size", arguments: [63, 64, 65, 1_000])
+    func traverseLongArrays(count: Int) {
+        let numbers = Array(0..<count)
+
+        #expect(numbers.traverse { $0 &* 2 } == .success(numbers.map { $0 &* 2 }))
+        #expect(
+            numbers.traverse { Result<String, Code>.success("\($0)") }
+                == .success(numbers.map { "\($0)" })
+        )
+        #expect(
+            numbers.traverse { $0 == count - 1 ? .failure(Code.odd) : .success($0) }
+                == .failure(.odd)
+        )
+    }
 }
